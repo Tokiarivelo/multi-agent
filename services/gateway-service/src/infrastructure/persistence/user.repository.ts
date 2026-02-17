@@ -35,16 +35,14 @@ export class UserRepository implements IUserRepository {
     }
   }
 
-  async create(
-    userData: {
-      email: string;
-      password: string;
-      firstName: string;
-      lastName: string;
-      role: string;
-      isActive: boolean;
-    },
-  ): Promise<User> {
+  async create(userData: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    isActive: boolean;
+  }): Promise<User> {
     try {
       const user = await this.prisma.user.create({
         data: userData,

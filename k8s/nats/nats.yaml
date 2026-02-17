@@ -32,20 +32,6 @@ data:
     logtime: true
 
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: nats-storage
-  namespace: multi-agent
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: standard
-
----
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -110,9 +96,15 @@ spec:
       - name: config
         configMap:
           name: nats-config
-      - name: data
-        persistentVolumeClaim:
-          claimName: nats-storage
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
 
 ---
 apiVersion: v1

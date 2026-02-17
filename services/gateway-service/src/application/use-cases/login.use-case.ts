@@ -1,18 +1,10 @@
-import {
-  Injectable,
-  Inject,
-  UnauthorizedException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Inject, UnauthorizedException, Logger } from '@nestjs/common';
 import { AuthService } from '../../domain/services/auth.service';
 import {
   IUserRepository,
   USER_REPOSITORY,
 } from '../../domain/repositories/user.repository.interface';
-import {
-  IJwtService,
-  JWT_SERVICE,
-} from '../interfaces/jwt.service.interface';
+import { IJwtService, JWT_SERVICE } from '../interfaces/jwt.service.interface';
 import { LoginDto } from '../dto/login.dto';
 
 @Injectable()
@@ -27,9 +19,7 @@ export class LoginUseCase {
     private readonly jwtService: IJwtService,
   ) {}
 
-  async execute(
-    loginDto: LoginDto,
-  ): Promise<{ accessToken: string; user: any }> {
+  async execute(loginDto: LoginDto): Promise<{ accessToken: string; user: any }> {
     this.logger.log(`Login attempt for email: ${loginDto.email}`);
 
     const user = await this.userRepository.findByEmail(loginDto.email);
@@ -54,6 +44,7 @@ export class LoginUseCase {
       role: user.role,
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = user;
 
     return {

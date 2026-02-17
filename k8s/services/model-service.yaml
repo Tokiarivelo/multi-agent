@@ -1,0 +1,131 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-service
+  namespace: multi-agent
+  labels:
+    app: model-service
+    component: model
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3004
+      targetPort: 3004
+      protocol: TCP
+      name: http
+  selector:
+    app: model-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-service
+  namespace: multi-agent
+  labels:
+    app: model-service
+    component: model
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: model-service
+  template:
+    metadata:
+      labels:
+        app: model-service
+        component: model
+    spec:
+      containers:
+        - name: model-service
+          image: model-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3004
+              name: http
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "3004"
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-agent-config
+                  key: NODE_ENV
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-agent-config
+                  key: LOG_LEVEL
+            - name: NATS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-agent-config
+                  key: NATS_URL
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: multi-agent-secrets
+                  key: DATABASE_URL
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: multi-agent-secrets
+                  key: OPENAI_API_KEY
+                  optional: true
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: multi-agent-secrets
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3004
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3004
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: model-service-hpa
+  namespace: multi-agent
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: model-service
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

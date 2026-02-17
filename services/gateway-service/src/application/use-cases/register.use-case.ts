@@ -1,18 +1,10 @@
-import {
-  Injectable,
-  Inject,
-  ConflictException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Inject, ConflictException, Logger } from '@nestjs/common';
 import { AuthService } from '../../domain/services/auth.service';
 import {
   IUserRepository,
   USER_REPOSITORY,
 } from '../../domain/repositories/user.repository.interface';
-import {
-  IJwtService,
-  JWT_SERVICE,
-} from '../interfaces/jwt.service.interface';
+import { IJwtService, JWT_SERVICE } from '../interfaces/jwt.service.interface';
 import { RegisterDto } from '../dto/register.dto';
 
 @Injectable()
@@ -27,23 +19,17 @@ export class RegisterUseCase {
     private readonly jwtService: IJwtService,
   ) {}
 
-  async execute(
-    registerDto: RegisterDto,
-  ): Promise<{ accessToken: string; user: any }> {
+  async execute(registerDto: RegisterDto): Promise<{ accessToken: string; user: any }> {
     this.logger.log(`Registering user with email: ${registerDto.email}`);
 
-    const existingUser = await this.userRepository.findByEmail(
-      registerDto.email,
-    );
+    const existingUser = await this.userRepository.findByEmail(registerDto.email);
 
     if (existingUser) {
       this.logger.warn(`User with email ${registerDto.email} already exists`);
       throw new ConflictException('User with this email already exists');
     }
 
-    const hashedPassword = await this.authService.hashPassword(
-      registerDto.password,
-    );
+    const hashedPassword = await this.authService.hashPassword(registerDto.password);
 
     const user = await this.userRepository.create({
       email: registerDto.email,
@@ -62,6 +48,7 @@ export class RegisterUseCase {
       role: user.role,
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = user;
 
     return {

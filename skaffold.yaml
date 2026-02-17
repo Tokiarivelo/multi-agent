@@ -1,0 +1,169 @@
+apiVersion: skaffold/v4beta7
+kind: Config
+metadata:
+  name: multi-agent-platform
+
+build:
+  artifacts:
+    - image: gateway-service
+      context: services/gateway-service
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          NODE_ENV: production
+    - image: orchestration-service
+      context: services/orchestration-service
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          NODE_ENV: production
+    - image: agent-service
+      context: services/agent-service
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          NODE_ENV: production
+    - image: tool-service
+      context: services/tool-service
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          NODE_ENV: production
+    - image: model-service
+      context: services/model-service
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          NODE_ENV: production
+    - image: vector-service
+      context: services/vector-service
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          NODE_ENV: production
+    - image: execution-service
+      context: services/execution-service
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          NODE_ENV: production
+    - image: frontend
+      context: frontend
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          NODE_ENV: production
+
+deploy:
+  kubectl:
+    defaultNamespace: multi-agent
+    manifests:
+      - k8s/namespace.yaml
+      - k8s/secrets.yaml
+      - k8s/configmaps.yaml
+      - k8s/postgres/postgres.yaml
+      - k8s/qdrant/qdrant.yaml
+      - k8s/nats/nats.yaml
+      - k8s/services/*.yaml
+      - k8s/frontend/frontend.yaml
+      - k8s/ingress.yaml
+
+portForward:
+  - resourceType: service
+    resourceName: gateway-service
+    namespace: multi-agent
+    port: 3000
+    localPort: 3000
+  - resourceType: service
+    resourceName: frontend
+    namespace: multi-agent
+    port: 3001
+    localPort: 3001
+  - resourceType: service
+    resourceName: postgres
+    namespace: multi-agent
+    port: 5432
+    localPort: 5432
+  - resourceType: service
+    resourceName: qdrant
+    namespace: multi-agent
+    port: 6333
+    localPort: 6333
+  - resourceType: service
+    resourceName: nats
+    namespace: multi-agent
+    port: 4222
+    localPort: 4222
+
+profiles:
+  - name: dev
+    activation:
+      - command: dev
+    build:
+      local:
+        push: false
+        concurrency: 4
+    deploy:
+      kubectl:
+        defaultNamespace: multi-agent
+    portForward:
+      - resourceType: service
+        resourceName: gateway-service
+        namespace: multi-agent
+        port: 3000
+        localPort: 3000
+      - resourceType: service
+        resourceName: frontend
+        namespace: multi-agent
+        port: 3001
+        localPort: 3001
+      - resourceType: service
+        resourceName: postgres
+        namespace: multi-agent
+        port: 5432
+        localPort: 5432
+      - resourceType: service
+        resourceName: qdrant
+        namespace: multi-agent
+        port: 6333
+        localPort: 6333
+
+  - name: prod
+    build:
+      cluster:
+        pullSecretName: regcred
+        namespace: multi-agent
+      tagPolicy:
+        gitCommit: {}
+    deploy:
+      kubectl:
+        defaultNamespace: multi-agent
+        flags:
+          apply:
+            - --validate=true
+            - --wait=true
+            - --timeout=5m
+
+  - name: local
+    activation:
+      - command: run
+    build:
+      local:
+        push: false
+        useBuildkit: true
+    deploy:
+      kubectl:
+        defaultNamespace: multi-agent
+
+  - name: debug
+    activation:
+      - env: SKAFFOLD_DEBUG=true
+    build:
+      local:
+        push: false
+    patches:
+      - op: add
+        path: /deploy/kubectl/flags/apply
+        value:
+          - --dry-run=client
+          - --validate=true
