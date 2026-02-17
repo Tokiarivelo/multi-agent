@@ -1,0 +1,67 @@
+.
+├── prisma
+│   ├── migrations
+│   │   ├── 20240101000000_init
+│   │   │   └── migration.sql
+│   │   └── migration_lock.toml
+│   └── schema.prisma
+├── src
+│   ├── application
+│   │   ├── dto
+│   │   │   ├── create-agent.dto.ts
+│   │   │   └── execute-agent.dto.ts
+│   │   ├── interfaces
+│   │   │   └── langchain-provider.interface.ts
+│   │   └── use-cases
+│   │       ├── create-agent.use-case.ts
+│   │       ├── execute-agent.use-case.ts
+│   │       └── list-agents.use-case.ts
+│   ├── domain
+│   │   ├── entities
+│   │   │   └── agent.entity.ts
+│   │   ├── repositories
+│   │   │   └── agent.repository.interface.ts
+│   │   └── services
+│   │       └── agent-execution.service.ts
+│   ├── infrastructure
+│   │   ├── config
+│   │   │   ├── config.module.ts
+│   │   │   └── env.validation.ts
+│   │   ├── database
+│   │   │   └── prisma.service.ts
+│   │   ├── external
+│   │   │   ├── langchain
+│   │   │   ├── model-client.service.ts
+│   │   │   └── tool-client.service.ts
+│   │   └── persistence
+│   │       └── agent.repository.ts
+│   ├── presentation
+│   │   ├── controllers
+│   │   │   ├── agent.controller.ts
+│   │   │   └── health.controller.ts
+│   │   ├── filters
+│   │   │   └── http-exception.filter.ts
+│   │   └── gateways
+│   │       └── agent-execution.gateway.ts
+│   ├── app.module.ts
+│   └── main.ts
+├── test
+│   ├── agent.e2e-spec.ts
+│   └── jest-e2e.json
+├── API.md
+├── CHANGELOG.md
+├── COMPLETION_REPORT.md
+├── DEPLOYMENT.md
+├── Dockerfile
+├── EXAMPLES.md
+├── FILE_TREE.txt
+├── Makefile
+├── PROJECT_SUMMARY.md
+├── QUICK_REFERENCE.md
+├── README.md
+├── docker-compose.yml
+├── nest-cli.json
+├── package.json
+└── tsconfig.json
+
+24 directories, 41 files

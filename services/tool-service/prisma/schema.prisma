@@ -1,0 +1,11 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// This schema references the main schema in the root prisma directory
+// In production, use the shared schema from ../../prisma/schema.prisma
