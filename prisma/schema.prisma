@@ -1,0 +1,210 @@
+// Prisma Schema for Multi-Agent Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  firstName String
+  lastName  String
+  password  String
+  role      UserRole @default(USER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workflows   Workflow[]
+  agents      Agent[]
+  apiKeys     ApiKey[]
+  executions  Execution[]
+  collections VectorCollection[]
+
+  @@index([email])
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+  VIEWER
+}
+
+model Workflow {
+  id          String         @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  nodes       Json           // WorkflowNode[]
+  edges       Json           // WorkflowEdge[]
+  status      WorkflowStatus @default(DRAFT)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions Execution[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("workflows")
+}
+
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+model Agent {
+  id           String   @id @default(uuid())
+  userId       String
+  name         String
+  description  String?
+  systemPrompt String   @db.Text
+  modelId      String
+  tools        Json     // string[]
+  temperature  Float?   @default(0.7)
+  maxTokens    Int?     @default(2000)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model Model @relation(fields: [modelId], references: [id])
+
+  @@index([userId])
+  @@index([modelId])
+  @@map("agents")
+}
+
+model Tool {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  description String
+  category    ToolCategory
+  parameters  Json         // ToolParameter[]
+  code        String?      @db.Text
+  isBuiltIn   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([category])
+  @@index([isBuiltIn])
+  @@map("tools")
+}
+
+enum ToolCategory {
+  WEB
+  API
+  DATABASE
+  FILE
+  CUSTOM
+}
+
+model Model {
+  id                String        @id @default(uuid())
+  name              String        @unique
+  provider          ModelProvider
+  modelName         String
+  maxTokens         Int
+  supportsStreaming Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  agents Agent[]
+
+  @@index([provider])
+  @@map("models")
+}
+
+enum ModelProvider {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  AZURE
+  OLLAMA
+}
+
+model ApiKey {
+  id           String        @id @default(uuid())
+  userId       String
+  provider     ModelProvider
+  encryptedKey String        @db.Text
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([provider])
+  @@map("api_keys")
+}
+
+model Execution {
+  id          String          @id @default(uuid())
+  workflowId  String
+  userId      String
+  status      ExecutionStatus @default(PENDING)
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+  error       String?         @db.Text
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workflow Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs     ExecutionLog[]
+
+  @@index([workflowId])
+  @@index([userId])
+  @@index([status])
+  @@index([startedAt])
+  @@map("executions")
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model ExecutionLog {
+  id          String          @id @default(uuid())
+  executionId String
+  nodeId      String
+  status      ExecutionStatus
+  input       Json?
+  output      Json?
+  error       String?         @db.Text
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+
+  execution Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@index([nodeId])
+  @@map("execution_logs")
+}
+
+model VectorCollection {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  dimension Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("vector_collections")
+}
