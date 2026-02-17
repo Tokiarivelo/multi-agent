@@ -153,6 +153,7 @@ model Execution {
   startedAt   DateTime        @default(now())
   completedAt DateTime?
   error       String?         @db.Text
+  metadata    Json?           // Additional execution metadata
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -179,13 +180,16 @@ model ExecutionLog {
   id          String          @id @default(uuid())
   executionId String
   nodeId      String
+  nodeName    String          // Name/type of the node
   status      ExecutionStatus
   input       Json?
   output      Json?
   error       String?         @db.Text
   startedAt   DateTime        @default(now())
   completedAt DateTime?
+  duration    Int?            // Duration in milliseconds
   createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   execution Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
