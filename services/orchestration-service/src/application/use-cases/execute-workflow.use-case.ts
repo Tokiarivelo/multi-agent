@@ -33,9 +33,7 @@ export class ExecuteWorkflowUseCase {
 
     const validation = workflow.validate();
     if (!validation.valid) {
-      throw new BadRequestException(
-        `Workflow validation failed: ${validation.errors.join(', ')}`,
-      );
+      throw new BadRequestException(`Workflow validation failed: ${validation.errors.join(', ')}`);
     }
 
     this.logger.log(`Starting execution of workflow ${dto.workflowId} for user ${userId}`);

@@ -44,18 +44,18 @@ import { WorkflowGateway } from './presentation/gateways/workflow.gateway';
     AgentClientService,
     ToolClientService,
     WorkflowGateway,
-    
+
     // Use Cases
     CreateWorkflowUseCase,
     GetWorkflowUseCase,
     ExecuteWorkflowUseCase,
-    
+
     // Repositories
     {
       provide: WORKFLOW_REPOSITORY,
       useClass: WorkflowRepository,
     },
-    
+
     // Services
     {
       provide: WORKFLOW_EXECUTOR,

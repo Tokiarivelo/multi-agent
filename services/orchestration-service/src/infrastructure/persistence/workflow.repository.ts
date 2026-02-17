@@ -79,7 +79,10 @@ export class WorkflowRepository implements IWorkflowRepository {
     this.logger.log(`Deleted workflow ${id}`);
   }
 
-  async findAll(page: number = 1, limit: number = 10): Promise<{ workflows: Workflow[]; total: number }> {
+  async findAll(
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{ workflows: Workflow[]; total: number }> {
     const skip = (page - 1) * limit;
 
     const [workflows, total] = await Promise.all([

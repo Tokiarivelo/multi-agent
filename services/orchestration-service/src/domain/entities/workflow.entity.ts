@@ -78,19 +78,19 @@ export class Workflow {
       errors.push('Workflow must have at least one node');
     }
 
-    const startNodes = this.definition.nodes.filter(n => n.type === NodeType.START);
+    const startNodes = this.definition.nodes.filter((n) => n.type === NodeType.START);
     if (startNodes.length === 0) {
       errors.push('Workflow must have a START node');
     } else if (startNodes.length > 1) {
       errors.push('Workflow can only have one START node');
     }
 
-    const endNodes = this.definition.nodes.filter(n => n.type === NodeType.END);
+    const endNodes = this.definition.nodes.filter((n) => n.type === NodeType.END);
     if (endNodes.length === 0) {
       errors.push('Workflow must have at least one END node');
     }
 
-    const nodeIds = new Set(this.definition.nodes.map(n => n.id));
+    const nodeIds = new Set(this.definition.nodes.map((n) => n.id));
     for (const edge of this.definition.edges) {
       if (!nodeIds.has(edge.source)) {
         errors.push(`Edge ${edge.id} references non-existent source node ${edge.source}`);

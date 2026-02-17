@@ -18,9 +18,7 @@ export class WorkflowExecutionService {
     currentNodeId: string,
     execution: WorkflowExecution,
   ): string[] {
-    const outgoingEdges = workflow.definition.edges.filter(
-      edge => edge.source === currentNodeId,
-    );
+    const outgoingEdges = workflow.definition.edges.filter((edge) => edge.source === currentNodeId);
 
     if (outgoingEdges.length === 0) {
       return [];
@@ -41,21 +39,16 @@ export class WorkflowExecutionService {
   }
 
   findStartNode(workflow: Workflow): string | null {
-    const startNode = workflow.definition.nodes.find(
-      node => node.type === NodeType.START,
-    );
+    const startNode = workflow.definition.nodes.find((node) => node.type === NodeType.START);
     return startNode?.id || null;
   }
 
   isEndNode(workflow: Workflow, nodeId: string): boolean {
-    const node = workflow.definition.nodes.find(n => n.id === nodeId);
+    const node = workflow.definition.nodes.find((n) => n.id === nodeId);
     return node?.type === NodeType.END;
   }
 
-  private evaluateCondition(
-    condition: string,
-    execution: WorkflowExecution,
-  ): boolean {
+  private evaluateCondition(condition: string, execution: WorkflowExecution): boolean {
     try {
       const lastNodeExecution = execution.nodeExecutions[execution.nodeExecutions.length - 1];
       const output = lastNodeExecution?.output;
@@ -82,17 +75,9 @@ export class WorkflowExecutionService {
     }
   }
 
-  buildNodeInput(
-    node: any,
-    execution: WorkflowExecution,
-    context: ExecutionContext,
-  ): any {
+  buildNodeInput(node: any, execution: WorkflowExecution, context: ExecutionContext): any {
     if (node.config?.inputMapping) {
-      return this.applyInputMapping(
-        node.config.inputMapping,
-        execution,
-        context,
-      );
+      return this.applyInputMapping(node.config.inputMapping, execution, context);
     }
 
     const previousNodeExecution = execution.nodeExecutions[execution.nodeExecutions.length - 1];
@@ -137,11 +122,7 @@ export class WorkflowExecutionService {
     return undefined;
   }
 
-  shouldRetry(
-    node: any,
-    nodeExecution: any,
-    maxRetries: number = 3,
-  ): boolean {
+  shouldRetry(node: any, nodeExecution: any, maxRetries: number = 3): boolean {
     if (!node.config?.retry) {
       return false;
     }

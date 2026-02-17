@@ -71,8 +71,8 @@ export class WorkflowExecution {
 
   startNodeExecution(nodeId: string, input?: any): void {
     this.currentNodeId = nodeId;
-    const existingIndex = this.nodeExecutions.findIndex(n => n.nodeId === nodeId);
-    
+    const existingIndex = this.nodeExecutions.findIndex((n) => n.nodeId === nodeId);
+
     if (existingIndex >= 0) {
       this.nodeExecutions[existingIndex] = {
         ...this.nodeExecutions[existingIndex],
@@ -92,7 +92,7 @@ export class WorkflowExecution {
   }
 
   completeNodeExecution(nodeId: string, output?: any): void {
-    const execution = this.nodeExecutions.find(n => n.nodeId === nodeId);
+    const execution = this.nodeExecutions.find((n) => n.nodeId === nodeId);
     if (execution) {
       execution.status = NodeExecutionStatus.COMPLETED;
       execution.output = output;
@@ -101,7 +101,7 @@ export class WorkflowExecution {
   }
 
   failNodeExecution(nodeId: string, error: string): void {
-    const execution = this.nodeExecutions.find(n => n.nodeId === nodeId);
+    const execution = this.nodeExecutions.find((n) => n.nodeId === nodeId);
     if (execution) {
       execution.status = NodeExecutionStatus.FAILED;
       execution.error = error;
@@ -110,7 +110,7 @@ export class WorkflowExecution {
   }
 
   skipNodeExecution(nodeId: string): void {
-    const execution = this.nodeExecutions.find(n => n.nodeId === nodeId);
+    const execution = this.nodeExecutions.find((n) => n.nodeId === nodeId);
     if (execution) {
       execution.status = NodeExecutionStatus.SKIPPED;
       execution.completedAt = new Date();
@@ -118,14 +118,14 @@ export class WorkflowExecution {
   }
 
   incrementRetryCount(nodeId: string): void {
-    const execution = this.nodeExecutions.find(n => n.nodeId === nodeId);
+    const execution = this.nodeExecutions.find((n) => n.nodeId === nodeId);
     if (execution) {
       execution.retryCount++;
     }
   }
 
   getNodeExecution(nodeId: string): NodeExecution | undefined {
-    return this.nodeExecutions.find(n => n.nodeId === nodeId);
+    return this.nodeExecutions.find((n) => n.nodeId === nodeId);
   }
 
   isRunning(): boolean {

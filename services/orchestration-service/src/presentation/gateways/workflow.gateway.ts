@@ -19,9 +19,7 @@ import { WorkflowExecution } from '../../domain/entities/workflow-execution.enti
   },
   namespace: '/workflows',
 })
-export class WorkflowGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+export class WorkflowGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
@@ -38,7 +36,7 @@ export class WorkflowGateway
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
-    
+
     for (const [executionId, clients] of this.subscriptions.entries()) {
       clients.delete(client.id);
       if (clients.size === 0) {
@@ -48,20 +46,17 @@ export class WorkflowGateway
   }
 
   @SubscribeMessage('subscribe')
-  handleSubscribe(
-    @MessageBody() data: { executionId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
+  handleSubscribe(@MessageBody() data: { executionId: string }, @ConnectedSocket() client: Socket) {
     const { executionId } = data;
-    
+
     if (!this.subscriptions.has(executionId)) {
       this.subscriptions.set(executionId, new Set());
     }
-    
+
     this.subscriptions.get(executionId)!.add(client.id);
-    
+
     this.logger.log(`Client ${client.id} subscribed to execution ${executionId}`);
-    
+
     client.emit('subscribed', { executionId });
   }
 
@@ -71,19 +66,19 @@ export class WorkflowGateway
     @ConnectedSocket() client: Socket,
   ) {
     const { executionId } = data;
-    
+
     if (this.subscriptions.has(executionId)) {
       this.subscriptions.get(executionId)!.delete(client.id);
     }
-    
+
     this.logger.log(`Client ${client.id} unsubscribed from execution ${executionId}`);
-    
+
     client.emit('unsubscribed', { executionId });
   }
 
   sendExecutionUpdate(execution: WorkflowExecution) {
     const room = `execution:${execution.id}`;
-    
+
     this.server.to(room).emit('execution:update', {
       executionId: execution.id,
       workflowId: execution.workflowId,
@@ -97,20 +92,13 @@ export class WorkflowGateway
 
     if (this.subscriptions.has(execution.id)) {
       const clients = this.subscriptions.get(execution.id)!;
-      this.logger.log(
-        `Sent update for execution ${execution.id} to ${clients.size} subscribers`,
-      );
+      this.logger.log(`Sent update for execution ${execution.id} to ${clients.size} subscribers`);
     }
   }
 
-  sendNodeUpdate(
-    executionId: string,
-    nodeId: string,
-    status: string,
-    data?: any,
-  ) {
+  sendNodeUpdate(executionId: string, nodeId: string, status: string, data?: any) {
     const room = `execution:${executionId}`;
-    
+
     this.server.to(room).emit('node:update', {
       executionId,
       nodeId,
@@ -122,7 +110,7 @@ export class WorkflowGateway
 
   sendError(executionId: string, error: string) {
     const room = `execution:${executionId}`;
-    
+
     this.server.to(room).emit('execution:error', {
       executionId,
       error,
@@ -131,10 +119,7 @@ export class WorkflowGateway
   }
 
   @SubscribeMessage('join')
-  handleJoinRoom(
-    @MessageBody() data: { executionId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
+  handleJoinRoom(@MessageBody() data: { executionId: string }, @ConnectedSocket() client: Socket) {
     const room = `execution:${data.executionId}`;
     client.join(room);
     this.logger.log(`Client ${client.id} joined room ${room}`);
@@ -142,10 +127,7 @@ export class WorkflowGateway
   }
 
   @SubscribeMessage('leave')
-  handleLeaveRoom(
-    @MessageBody() data: { executionId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
+  handleLeaveRoom(@MessageBody() data: { executionId: string }, @ConnectedSocket() client: Socket) {
     const room = `execution:${data.executionId}`;
     client.leave(room);
     this.logger.log(`Client ${client.id} left room ${room}`);

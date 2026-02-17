@@ -33,10 +33,7 @@ export class WorkflowController {
   @ApiOperation({ summary: 'Create a new workflow' })
   @ApiResponse({ status: 201, description: 'Workflow created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async create(
-    @Body() dto: CreateWorkflowDto,
-    @Query('userId') userId: string,
-  ) {
+  async create(@Body() dto: CreateWorkflowDto, @Query('userId') userId: string) {
     this.logger.log(`Creating workflow for user ${userId}`);
     return this.createWorkflowUseCase.execute(dto, userId);
   }
@@ -77,10 +74,7 @@ export class WorkflowController {
   @ApiResponse({ status: 202, description: 'Workflow execution started' })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 404, description: 'Workflow not found' })
-  async execute(
-    @Body() dto: ExecuteWorkflowDto,
-    @Query('userId') userId: string,
-  ) {
+  async execute(@Body() dto: ExecuteWorkflowDto, @Query('userId') userId: string) {
     this.logger.log(`Executing workflow ${dto.workflowId} for user ${userId}`);
     return this.executeWorkflowUseCase.execute(dto, userId);
   }

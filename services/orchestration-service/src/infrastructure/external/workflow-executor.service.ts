@@ -36,11 +36,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     this.executionTimeout = this.configService.get<number>('EXECUTION_TIMEOUT', 300000);
   }
 
-  async execute(
-    workflowId: string,
-    input: any,
-    userId: string,
-  ): Promise<WorkflowExecution> {
+  async execute(workflowId: string, input: any, userId: string): Promise<WorkflowExecution> {
     const workflow = await this.workflowRepository.findById(workflowId);
     if (!workflow) {
       throw new Error(`Workflow ${workflowId} not found`);
@@ -68,7 +64,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
     execution.id = savedExecution.id;
 
-    this.executeAsync(execution, workflow).catch(error => {
+    this.executeAsync(execution, workflow).catch((error) => {
       this.logger.error(
         `Async execution failed for ${execution.id}`,
         error instanceof Error ? error.stack : String(error),
@@ -181,7 +177,11 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     }
   }
 
-  private async executeNodeByType(node: any, input: any, execution: WorkflowExecution): Promise<any> {
+  private async executeNodeByType(
+    node: any,
+    input: any,
+    execution: WorkflowExecution,
+  ): Promise<any> {
     switch (node.type) {
       case NodeType.START:
         return input;
