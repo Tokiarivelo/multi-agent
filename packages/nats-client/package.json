@@ -1,0 +1,20 @@
+{
+  "name": "@multi-agent/nats-client",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@multi-agent/types": "workspace:*",
+    "@multi-agent/events": "workspace:*",
+    "@multi-agent/common": "workspace:*",
+    "nats": "^2.19.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.6"
+  }
+}
