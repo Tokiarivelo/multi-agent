@@ -163,7 +163,6 @@ services/model-service/
 │   │   └── filters/ (1 file)
 │   ├── app.module.ts
 │   └── main.ts
-├── prisma/
 │   └── schema.prisma
 ├── test/
 │   ├── unit/use-cases/ (1 test)

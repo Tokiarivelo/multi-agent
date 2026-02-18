@@ -58,7 +58,7 @@ async function bootstrap() {
   // Enable graceful shutdown
   app.enableShutdownHooks();
 
-  const port = configService.get<number>('PORT', 3000);
+  const port = configService.get<number>('GATEWAY_PORT', 3000);
   await app.listen(port);
 
   logger.log(`🚀 Gateway Service is running on: http://localhost:${port}`);

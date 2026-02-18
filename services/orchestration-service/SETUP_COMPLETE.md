@@ -162,7 +162,7 @@ DATABASE_URL=postgresql://user:password@localhost:5432/multi_agent
 
 # Run Prisma migrations
 cd ../../prisma
-npx prisma migrate dev
+pnpm prisma:migrate
 ```
 
 ### 2. Environment Configuration

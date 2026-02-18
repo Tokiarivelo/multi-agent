@@ -102,7 +102,6 @@ services/model-service/
 │   │       └── http-exception.filter.ts
 │   ├── app.module.ts             # Main application module
 │   └── main.ts                   # Application entry point
-├── prisma/
 │   └── schema.prisma             # Database schema
 ├── test/
 │   ├── unit/

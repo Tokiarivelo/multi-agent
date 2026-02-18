@@ -7,6 +7,7 @@ The Agent Service is a production-ready microservice built with NestJS that mana
 ## ✅ Completed Features
 
 ### Core Functionality
+
 - ✅ Complete CRUD operations for AI agents
 - ✅ Agent execution with streaming and non-streaming modes
 - ✅ Conversation history management
@@ -16,6 +17,7 @@ The Agent Service is a production-ready microservice built with NestJS that mana
 - ✅ Comprehensive error handling
 
 ### Architecture
+
 - ✅ Clean Architecture with 4 layers (Domain, Application, Infrastructure, Presentation)
 - ✅ Domain-Driven Design patterns
 - ✅ Dependency injection throughout
@@ -25,6 +27,7 @@ The Agent Service is a production-ready microservice built with NestJS that mana
 - ✅ Interface segregation
 
 ### LLM Integration
+
 - ✅ LangChain integration
 - ✅ OpenAI provider (GPT-3.5, GPT-4, GPT-4-turbo)
 - ✅ Anthropic provider (Claude 2, Claude 3)
@@ -33,12 +36,14 @@ The Agent Service is a production-ready microservice built with NestJS that mana
 - ✅ Tool/function calling support
 
 ### External Integrations
+
 - ✅ Model Service client for fetching model configurations
 - ✅ Tool Service client for dynamic tool execution
 - ✅ HTTP client with retry logic
 - ✅ Error handling for external service failures
 
 ### Database
+
 - ✅ Prisma ORM integration
 - ✅ PostgreSQL database schema
 - ✅ Database migrations
@@ -47,6 +52,7 @@ The Agent Service is a production-ready microservice built with NestJS that mana
 - ✅ Cascade delete support
 
 ### API
+
 - ✅ RESTful API with NestJS controllers
 - ✅ WebSocket gateway for streaming
 - ✅ Health check endpoint
@@ -56,6 +62,7 @@ The Agent Service is a production-ready microservice built with NestJS that mana
 - ✅ API versioning with prefix
 
 ### DevOps
+
 - ✅ Docker support with multi-stage builds
 - ✅ Docker Compose for local development
 - ✅ Environment variable validation
@@ -64,11 +71,13 @@ The Agent Service is a production-ready microservice built with NestJS that mana
 - ✅ PostgreSQL container included
 
 ### Testing
+
 - ✅ E2E test suite
 - ✅ Jest configuration
 - ✅ Test utilities and fixtures
 
 ### Documentation
+
 - ✅ Comprehensive README
 - ✅ API documentation with all endpoints
 - ✅ Deployment guide (local, Docker, K8s)
@@ -133,10 +142,6 @@ services/agent-service/
 │   ├── app.module.ts                # Main application module
 │   └── main.ts                      # Application entry point
 │
-├── prisma/                          # Database
-│   ├── schema.prisma                # Database schema
-│   └── migrations/                  # Migration files
-│
 ├── test/                            # Tests
 │   ├── agent.e2e-spec.ts
 │   └── jest-e2e.json
@@ -149,48 +154,56 @@ services/agent-service/
 ## 🔑 Key Design Decisions
 
 ### 1. Clean Architecture
+
 - **Why**: Ensures separation of concerns, testability, and maintainability
 - **Benefit**: Easy to swap implementations, test in isolation, and scale
 
 ### 2. LangChain Integration
+
 - **Why**: Provides abstraction over multiple LLM providers
 - **Benefit**: Easy to add new providers, consistent API, built-in streaming
 
 ### 3. WebSocket for Streaming
+
 - **Why**: Real-time token delivery for better UX
 - **Benefit**: Low latency, efficient, bidirectional communication
 
 ### 4. Prisma ORM
+
 - **Why**: Type-safe database access, migration management
 - **Benefit**: Developer productivity, reduced errors, easy schema evolution
 
 ### 5. Provider Factory Pattern
+
 - **Why**: Extensible design for adding new LLM providers
 - **Benefit**: Open-closed principle, easy to test, maintainable
 
 ### 6. External Service Clients
+
 - **Why**: Separation from model and tool services
 - **Benefit**: Loose coupling, independent scaling, fault tolerance
 
 ## 📊 Technical Specifications
 
 ### Technology Stack
+
 - **Framework**: NestJS 10.x
 - **Runtime**: Node.js 20+
 - **Language**: TypeScript 5.x
 - **Database**: PostgreSQL 15+
-- **ORM**: Prisma 5.x
+- **ORM**: Prisma 7.x (via @multi-agent/database)
 - **LLM Library**: LangChain 0.1.x
 - **WebSocket**: Socket.io 4.x
 - **HTTP Client**: Axios 1.x
 - **Validation**: class-validator, class-transformer
 
 ### Dependencies
+
 ```json
 {
   "core": ["@nestjs/core", "@nestjs/common", "@nestjs/platform-express"],
   "websocket": ["@nestjs/websockets", "@nestjs/platform-socket.io"],
-  "database": ["@prisma/client", "prisma"],
+  "database": ["@multi-agent/database"],
   "langchain": ["langchain", "@langchain/openai", "@langchain/anthropic"],
   "http": ["@nestjs/axios", "axios"],
   "validation": ["class-validator", "class-transformer"],
@@ -199,12 +212,14 @@ services/agent-service/
 ```
 
 ### Database Schema
+
 - **Agents Table**: Stores agent configurations
 - **AgentExecutions Table**: Stores execution history
 - **Indexes**: On agentId, status, startedAt for performance
 - **Relations**: One-to-many (Agent -> AgentExecutions)
 
 ### API Endpoints
+
 ```
 POST   /api/agents              - Create agent
 GET    /api/agents              - List agents
@@ -219,6 +234,7 @@ WS     /agent-execution         - WebSocket streaming
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 ```bash
 - Node.js 20+
 - PostgreSQL 15+
@@ -226,6 +242,7 @@ WS     /agent-execution         - WebSocket streaming
 ```
 
 ### Installation
+
 ```bash
 cd services/agent-service
 make install
@@ -234,6 +251,7 @@ make start-dev
 ```
 
 ### Docker
+
 ```bash
 make docker-up
 ```
@@ -297,6 +315,7 @@ make docker-up
 ## 📦 Production Ready
 
 The service is production-ready with:
+
 - Complete error handling
 - Database migrations
 - Docker support
@@ -311,6 +330,7 @@ The service is production-ready with:
 ## 🔮 Future Enhancements
 
 See CHANGELOG.md for planned features including:
+
 - Additional LLM providers (Google, Azure, Ollama)
 - Authentication and authorization
 - Usage analytics and monitoring
@@ -323,6 +343,7 @@ See CHANGELOG.md for planned features including:
 ## 📞 Support
 
 For issues, questions, or contributions:
+
 1. Check documentation files
 2. Review examples in EXAMPLES.md
 3. Check API documentation in API.md

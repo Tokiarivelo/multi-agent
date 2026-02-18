@@ -67,16 +67,16 @@ Multi-Agent Platform is an enterprise-grade AI orchestration system that enables
 
 ### Service Overview
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| **Gateway** | 3000 | API gateway, authentication, authorization |
-| **Frontend** | 3001 | Next.js web interface |
-| **Agent** | 3002 | AI agent management & LangChain execution |
-| **Orchestration** | 3003 | Workflow orchestration engine |
-| **Execution** | 3004 | Execution tracking & audit logs |
-| **Model** | 3005 | LLM provider management & API key encryption |
-| **Tool** | 3006 | Tool registry & sandboxed execution |
-| **Vector** | 3007 | Vector storage & semantic search |
+| Service           | Port | Purpose                                      |
+| ----------------- | ---- | -------------------------------------------- |
+| **Gateway**       | 3000 | API gateway, authentication, authorization   |
+| **Frontend**      | 3001 | Next.js web interface                        |
+| **Agent**         | 3002 | AI agent management & LangChain execution    |
+| **Orchestration** | 3003 | Workflow orchestration engine                |
+| **Execution**     | 3004 | Execution tracking & audit logs              |
+| **Model**         | 3005 | LLM provider management & API key encryption |
+| **Tool**          | 3006 | Tool registry & sandboxed execution          |
+| **Vector**        | 3007 | Vector storage & semantic search             |
 
 For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -132,6 +132,7 @@ For detailed security documentation, see [SECURITY.md](SECURITY.md).
 ## 🛠️ Technology Stack
 
 ### Backend
+
 - **Framework**: NestJS 10.3
 - **Runtime**: Node.js 20+
 - **Language**: TypeScript 5.3
@@ -141,6 +142,7 @@ For detailed security documentation, see [SECURITY.md](SECURITY.md).
 - **AI/ML**: LangChain, OpenAI SDK, Anthropic SDK
 
 ### Frontend
+
 - **Framework**: Next.js 16 with React 19
 - **Language**: TypeScript 5.3
 - **Styling**: Tailwind CSS v4
@@ -150,6 +152,7 @@ For detailed security documentation, see [SECURITY.md](SECURITY.md).
 - **Forms**: React Hook Form + Zod validation
 
 ### DevOps
+
 - **Container**: Docker & Docker Compose
 - **Orchestration**: Kubernetes (Skaffold)
 - **Package Manager**: pnpm 8+
@@ -171,11 +174,14 @@ multi-agent/
 │   └── vector-service/         # Vector storage & search
 ├── packages/                    # Shared packages
 │   ├── common/                 # Shared utilities
+│   ├── database/               # Shared Prisma client & schema
+│   │   ├── prisma/             # Database schema & migrations
+│   │   ├── src/                # PrismaService & re-exports
+│   │   └── prisma.config.ts    # Prisma configuration
 │   ├── types/                  # TypeScript type definitions
 │   ├── events/                 # Event schemas
 │   └── nats-client/            # NATS messaging client
 ├── frontend/                    # Next.js web application
-├── prisma/                      # Database schema
 ├── k8s/                         # Kubernetes manifests
 ├── docker-compose.yml          # Local development stack
 ├── skaffold.yaml               # Kubernetes deployment
@@ -220,6 +226,7 @@ docker-compose up -d
 ```
 
 This starts:
+
 - NATS (port 4222)
 - PostgreSQL (port 5432)
 - Qdrant (port 6333)
@@ -227,10 +234,11 @@ This starts:
 ### 5. Run Database Migrations
 
 ```bash
-cd prisma
-npx prisma migrate dev
-npx prisma generate
-cd ..
+# Generate Prisma client
+pnpm prisma:generate
+
+# Run migrations
+pnpm prisma:migrate
 ```
 
 ### 6. Start Development Servers
@@ -240,6 +248,7 @@ pnpm dev
 ```
 
 This starts all services in development mode with hot-reload:
+
 - Gateway: http://localhost:3000
 - Frontend: http://localhost:3001
 - Agent Service: http://localhost:3002
@@ -252,6 +261,7 @@ This starts all services in development mode with hot-reload:
 ### 7. Access the Application
 
 Open your browser and navigate to:
+
 - **Frontend**: http://localhost:3001
 - **API Gateway**: http://localhost:3000
 - **API Documentation**: http://localhost:3000/api (Swagger)
@@ -312,6 +322,7 @@ For detailed API documentation, see [API.md](API.md).
 ### Swagger Documentation
 
 Once the gateway service is running, access interactive API documentation at:
+
 - **Local**: http://localhost:3000/api
 - **Kubernetes**: http://<your-cluster-ip>:3000/api
 

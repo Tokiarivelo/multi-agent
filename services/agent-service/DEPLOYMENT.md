@@ -113,7 +113,7 @@ pnpm run build
 ### 2. Run Database Migrations
 
 ```bash
-npx prisma migrate deploy
+pnpm prisma:migrate
 ```
 
 ### 3. Start Production Server
@@ -234,10 +234,10 @@ spec:
 
 ```bash
 # Create new migration
-npx prisma migrate dev --name migration_name
+pnpm prisma:migrate --name migration_name
 
 # Apply migrations
-npx prisma migrate deploy
+pnpm prisma:migrate
 
 # Reset database (development only)
 npx prisma migrate reset
@@ -247,7 +247,7 @@ npx prisma migrate reset
 
 ```bash
 # Open database GUI
-npx prisma studio
+pnpm prisma:studio
 ```
 
 ## Monitoring & Logging

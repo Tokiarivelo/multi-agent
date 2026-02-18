@@ -7,7 +7,7 @@ import { Logger } from '@multi-agent/common';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  
+
   const app = await NestFactory.create(AppModule);
 
   // Global prefix
@@ -41,7 +41,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   // Start server
-  const port = process.env.PORT || 3003;
+  const port = process.env.EXECUTION_PORT || 3004;
   await app.listen(port);
 
   logger.info(`🚀 Execution Service is running on: http://localhost:${port}/api`);

@@ -41,18 +41,16 @@ pnpm install
 Copy `.env.example` to `.env` and configure:
 
 ```env
-DATABASE_URL=postgresql://user:password@localhost:5432/agent_service
-MODEL_SERVICE_URL=http://localhost:3001
-TOOL_SERVICE_URL=http://localhost:3003
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/multi_agent?schema=public
+MODEL_SERVICE_URL=http://localhost:3005
+TOOL_SERVICE_URL=http://localhost:3006
 PORT=3002
 ```
 
 ### Database Setup
 
-```bash
-pnpm run prisma:generate
-npx prisma migrate dev --name init
-```
+Database schema and migrations are managed centrally via `packages/database`.
+See the root [DEVELOPMENT.md](../../DEVELOPMENT.md) for migration commands.
 
 ### Running
 
@@ -89,8 +87,8 @@ socket.emit('execute', {
   dto: {
     input: 'Your prompt here',
     conversationHistory: [],
-    stream: true
-  }
+    stream: true,
+  },
 });
 
 socket.on('token', (data) => {
@@ -174,7 +172,6 @@ services/agent-service/
 │       ├── controllers/     # REST controllers
 │       ├── gateways/        # WebSocket gateways
 │       └── filters/         # Exception filters
-├── prisma/                  # Database schema
 ├── package.json
 └── tsconfig.json
 ```

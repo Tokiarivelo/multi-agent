@@ -37,7 +37,6 @@ tool-service/
 │       ├── controllers/            # 2 controllers
 │       └── filters/                # Exception handling
 ├── test/                           # E2E tests
-├── prisma/                         # Database schema
 └── [Documentation files]
 ```
 
@@ -144,7 +143,7 @@ tool-service/
 - **@nestjs/throttler**: Rate limiting
 
 ### Data & HTTP
-- **Prisma 5**: Type-safe ORM
+- **Prisma 7**: Type-safe ORM
 - **PostgreSQL**: Primary database
 - **Axios**: HTTP client
 - **Cheerio**: Web scraping

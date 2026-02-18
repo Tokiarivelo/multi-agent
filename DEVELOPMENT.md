@@ -17,6 +17,7 @@
 ### Prerequisites
 
 Ensure you have the following installed:
+
 - **Node.js**: >= 20.0.0
 - **pnpm**: >= 8.0.0
 - **Docker**: >= 24.0.0
@@ -26,36 +27,39 @@ Ensure you have the following installed:
 ### Initial Setup
 
 1. **Clone the repository**:
+
 ```bash
 git clone https://github.com/yourusername/multi-agent.git
 cd multi-agent
 ```
 
 2. **Install dependencies**:
+
 ```bash
 pnpm install
 ```
 
 3. **Setup environment variables**:
+
 ```bash
 cp .env.example .env
 # Edit .env with your configuration
 ```
 
 4. **Start infrastructure services**:
+
 ```bash
 docker-compose up -d
 ```
 
 5. **Run database migrations**:
+
 ```bash
-cd prisma
-npx prisma migrate dev
-npx prisma generate
-cd ..
+pnpm prisma:migrate
 ```
 
 6. **Start all services**:
+
 ```bash
 pnpm dev
 ```
@@ -66,10 +70,11 @@ Check that all services are running:
 
 ```bash
 # Check infrastructure
-docker-compose ps
+docker compose ps
 
 # Check service health
-curl http://localhost:3000/health  # Gateway
+curl http://localhost:3000/health  # Gateway (port 3000)
+curl http://localhost:3001             # Frontend (port 3001)
 curl http://localhost:3002/health  # Agent
 curl http://localhost:3003/health  # Orchestration
 ```
@@ -109,6 +114,10 @@ multi-agent/
 │
 ├── packages/                      # Shared packages
 │   ├── common/                   # Common utilities
+│   ├── database/                 # Shared Prisma client & schema
+│   │   ├── prisma/               # Database schema & migrations
+│   │   ├── src/                  # PrismaService & re-exports
+│   │   └── prisma.config.ts      # Prisma configuration
 │   ├── types/                    # TypeScript types
 │   ├── events/                   # Event schemas
 │   └── nats-client/              # NATS client wrapper
@@ -121,10 +130,6 @@ multi-agent/
 │   │   └── stores/               # Zustand stores
 │   └── ...
 │
-├── prisma/                        # Database
-│   ├── schema.prisma             # Database schema
-│   └── migrations/               # Migration files
-│
 ├── k8s/                           # Kubernetes manifests
 └── docker-compose.yml
 ```
@@ -134,6 +139,7 @@ multi-agent/
 ### Working on a Feature
 
 1. **Create a feature branch**:
+
 ```bash
 git checkout -b feature/your-feature-name
 ```
@@ -141,21 +147,25 @@ git checkout -b feature/your-feature-name
 2. **Make your changes** in the relevant service
 
 3. **Run tests**:
+
 ```bash
 pnpm test
 ```
 
 4. **Lint your code**:
+
 ```bash
 pnpm lint
 ```
 
 5. **Format your code**:
+
 ```bash
 pnpm format
 ```
 
 6. **Commit your changes**:
+
 ```bash
 git add .
 git commit -m "feat(agent): add streaming support"
@@ -181,15 +191,15 @@ pnpm dev
 #### Creating a Migration
 
 ```bash
-cd prisma
-npx prisma migrate dev --name add_user_avatar
+pnpm prisma:migrate
+# Or with a name:
+pnpm --filter @multi-agent/database exec prisma migrate dev -- --name add_user_avatar
 ```
 
 #### Using Prisma Studio
 
 ```bash
-cd prisma
-npx prisma studio
+pnpm prisma:studio
 ```
 
 Access at: http://localhost:5555
@@ -401,11 +411,10 @@ docker-compose logs nats
 
 ```bash
 # Regenerate Prisma client
-cd prisma
-npx prisma generate
+pnpm prisma:generate
 
 # Reset database
-npx prisma migrate reset
+pnpm --filter @multi-agent/database exec prisma migrate reset
 ```
 
 ### Node Module Issues

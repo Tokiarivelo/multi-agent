@@ -37,14 +37,8 @@ This service follows Clean Architecture with the following layers:
 # Install dependencies (from root of monorepo)
 pnpm install
 
-# Generate Prisma client (required before building or running)
-cd prisma
-npx prisma generate
-
-# Or use the provided script
-cd services/gateway-service
-chmod +x scripts/generate-prisma.sh
-./scripts/generate-prisma.sh
+# Generate Prisma client
+pnpm prisma:generate
 ```
 
 ## Configuration
@@ -56,12 +50,13 @@ cp .env.example .env
 ```
 
 Required environment variables:
+
 - `PORT`: Server port (default: 3000)
 - `NODE_ENV`: Environment (development/production)
 - `DATABASE_URL`: PostgreSQL connection string
 - `JWT_SECRET`: Secret key for JWT tokens
 - `JWT_EXPIRATION`: Token expiration time (default: 1d)
-- `CORS_ORIGIN`: CORS allowed origins (default: *)
+- `CORS_ORIGIN`: CORS allowed origins (default: \*)
 
 ## Running the Service
 
@@ -77,6 +72,7 @@ pnpm start:prod
 ## API Documentation
 
 Once the service is running, access the Swagger documentation at:
+
 ```
 http://localhost:3000/api
 ```

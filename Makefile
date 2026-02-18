@@ -1,6 +1,6 @@
 # Makefile for Multi-Agent Platform Kubernetes Deployment
 
-.PHONY: help setup build deploy dev prod clean status logs port-forward test validate
+.PHONY: help setup build deploy dev prod clean status logs port-forward test validate prisma-generate prisma-migrate prisma-studio prisma-reset
 
 # Default target
 .DEFAULT_GOAL := help
@@ -111,6 +111,23 @@ port-forward: ## Forward ports for local access
 test: ## Run tests
 	@echo "$(GREEN)Running tests...$(NC)"
 	# Add test commands here
+
+# Database commands (via packages/database)
+prisma-generate: ## Generate Prisma client
+	@echo "$(GREEN)Generating Prisma client...$(NC)"
+	pnpm prisma:generate
+
+prisma-migrate: ## Run database migrations
+	@echo "$(GREEN)Running database migrations...$(NC)"
+	pnpm prisma:migrate
+
+prisma-studio: ## Open Prisma Studio
+	@echo "$(GREEN)Opening Prisma Studio...$(NC)"
+	pnpm prisma:studio
+
+prisma-reset: ## Reset database (WARNING: destroys data)
+	@echo "$(RED)Resetting database...$(NC)"
+	pnpm --filter @multi-agent/database exec prisma migrate reset
 
 validate: ## Validate Kubernetes manifests
 	@echo "$(GREEN)Validating Kubernetes manifests...$(NC)"

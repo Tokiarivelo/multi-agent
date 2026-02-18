@@ -149,7 +149,7 @@ make test-cov
   "framework": "NestJS 10.x",
   "language": "TypeScript 5.x",
   "database": "PostgreSQL 15+",
-  "orm": "Prisma 5.x",
+  "orm": "Prisma 7.x (via @multi-agent/database)",
   "llm": "LangChain 0.1.x",
   "websocket": "Socket.io 4.x",
   "runtime": "Node.js 20+"
@@ -274,7 +274,6 @@ make docker-up
 ```
 agent-service/
 ├── src/               # Source code (4 layers)
-├── prisma/            # Database schema & migrations
 ├── test/              # E2E tests
 ├── Dockerfile         # Docker build
 ├── docker-compose.yml # Local development

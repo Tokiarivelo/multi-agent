@@ -1,8 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
-import { LLMConfig, LLMResponse, StreamingOptions } from '../../../application/interfaces/langchain-provider.interface';
-import { ConversationMessage } from '../../../domain/entities/agent.entity';
+import {
+  LLMConfig,
+  LLMResponse,
+  StreamingOptions,
+} from '../../../../application/interfaces/langchain-provider.interface';
+import { ConversationMessage } from '../../../../domain/entities/agent.entity';
 
 @Injectable()
 export class OpenAIProvider {
@@ -17,14 +21,14 @@ export class OpenAIProvider {
       maxTokens: config.maxTokens,
       streaming: false,
     });
-    
+
     this.logger.log(`Initialized OpenAI provider with model: ${config.model}`);
   }
 
   async execute(messages: ConversationMessage[], tools?: any[]): Promise<LLMResponse> {
     try {
       const langchainMessages = this.convertMessages(messages);
-      
+
       let response;
       if (tools && tools.length > 0) {
         const modelWithTools = this.model.bind({ tools });
@@ -62,13 +66,14 @@ export class OpenAIProvider {
       });
 
       const langchainMessages = this.convertMessages(messages);
-      
+
       let fullContent = '';
       let tokenCount = 0;
 
-      const stream = tools && tools.length > 0
-        ? await streamingModel.bind({ tools }).stream(langchainMessages)
-        : await streamingModel.stream(langchainMessages);
+      const stream =
+        tools && tools.length > 0
+          ? await streamingModel.bind({ tools }).stream(langchainMessages)
+          : await streamingModel.stream(langchainMessages);
 
       for await (const chunk of stream) {
         const content = chunk.content.toString();
@@ -90,7 +95,7 @@ export class OpenAIProvider {
   }
 
   private convertMessages(messages: ConversationMessage[]): any[] {
-    return messages.map(msg => {
+    return messages.map((msg) => {
       switch (msg.role) {
         case 'system':
           return new SystemMessage(msg.content);

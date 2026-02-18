@@ -471,7 +471,7 @@ kubectl apply -f k8s/migration-job.yaml
 kubectl run migration --image=multi-agent/gateway-service:latest \
   --restart=Never \
   --env="DATABASE_URL=$DATABASE_URL" \
-  --command -- npx prisma migrate deploy
+  --command -- pnpm prisma:migrate
 
 # Check job status
 kubectl get jobs

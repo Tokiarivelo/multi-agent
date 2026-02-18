@@ -50,10 +50,7 @@ export class VectorRepository implements IVectorRepository {
     );
   }
 
-  async findCollectionByNameAndUserId(
-    name: string,
-    userId: string,
-  ): Promise<Collection | null> {
+  async findCollectionByNameAndUserId(name: string, userId: string): Promise<Collection | null> {
     const collection = await this.prisma.collection.findFirst({
       where: {
         name,
@@ -83,7 +80,7 @@ export class VectorRepository implements IVectorRepository {
     });
 
     return collections.map(
-      c =>
+      (c: any) =>
         new Collection(
           c.id,
           c.name,

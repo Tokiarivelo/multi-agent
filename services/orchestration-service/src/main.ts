@@ -58,7 +58,7 @@ async function bootstrap() {
   // Enable graceful shutdown
   app.enableShutdownHooks();
 
-  const port = configService.get<number>('PORT', 3001);
+  const port = configService.get<number>('ORCHESTRATION_PORT', 3003);
   await app.listen(port);
 
   logger.log(`🚀 Orchestration Service is running on: http://localhost:${port}`);
