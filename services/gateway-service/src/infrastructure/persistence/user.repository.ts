@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { IUserRepository } from '../../domain/repositories/user.repository.interface';
 import { User } from '../../domain/entities/user.entity';
 import { PrismaService } from '../database/prisma.service';
+import { UserRole, Prisma } from '@multi-agent/database';
 
 @Injectable()
 export class UserRepository implements IUserRepository {
@@ -37,15 +38,21 @@ export class UserRepository implements IUserRepository {
 
   async create(userData: {
     email: string;
-    password: string;
+    password?: string | null;
     firstName: string;
     lastName: string;
-    role: string;
+    role: UserRole;
     isActive: boolean;
+    provider?: string | null;
+    image?: string | null;
   }): Promise<User> {
     try {
       const user = await this.prisma.user.create({
-        data: userData,
+        data: {
+          ...userData,
+          password: userData.password || undefined,
+          provider: userData.provider || 'credentials',
+        },
       });
 
       this.logger.log(`User created: ${user.id}`);
@@ -60,7 +67,7 @@ export class UserRepository implements IUserRepository {
     try {
       const user = await this.prisma.user.update({
         where: { id },
-        data: userData,
+        data: userData as Prisma.UserUpdateInput,
       });
 
       this.logger.log(`User updated: ${id}`);

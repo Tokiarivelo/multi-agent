@@ -7,13 +7,13 @@ import {
   NotFoundException,
   BadRequestException,
   Inject,
+  Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { IExecutionRepository } from '../../domain/repositories/execution.repository.interface';
 import { GetExecutionLogsUseCase } from '../../application/use-cases/get-execution-logs.use-case';
 import { IEventPublisher } from '../../application/interfaces/event-publisher.interface';
 import { ExecutionDomainService } from '../../domain/services/execution.domain.service';
-import { Logger } from '@multi-agent/common';
 
 @ApiTags('executions')
 @Controller('executions')
@@ -34,7 +34,7 @@ export class ExecutionController {
   @ApiResponse({ status: 200, description: 'Execution found' })
   @ApiResponse({ status: 404, description: 'Execution not found' })
   async getExecution(@Param('id') id: string) {
-    this.logger.info(`Getting execution ${id}`);
+    this.logger.log(`Getting execution ${id}`);
 
     const execution = await this.executionRepository.findById(id);
     if (!execution) {
@@ -60,7 +60,7 @@ export class ExecutionController {
   @ApiResponse({ status: 200, description: 'Execution logs found' })
   @ApiResponse({ status: 404, description: 'Execution not found' })
   async getExecutionLogs(@Param('id') id: string) {
-    this.logger.info(`Getting logs for execution ${id}`);
+    this.logger.log(`Getting logs for execution ${id}`);
 
     const execution = await this.executionRepository.findById(id);
     if (!execution) {
@@ -69,7 +69,7 @@ export class ExecutionController {
 
     const logs = await this.getExecutionLogsUseCase.execute(id);
 
-    return logs.map(log => ({
+    return logs.map((log) => ({
       id: log.id,
       executionId: log.executionId,
       nodeId: log.nodeId,
@@ -91,10 +91,7 @@ export class ExecutionController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Executions list' })
-  async listExecutions(
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '10',
-  ) {
+  async listExecutions(@Query('page') page: string = '1', @Query('limit') limit: string = '10') {
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
 
@@ -106,7 +103,7 @@ export class ExecutionController {
       throw new BadRequestException('Invalid limit (must be between 1 and 100)');
     }
 
-    this.logger.info(`Listing executions - page: ${pageNum}, limit: ${limitNum}`);
+    this.logger.log(`Listing executions - page: ${pageNum}, limit: ${limitNum}`);
 
     const result = await this.executionRepository.findAll({
       page: pageNum,
@@ -114,7 +111,7 @@ export class ExecutionController {
     });
 
     return {
-      data: result.data.map(execution => ({
+      data: result.data.map((execution) => ({
         id: execution.id,
         workflowId: execution.workflowId,
         userId: execution.userId,
@@ -141,7 +138,7 @@ export class ExecutionController {
   @ApiResponse({ status: 404, description: 'Execution not found' })
   @ApiResponse({ status: 400, description: 'Execution cannot be retried' })
   async retryExecution(@Param('id') id: string) {
-    this.logger.info(`Retrying execution ${id}`);
+    this.logger.log(`Retrying execution ${id}`);
 
     const execution = await this.executionRepository.findById(id);
     if (!execution) {
@@ -168,7 +165,7 @@ export class ExecutionController {
       timestamp: new Date().toISOString(),
     });
 
-    this.logger.info(`Retry requested for execution ${id} starting from node ${failedNode.nodeId}`);
+    this.logger.log(`Retry requested for execution ${id} starting from node ${failedNode.nodeId}`);
 
     return {
       message: 'Execution retry initiated',

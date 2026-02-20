@@ -15,6 +15,7 @@ import { AgentClientService } from './agent-client.service';
 import { ToolClientService } from './tool-client.service';
 import { PrismaService } from '../database/prisma.service';
 import { WorkflowGateway } from '../../presentation/gateways/workflow.gateway';
+import { ExecutionStatus as PrismaExecutionStatus } from '@prisma/client';
 
 @Injectable()
 export class WorkflowExecutorService implements IWorkflowExecutor {
@@ -55,10 +56,10 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     const savedExecution = await this.prisma.workflowExecution.create({
       data: {
         workflowId: execution.workflowId,
-        status: execution.status,
+        status: execution.status as unknown as PrismaExecutionStatus,
         input: execution.input,
         userId: execution.userId,
-        nodeExecutions: execution.nodeExecutions,
+        nodeExecutions: execution.nodeExecutions as any,
       },
     });
 
@@ -134,7 +135,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     this.workflowGateway.sendExecutionUpdate(execution);
 
     try {
-      const output = await this.executeNodeByType(node, input, execution);
+      const output = await this.executeNodeByType(node, input);
 
       execution.completeNodeExecution(nodeId, output);
       context.variables = { ...context.variables, ...output };
@@ -177,11 +178,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     }
   }
 
-  private async executeNodeByType(
-    node: any,
-    input: any,
-    execution: WorkflowExecution,
-  ): Promise<any> {
+  private async executeNodeByType(node: any, input: any): Promise<any> {
     switch (node.type) {
       case NodeType.START:
         return input;
@@ -226,10 +223,10 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     await this.prisma.workflowExecution.update({
       where: { id: execution.id },
       data: {
-        status: execution.status,
+        status: execution.status as PrismaExecutionStatus,
         output: execution.output,
         error: execution.error,
-        nodeExecutions: execution.nodeExecutions,
+        nodeExecutions: execution.nodeExecutions as any,
         currentNodeId: execution.currentNodeId,
         startedAt: execution.startedAt,
         completedAt: execution.completedAt,
@@ -251,13 +248,19 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       id: execution.id,
       workflowId: execution.workflowId,
       status: execution.status as ExecutionStatus,
-      input: execution.input,
-      output: execution.output,
-      error: execution.error,
+      input: execution.input ?? undefined,
+      output: execution.output ?? undefined,
+      error: (execution.error === null ? undefined : execution.error) as string | undefined,
       nodeExecutions: execution.nodeExecutions as any[],
-      currentNodeId: execution.currentNodeId || undefined,
-      startedAt: execution.startedAt || undefined,
-      completedAt: execution.completedAt || undefined,
+      currentNodeId: (execution.currentNodeId === null ? undefined : execution.currentNodeId) as
+        | string
+        | undefined,
+      startedAt: (execution.startedAt === null ? undefined : execution.startedAt) as
+        | Date
+        | undefined,
+      completedAt: (execution.completedAt === null ? undefined : execution.completedAt) as
+        | Date
+        | undefined,
       userId: execution.userId,
       createdAt: execution.createdAt,
       updatedAt: execution.updatedAt,

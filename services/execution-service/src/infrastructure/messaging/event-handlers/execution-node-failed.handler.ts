@@ -1,5 +1,4 @@
-import { Injectable } from '@nestjs/common';
-import { Logger } from '@multi-agent/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ExecutionNodeFailedEvent } from '@multi-agent/events';
 import { LogNodeExecutionUseCase } from '../../../application/use-cases/log-node-execution.use-case';
 
@@ -7,13 +6,11 @@ import { LogNodeExecutionUseCase } from '../../../application/use-cases/log-node
 export class ExecutionNodeFailedHandler {
   private readonly logger = new Logger(ExecutionNodeFailedHandler.name);
 
-  constructor(
-    private readonly logNodeExecutionUseCase: LogNodeExecutionUseCase,
-  ) {}
+  constructor(private readonly logNodeExecutionUseCase: LogNodeExecutionUseCase) {}
 
   async handle(event: ExecutionNodeFailedEvent): Promise<void> {
     try {
-      this.logger.info(`Handling execution.node.failed event`, {
+      this.logger.log(`Handling execution.node.failed event`, {
         executionId: event.data.executionId,
         nodeId: event.data.nodeId,
       });
@@ -24,7 +21,7 @@ export class ExecutionNodeFailedHandler {
         event.data.error,
       );
 
-      this.logger.info(`Node execution failed`, {
+      this.logger.log(`Node execution failed`, {
         executionId: event.data.executionId,
         nodeId: event.data.nodeId,
       });

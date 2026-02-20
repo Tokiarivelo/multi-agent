@@ -9,7 +9,7 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "prisma:generate": "pnpm --filter @multi-agent/database prisma:generate",
+    "prisma:generate": "pnpm --filter @multi-agent/database prisma:generate && pnpm --filter @multi-agent/database build",
     "prisma:migrate": "pnpm --filter @multi-agent/database prisma:migrate",
     "prisma:studio": "pnpm --filter @multi-agent/database prisma:studio",
     "prepare": "husky install"

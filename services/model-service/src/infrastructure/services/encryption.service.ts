@@ -7,9 +7,9 @@ export class EncryptionService {
   private readonly encryptionService: CommonEncryptionService;
 
   constructor(private readonly configService: ConfigService) {
-    const secret = this.configService.get<string>('ENCRYPTION_SECRET');
+    const secret = this.configService.get<string>('ENCRYPTION_KEY');
     if (!secret || secret.length < 32) {
-      throw new Error('ENCRYPTION_SECRET must be at least 32 characters long');
+      throw new Error('ENCRYPTION_KEY must be at least 32 characters long');
     }
     this.encryptionService = new CommonEncryptionService(secret);
   }

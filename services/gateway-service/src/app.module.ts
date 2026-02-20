@@ -17,11 +17,14 @@ import { USER_REPOSITORY } from './domain/repositories/user.repository.interface
 // Application
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { RegisterUseCase } from './application/use-cases/register.use-case';
+import { SocialLoginUseCase } from './application/use-cases/social-login.use-case';
 import { JWT_SERVICE } from './application/interfaces/jwt.service.interface';
 
 // Presentation
 import { AuthController } from './presentation/controllers/auth.controller';
 import { HealthController } from './presentation/controllers/health.controller';
+import { GatewaysModule } from './presentation/gateways/gateways.module';
+import { NatsModule } from './infrastructure/messaging/nats.module';
 
 @Module({
   imports: [
@@ -37,6 +40,8 @@ import { HealthController } from './presentation/controllers/health.controller';
       }),
       inject: [ConfigService],
     }),
+    NatsModule,
+    GatewaysModule,
   ],
   controllers: [AuthController, HealthController],
   providers: [
@@ -45,6 +50,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     JwtStrategy,
     LoginUseCase,
     RegisterUseCase,
+    SocialLoginUseCase,
     {
       provide: USER_REPOSITORY,
       useClass: UserRepository,

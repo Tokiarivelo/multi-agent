@@ -1,6 +1,9 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { Logger } from '@multi-agent/common';
-import { ExecutionStartedEvent, ExecutionCompletedEvent, ExecutionFailedEvent } from '@multi-agent/events';
+import { Injectable, Logger } from '@nestjs/common';
+import {
+  ExecutionStartedEvent,
+  ExecutionCompletedEvent,
+  ExecutionFailedEvent,
+} from '@multi-agent/events';
 import { CreateExecutionUseCase } from '../../../application/use-cases/create-execution.use-case';
 import { UpdateExecutionStatusUseCase } from '../../../application/use-cases/update-execution-status.use-case';
 import { ExecutionStatus } from '../../../domain/entities/execution.entity';
@@ -16,7 +19,7 @@ export class ExecutionStartedHandler {
 
   async handle(event: ExecutionStartedEvent): Promise<void> {
     try {
-      this.logger.info(`Handling execution.started event`, { executionId: event.data.executionId });
+      this.logger.log(`Handling execution.started event`, { executionId: event.data.executionId });
 
       // Create execution record
       await this.createExecutionUseCase.execute({
@@ -32,7 +35,7 @@ export class ExecutionStartedHandler {
         ExecutionStatus.RUNNING,
       );
 
-      this.logger.info(`Execution created and started`, { executionId: event.data.executionId });
+      this.logger.log(`Execution created and started`, { executionId: event.data.executionId });
     } catch (error) {
       this.logger.error(`Failed to handle execution.started event`, error, {
         executionId: event.data.executionId,
@@ -43,14 +46,16 @@ export class ExecutionStartedHandler {
 
   async handleCompleted(event: ExecutionCompletedEvent): Promise<void> {
     try {
-      this.logger.info(`Handling execution.completed event`, { executionId: event.data.executionId });
+      this.logger.log(`Handling execution.completed event`, {
+        executionId: event.data.executionId,
+      });
 
       await this.updateExecutionStatusUseCase.execute(
         event.data.executionId,
         ExecutionStatus.COMPLETED,
       );
 
-      this.logger.info(`Execution completed`, { executionId: event.data.executionId });
+      this.logger.log(`Execution completed`, { executionId: event.data.executionId });
     } catch (error) {
       this.logger.error(`Failed to handle execution.completed event`, error, {
         executionId: event.data.executionId,
@@ -61,7 +66,7 @@ export class ExecutionStartedHandler {
 
   async handleFailed(event: ExecutionFailedEvent): Promise<void> {
     try {
-      this.logger.info(`Handling execution.failed event`, { executionId: event.data.executionId });
+      this.logger.log(`Handling execution.failed event`, { executionId: event.data.executionId });
 
       await this.updateExecutionStatusUseCase.execute(
         event.data.executionId,
@@ -69,7 +74,7 @@ export class ExecutionStartedHandler {
         event.data.error,
       );
 
-      this.logger.info(`Execution failed`, { executionId: event.data.executionId });
+      this.logger.log(`Execution failed`, { executionId: event.data.executionId });
     } catch (error) {
       this.logger.error(`Failed to handle execution.failed event`, error, {
         executionId: event.data.executionId,

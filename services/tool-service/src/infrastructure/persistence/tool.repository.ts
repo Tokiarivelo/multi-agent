@@ -13,7 +13,7 @@ export class PrismaToolRepository implements ToolRepository {
         name: tool.name,
         description: tool.description,
         category: tool.category,
-        parameters: tool.parameters,
+        parameters: tool.parameters as any,
         code: tool.code,
         isBuiltIn: tool.isBuiltIn,
       },
@@ -59,7 +59,7 @@ export class PrismaToolRepository implements ToolRepository {
         ...(updates.name && { name: updates.name }),
         ...(updates.description && { description: updates.description }),
         ...(updates.category && { category: updates.category }),
-        ...(updates.parameters && { parameters: updates.parameters }),
+        ...(updates.parameters && { parameters: updates.parameters as any }),
         ...(updates.code !== undefined && { code: updates.code }),
       },
     });

@@ -4,6 +4,8 @@ import { LoginUseCase } from '../../application/use-cases/login.use-case';
 import { RegisterUseCase } from '../../application/use-cases/register.use-case';
 import { LoginDto } from '../../application/dto/login.dto';
 import { RegisterDto } from '../../application/dto/register.dto';
+import { SocialLoginDto } from '../../application/dto/social-login.dto';
+import { SocialLoginUseCase } from '../../application/use-cases/social-login.use-case';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -11,6 +13,7 @@ export class AuthController {
   constructor(
     private readonly loginUseCase: LoginUseCase,
     private readonly registerUseCase: RegisterUseCase,
+    private readonly socialLoginUseCase: SocialLoginUseCase,
   ) {}
 
   @Post('register')
@@ -49,5 +52,16 @@ export class AuthController {
   })
   async login(@Body() loginDto: LoginDto) {
     return this.loginUseCase.execute(loginDto);
+  }
+
+  @Post('social-login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Social Login user' })
+  @ApiResponse({
+    status: 200,
+    description: 'User successfully logged in via social provider',
+  })
+  async socialLogin(@Body() socialLoginDto: SocialLoginDto) {
+    return this.socialLoginUseCase.execute(socialLoginDto);
   }
 }

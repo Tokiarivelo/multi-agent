@@ -5,11 +5,12 @@ import {
   JetStreamManager,
   StreamConfig,
   ConsumerConfig,
-  StringCodec,
   JsMsg,
   AckPolicy,
   DeliverPolicy,
   JSONCodec,
+  RetentionPolicy,
+  StorageType,
 } from 'nats';
 import { Logger } from '@multi-agent/common';
 import { BaseEvent, DomainEvent, DeadLetterEvent } from '@multi-agent/events';
@@ -84,10 +85,10 @@ export class NatsClient {
           'model.token.*',
           'vector.*',
         ],
-        retention: 'limits',
+        retention: RetentionPolicy.Limits,
         max_age: 7 * 24 * 60 * 60 * 1e9, // 7 days in nanoseconds
         max_msgs: 1000000,
-        storage: 'file',
+        storage: StorageType.File,
         duplicate_window: 2 * 60 * 1e9, // 2 minutes in nanoseconds
       };
 
@@ -98,9 +99,9 @@ export class NatsClient {
       const dlqStreamConfig: Partial<StreamConfig> = {
         name: 'DLQ',
         subjects: ['dlq.*'],
-        retention: 'limits',
+        retention: RetentionPolicy.Limits,
         max_age: 30 * 24 * 60 * 60 * 1e9, // 30 days
-        storage: 'file',
+        storage: StorageType.File,
       };
 
       await this.jetStreamManager.streams.add(dlqStreamConfig);
@@ -118,7 +119,7 @@ export class NatsClient {
   private handleConnectionEvents(): void {
     if (!this.connection) return;
 
-    (async () => {
+    void (async () => {
       for await (const status of this.connection!.status()) {
         this.logger.info('NATS connection status', { status: status.type });
 
@@ -180,7 +181,8 @@ export class NatsClient {
     }
 
     try {
-      const durableName = consumerName || `${this.serviceName}-${subject.replace(/\*/g, 'all')}`;
+      const durableName =
+        consumerName || `${this.serviceName}-${subject.replace(/\./g, '-').replace(/\*/g, 'all')}`;
 
       const consumerConfig: Partial<ConsumerConfig> = {
         durable_name: durableName,
@@ -189,6 +191,11 @@ export class NatsClient {
         max_deliver: this.config.maxDeliverAttempts,
         ack_wait: 30 * 1e9, // 30 seconds in nanoseconds
       };
+
+      // Ensure consumer exists with config
+      if (this.jetStreamManager) {
+        await this.jetStreamManager.consumers.add('EVENTS', consumerConfig as ConsumerConfig);
+      }
 
       const consumer = await this.jetStream.consumers.get('EVENTS', durableName);
       const messages = await consumer.consume();
@@ -199,7 +206,7 @@ export class NatsClient {
       this.eventHandlers.set(durableName, handler);
 
       // Process messages
-      (async () => {
+      void (async () => {
         for await (const msg of messages) {
           await this.handleMessage(msg, handler);
         }

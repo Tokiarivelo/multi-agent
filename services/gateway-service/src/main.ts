@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './presentation/filters/http-exception.filter';
+import { WsAdapter } from '@nestjs/platform-ws';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -57,6 +58,8 @@ async function bootstrap() {
 
   // Enable graceful shutdown
   app.enableShutdownHooks();
+
+  app.useWebSocketAdapter(new WsAdapter(app));
 
   const port = configService.get<number>('GATEWAY_PORT', 3000);
   await app.listen(port);

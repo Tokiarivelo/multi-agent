@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { ExecutionLogEntity, ExecutionLogStatus } from '../../domain/entities/execution-log.entity';
+import { ExecutionLogEntity } from '../../domain/entities/execution-log.entity';
 import { IExecutionLogRepository } from '../../domain/repositories/execution-log.repository.interface';
 import { ExecutionLogDto } from '../dto/execution-log.dto';
 
@@ -11,10 +11,7 @@ export class LogNodeExecutionUseCase {
   ) {}
 
   async logStart(dto: ExecutionLogDto): Promise<ExecutionLogEntity> {
-    let log = await this.executionLogRepository.findByNodeId(
-      dto.executionId,
-      dto.nodeId,
-    );
+    let log = await this.executionLogRepository.findByNodeId(dto.executionId, dto.nodeId);
 
     if (!log) {
       log = ExecutionLogEntity.create({
@@ -36,15 +33,10 @@ export class LogNodeExecutionUseCase {
     nodeId: string,
     output: Record<string, any>,
   ): Promise<ExecutionLogEntity> {
-    const log = await this.executionLogRepository.findByNodeId(
-      executionId,
-      nodeId,
-    );
+    const log = await this.executionLogRepository.findByNodeId(executionId, nodeId);
 
     if (!log) {
-      throw new Error(
-        `Execution log not found for execution ${executionId} and node ${nodeId}`,
-      );
+      throw new Error(`Execution log not found for execution ${executionId} and node ${nodeId}`);
     }
 
     const updatedLog = log.complete(output);
@@ -56,15 +48,10 @@ export class LogNodeExecutionUseCase {
     nodeId: string,
     error: string,
   ): Promise<ExecutionLogEntity> {
-    const log = await this.executionLogRepository.findByNodeId(
-      executionId,
-      nodeId,
-    );
+    const log = await this.executionLogRepository.findByNodeId(executionId, nodeId);
 
     if (!log) {
-      throw new Error(
-        `Execution log not found for execution ${executionId} and node ${nodeId}`,
-      );
+      throw new Error(`Execution log not found for execution ${executionId} and node ${nodeId}`);
     }
 
     const updatedLog = log.fail(error);

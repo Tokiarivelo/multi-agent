@@ -13,17 +13,20 @@ model User {
   email     String   @unique
   firstName String
   lastName  String
-  password  String
+  password  String?
+  image     String?
+  provider  String?  @default("credentials")
   role      UserRole @default(USER)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workflows   Workflow[]
-  agents      Agent[]
-  apiKeys     ApiKey[]
-  executions  Execution[]
-  collections VectorCollection[]
+  workflows          Workflow[]
+  agents             Agent[]
+  apiKeys            ApiKey[]
+  executions         Execution[]
+  collections        VectorCollection[]
+  workflowExecutions WorkflowExecution[]
 
   @@index([email])
   @@map("users")
@@ -42,12 +45,14 @@ model Workflow {
   description String?
   nodes       Json           // WorkflowNode[]
   edges       Json           // WorkflowEdge[]
+  definition  Json?          // Full workflow definition (nodes + edges + version)
   status      WorkflowStatus @default(DRAFT)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  executions Execution[]
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions         Execution[]
+  workflowExecutions WorkflowExecution[]
 
   @@index([userId])
   @@index([status])
@@ -58,6 +63,7 @@ enum WorkflowStatus {
   DRAFT
   ACTIVE
   INACTIVE
+  ARCHIVED
 }
 
 model Agent {
@@ -65,20 +71,42 @@ model Agent {
   userId       String
   name         String
   description  String?
-  systemPrompt String   @db.Text
+  systemPrompt String?  @db.Text
   modelId      String
   tools        Json     // string[]
   temperature  Float?   @default(0.7)
   maxTokens    Int?     @default(2000)
+  metadata     Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  model Model @relation(fields: [modelId], references: [id])
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model      Model            @relation(fields: [modelId], references: [id])
+  executions AgentExecution[]
 
   @@index([userId])
   @@index([modelId])
   @@map("agents")
+}
+
+model AgentExecution {
+  id          String          @id @default(uuid())
+  agentId     String
+  input       String          @db.Text
+  output      String?         @db.Text
+  tokens      Int?
+  status      ExecutionStatus @default(PENDING)
+  error       String?         @db.Text
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([status])
+  @@map("agent_executions")
 }
 
 model Tool {
@@ -106,18 +134,32 @@ enum ToolCategory {
 }
 
 model Model {
-  id                String        @id @default(uuid())
-  name              String        @unique
-  provider          ModelProvider
-  modelName         String
-  maxTokens         Int
-  supportsStreaming Boolean       @default(true)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id                    String        @id @default(uuid())
+  name                  String        @unique
+  provider              ModelProvider
+  modelId               String?       // External model identifier (e.g. gpt-4o)
+  modelName             String
+  description           String?
+  maxTokens             Int
+  supportsStreaming      Boolean       @default(true)
+  defaultTemperature    Float?
+  rateLimitPerMinute    Int?
+  rateLimitPerHour      Int?
+  rateLimitPerDay       Int?
+  inputCostPer1kTokens  Float?
+  outputCostPer1kTokens Float?
+  providerSettings      Json?
+  isActive              Boolean       @default(true)
+  isDefault             Boolean       @default(false)
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
   agents Agent[]
 
   @@index([provider])
+  @@index([isActive])
+  @@index([isDefault])
   @@map("models")
 }
 
@@ -133,7 +175,14 @@ model ApiKey {
   id           String        @id @default(uuid())
   userId       String
   provider     ModelProvider
+  keyName      String?
   encryptedKey String        @db.Text
+  keyPrefix    String?
+  lastUsedAt   DateTime?
+  usageCount   Int           @default(0)
+  isActive     Boolean       @default(true)
+  isValid      Boolean       @default(true)
+  metadata     Json?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -141,6 +190,7 @@ model ApiKey {
 
   @@index([userId])
   @@index([provider])
+  @@index([userId, provider, keyName])
   @@map("api_keys")
 }
 
@@ -195,6 +245,30 @@ model ExecutionLog {
   @@index([executionId])
   @@index([nodeId])
   @@map("execution_logs")
+}
+
+model WorkflowExecution {
+  id             String          @id @default(uuid())
+  workflowId     String
+  userId         String
+  status         ExecutionStatus @default(PENDING)
+  input          Json?
+  output         Json?
+  error          String?         @db.Text
+  nodeExecutions Json?           // NodeExecution[] stored as JSON
+  currentNodeId  String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([userId])
+  @@index([status])
+  @@map("workflow_executions")
 }
 
 model VectorCollection {

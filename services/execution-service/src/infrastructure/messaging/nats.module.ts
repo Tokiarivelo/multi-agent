@@ -1,12 +1,12 @@
-import { Module, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Module, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NatsClient } from '@multi-agent/nats-client';
-import { Logger } from '@multi-agent/common';
 import { IEventPublisher } from '../../application/interfaces/event-publisher.interface';
 import { ExecutionStartedHandler } from './event-handlers/execution-started.handler';
 import { ExecutionNodeStartedHandler } from './event-handlers/execution-node-started.handler';
 import { ExecutionNodeCompletedHandler } from './event-handlers/execution-node-completed.handler';
 import { ExecutionNodeFailedHandler } from './event-handlers/execution-node-failed.handler';
+import { ExecutionModule } from '../execution/execution.module';
 
 export class NatsEventPublisher implements IEventPublisher {
   constructor(private readonly natsClient: NatsClient) {}
@@ -25,6 +25,7 @@ export class NatsEventPublisher implements IEventPublisher {
 }
 
 @Module({
+  imports: [ExecutionModule],
   providers: [
     {
       provide: NatsClient,
@@ -69,11 +70,11 @@ export class NatsModule implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     try {
       await this.natsClient.connect();
-      this.logger.info('Connected to NATS');
+      this.logger.log('Connected to NATS');
 
       // Subscribe to execution events
       await this.subscribeToEvents();
-      this.logger.info('Subscribed to execution events');
+      this.logger.log('Subscribed to execution events');
     } catch (error) {
       this.logger.error('Failed to connect to NATS', error);
       throw error;
@@ -83,7 +84,7 @@ export class NatsModule implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy() {
     try {
       await this.natsClient.close();
-      this.logger.info('Disconnected from NATS');
+      this.logger.log('Disconnected from NATS');
     } catch (error) {
       this.logger.error('Error disconnecting from NATS', error);
     }
@@ -92,30 +93,42 @@ export class NatsModule implements OnModuleInit, OnModuleDestroy {
   private async subscribeToEvents() {
     // Create consumers for each event type
     const eventSubscriptions = [
-      { subject: 'execution.started', handler: this.executionStartedHandler.handle.bind(this.executionStartedHandler) },
-      { subject: 'execution.node.started', handler: this.executionNodeStartedHandler.handle.bind(this.executionNodeStartedHandler) },
-      { subject: 'execution.node.completed', handler: this.executionNodeCompletedHandler.handle.bind(this.executionNodeCompletedHandler) },
-      { subject: 'execution.node.failed', handler: this.executionNodeFailedHandler.handle.bind(this.executionNodeFailedHandler) },
-      { 
-        subject: 'execution.completed', 
-        handler: async (event: any) => {
-          this.logger.info(`Execution completed: ${event.data?.executionId || event.executionId}`);
-          await this.executionStartedHandler.handleCompleted(event);
-        }
+      {
+        subject: 'execution.started',
+        handler: this.executionStartedHandler.handle.bind(this.executionStartedHandler),
       },
-      { 
-        subject: 'execution.failed', 
+      {
+        subject: 'execution.node.started',
+        handler: this.executionNodeStartedHandler.handle.bind(this.executionNodeStartedHandler),
+      },
+      {
+        subject: 'execution.node.completed',
+        handler: this.executionNodeCompletedHandler.handle.bind(this.executionNodeCompletedHandler),
+      },
+      {
+        subject: 'execution.node.failed',
+        handler: this.executionNodeFailedHandler.handle.bind(this.executionNodeFailedHandler),
+      },
+      {
+        subject: 'execution.completed',
         handler: async (event: any) => {
-          this.logger.info(`Execution failed: ${event.data?.executionId || event.executionId}`);
+          this.logger.log(`Execution completed: ${event.data?.executionId || event.executionId}`);
+          await this.executionStartedHandler.handleCompleted(event);
+        },
+      },
+      {
+        subject: 'execution.failed',
+        handler: async (event: any) => {
+          this.logger.log(`Execution failed: ${event.data?.executionId || event.executionId}`);
           await this.executionStartedHandler.handleFailed(event);
-        }
+        },
       },
     ];
 
     // Subscribe to all events
     for (const { subject, handler } of eventSubscriptions) {
       await this.natsClient.subscribe(subject, handler);
-      this.logger.info(`Subscribed to ${subject}`);
+      this.logger.log(`Subscribed to ${subject}`);
     }
   }
 }

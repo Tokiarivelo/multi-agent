@@ -29,6 +29,6 @@ export class ExecutionDomainService {
 
   async findFailedNode(executionId: string): Promise<ExecutionLogEntity | null> {
     const logs = await this.executionLogRepository.findByExecutionId(executionId);
-    return logs.find(log => log.status === 'FAILED') || null;
+    return logs.find((log) => log.status === 'FAILED') || null;
   }
 }

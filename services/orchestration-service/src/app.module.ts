@@ -30,7 +30,7 @@ import { WorkflowGateway } from './presentation/gateways/workflow.gateway';
     ConfigModule,
     HttpModule.registerAsync({
       imports: [NestConfigModule],
-      useFactory: async (configService: ConfigService) => ({
+      useFactory: async () => ({
         timeout: 30000,
         maxRedirects: 5,
       }),

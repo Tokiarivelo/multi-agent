@@ -1,5 +1,6 @@
 export interface Agent {
   id: string;
+  userId: string;
   name: string;
   description: string;
   modelId: string;

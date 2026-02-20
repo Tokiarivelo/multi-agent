@@ -1,7 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
-import { ModelRepositoryInterface, ModelFilters } from '../../domain/repositories/model.repository.interface';
-import { Model, CreateModelInput, UpdateModelInput, ModelProvider } from '../../domain/entities/model.entity';
+import {
+  ModelRepositoryInterface,
+  ModelFilters,
+} from '../../domain/repositories/model.repository.interface';
+import {
+  Model,
+  CreateModelInput,
+  UpdateModelInput,
+  ModelProvider,
+} from '../../domain/entities/model.entity';
 
 @Injectable()
 export class ModelRepository implements ModelRepositoryInterface {
@@ -12,6 +20,7 @@ export class ModelRepository implements ModelRepositoryInterface {
       data: {
         name: input.name,
         provider: input.provider,
+        modelName: input.modelId, // Mapping modelId to legacy modelName field
         modelId: input.modelId,
         description: input.description,
         maxTokens: input.maxTokens || 4096,
@@ -51,15 +60,14 @@ export class ModelRepository implements ModelRepositoryInterface {
       where: {
         ...(filters?.provider && { provider: filters.provider }),
         ...(filters?.isActive !== undefined && { isActive: filters.isActive }),
-        ...(filters?.supportsStreaming !== undefined && { supportsStreaming: filters.supportsStreaming }),
+        ...(filters?.supportsStreaming !== undefined && {
+          supportsStreaming: filters.supportsStreaming,
+        }),
       },
-      orderBy: [
-        { isDefault: 'desc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
     });
 
-    return models.map(model => this.mapToEntity(model));
+    return models.map((model) => this.mapToEntity(model));
   }
 
   async update(id: string, input: UpdateModelInput): Promise<Model> {
@@ -69,13 +77,23 @@ export class ModelRepository implements ModelRepositoryInterface {
         ...(input.name !== undefined && { name: input.name }),
         ...(input.description !== undefined && { description: input.description }),
         ...(input.maxTokens !== undefined && { maxTokens: input.maxTokens }),
-        ...(input.supportsStreaming !== undefined && { supportsStreaming: input.supportsStreaming }),
-        ...(input.defaultTemperature !== undefined && { defaultTemperature: input.defaultTemperature }),
-        ...(input.rateLimitPerMinute !== undefined && { rateLimitPerMinute: input.rateLimitPerMinute }),
+        ...(input.supportsStreaming !== undefined && {
+          supportsStreaming: input.supportsStreaming,
+        }),
+        ...(input.defaultTemperature !== undefined && {
+          defaultTemperature: input.defaultTemperature,
+        }),
+        ...(input.rateLimitPerMinute !== undefined && {
+          rateLimitPerMinute: input.rateLimitPerMinute,
+        }),
         ...(input.rateLimitPerHour !== undefined && { rateLimitPerHour: input.rateLimitPerHour }),
         ...(input.rateLimitPerDay !== undefined && { rateLimitPerDay: input.rateLimitPerDay }),
-        ...(input.inputCostPer1kTokens !== undefined && { inputCostPer1kTokens: input.inputCostPer1kTokens }),
-        ...(input.outputCostPer1kTokens !== undefined && { outputCostPer1kTokens: input.outputCostPer1kTokens }),
+        ...(input.inputCostPer1kTokens !== undefined && {
+          inputCostPer1kTokens: input.inputCostPer1kTokens,
+        }),
+        ...(input.outputCostPer1kTokens !== undefined && {
+          outputCostPer1kTokens: input.outputCostPer1kTokens,
+        }),
         ...(input.providerSettings !== undefined && { providerSettings: input.providerSettings }),
         ...(input.isActive !== undefined && { isActive: input.isActive }),
         ...(input.isDefault !== undefined && { isDefault: input.isDefault }),
@@ -98,7 +116,7 @@ export class ModelRepository implements ModelRepositoryInterface {
       orderBy: { createdAt: 'desc' },
     });
 
-    return models.map(model => this.mapToEntity(model));
+    return models.map((model) => this.mapToEntity(model));
   }
 
   async getDefaultModel(): Promise<Model | null> {
@@ -127,7 +145,7 @@ export class ModelRepository implements ModelRepositoryInterface {
       id: model.id,
       name: model.name,
       provider: model.provider,
-      modelId: model.modelId,
+      modelId: model.modelId ?? model.modelName,
       description: model.description,
       maxTokens: model.maxTokens,
       supportsStreaming: model.supportsStreaming,

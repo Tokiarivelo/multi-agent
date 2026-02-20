@@ -1,11 +1,15 @@
+import { UserRole } from '@multi-agent/database';
+
 export class User {
   id!: string;
   email!: string;
-  password!: string;
+  password?: string | null;
   firstName!: string;
   lastName!: string;
-  role!: string;
+  role!: UserRole;
   isActive!: boolean;
+  provider?: string | null;
+  image?: string | null;
   createdAt!: Date;
   updatedAt!: Date;
 
@@ -17,7 +21,7 @@ export class User {
     return `${this.firstName} ${this.lastName}`;
   }
 
-  hasRole(role: string): boolean {
+  hasRole(role: UserRole): boolean {
     return this.role === role;
   }
 

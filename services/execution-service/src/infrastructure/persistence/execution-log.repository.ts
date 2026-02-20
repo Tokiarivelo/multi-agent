@@ -25,7 +25,7 @@ export class ExecutionLogRepository implements IExecutionLogRepository {
       orderBy: { startedAt: 'asc' },
     });
 
-    return logs.map(log => this.toDomain(log));
+    return logs.map((log) => this.toDomain(log));
   }
 
   async findByNodeId(executionId: string, nodeId: string): Promise<ExecutionLogEntity | null> {

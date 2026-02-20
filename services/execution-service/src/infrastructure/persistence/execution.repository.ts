@@ -37,7 +37,7 @@ export class ExecutionRepository implements IExecutionRepository {
     ]);
 
     return {
-      data: executions.map(e => this.toDomain(e)),
+      data: executions.map((e) => this.toDomain(e)),
       total,
       page,
       limit,

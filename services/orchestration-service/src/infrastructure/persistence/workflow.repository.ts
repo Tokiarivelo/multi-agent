@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { IWorkflowRepository } from '../../domain/repositories/workflow.repository.interface';
-import { Workflow, WorkflowStatus } from '../../domain/entities/workflow.entity';
+import {
+  Workflow,
+  WorkflowStatus as DomainWorkflowStatus,
+} from '../../domain/entities/workflow.entity';
+import { WorkflowStatus as PrismaWorkflowStatus } from '@prisma/client';
 
 @Injectable()
 export class WorkflowRepository implements IWorkflowRepository {
@@ -26,9 +30,9 @@ export class WorkflowRepository implements IWorkflowRepository {
     return workflows.map((w: any) => this.toDomain(w));
   }
 
-  async findByStatus(status: WorkflowStatus): Promise<Workflow[]> {
+  async findByStatus(status: DomainWorkflowStatus): Promise<Workflow[]> {
     const workflows = await this.prisma.workflow.findMany({
-      where: { status },
+      where: { status: status as unknown as PrismaWorkflowStatus },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -39,15 +43,17 @@ export class WorkflowRepository implements IWorkflowRepository {
     name: string;
     description: string;
     definition: any;
-    status: WorkflowStatus;
+    status: DomainWorkflowStatus;
     userId: string;
   }): Promise<Workflow> {
     const workflow = await this.prisma.workflow.create({
       data: {
         name: data.name,
         description: data.description,
+        nodes: data.definition.nodes,
+        edges: data.definition.edges,
         definition: data.definition,
-        status: data.status,
+        status: data.status as unknown as PrismaWorkflowStatus,
         userId: data.userId,
       },
     });
@@ -57,14 +63,21 @@ export class WorkflowRepository implements IWorkflowRepository {
   }
 
   async update(id: string, data: Partial<Workflow>): Promise<Workflow> {
+    const updateData: any = {
+      ...(data.name && { name: data.name }),
+      ...(data.description && { description: data.description }),
+      ...(data.status && { status: data.status as unknown as PrismaWorkflowStatus }),
+    };
+
+    if (data.definition) {
+      updateData.nodes = data.definition.nodes;
+      updateData.edges = data.definition.edges;
+      updateData.definition = data.definition as any;
+    }
+
     const workflow = await this.prisma.workflow.update({
       where: { id },
-      data: {
-        name: data.name,
-        description: data.description,
-        definition: data.definition,
-        status: data.status,
-      },
+      data: updateData,
     });
 
     this.logger.log(`Updated workflow ${id}`);
@@ -95,7 +108,7 @@ export class WorkflowRepository implements IWorkflowRepository {
     ]);
 
     return {
-      workflows: workflows.map((w: any) => this.toDomain(w)),
+      workflows: workflows.map((w) => this.toDomain(w)),
       total,
     };
   }
@@ -104,9 +117,13 @@ export class WorkflowRepository implements IWorkflowRepository {
     return new Workflow({
       id: workflow.id,
       name: workflow.name,
-      description: workflow.description,
-      definition: workflow.definition,
-      status: workflow.status as WorkflowStatus,
+      description: workflow.description ?? '',
+      definition: (workflow.definition as any) || {
+        nodes: workflow.nodes,
+        edges: workflow.edges,
+        version: 1,
+      },
+      status: workflow.status as unknown as DomainWorkflowStatus,
       userId: workflow.userId,
       createdAt: workflow.createdAt,
       updatedAt: workflow.updatedAt,

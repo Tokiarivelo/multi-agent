@@ -1,9 +1,8 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './presentation/filters/http-exception.filter';
-import { Logger } from '@multi-agent/common';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -44,8 +43,8 @@ async function bootstrap() {
   const port = process.env.EXECUTION_PORT || 3004;
   await app.listen(port);
 
-  logger.info(`🚀 Execution Service is running on: http://localhost:${port}/api`);
-  logger.info(`📚 Swagger documentation available at: http://localhost:${port}/api/docs`);
+  logger.log(`🚀 Execution Service is running on: http://localhost:${port}/api`);
+  logger.log(`📚 Swagger documentation available at: http://localhost:${port}/api/docs`);
 }
 
 bootstrap().catch((error) => {

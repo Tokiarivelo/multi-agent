@@ -71,6 +71,13 @@ Enforce:
 - Separate UI, state, API layer.
 - Components must be reusable.
 - No direct coupling to backend internals.
+- Always use the recommanded code and the best practice
+
+---
+
+## 3️⃣ Backend Discipline
+
+- Always update swagger
 
 ---
 

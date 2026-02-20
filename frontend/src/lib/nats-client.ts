@@ -1,6 +1,6 @@
-import { WebSocketMessage } from "@/types";
+import { WebSocketMessage } from '@/types';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:3000";
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3000';
 
 export class NatsWebSocketClient {
   private ws: WebSocket | null = null;
@@ -8,6 +8,7 @@ export class NatsWebSocketClient {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
   private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
+  private globalListeners: Set<(event: string, data: unknown) => void> = new Set();
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -15,7 +16,7 @@ export class NatsWebSocketClient {
         this.ws = new WebSocket(`${WS_URL}/ws`);
 
         this.ws.onopen = () => {
-          console.log("WebSocket connected");
+          console.log('WebSocket connected');
           this.reconnectAttempts = 0;
           resolve();
         };
@@ -25,17 +26,17 @@ export class NatsWebSocketClient {
             const message: WebSocketMessage = JSON.parse(event.data);
             this.handleMessage(message);
           } catch (error) {
-            console.error("Failed to parse WebSocket message:", error);
+            console.error('Failed to parse WebSocket message:', error);
           }
         };
 
         this.ws.onerror = (error) => {
-          console.error("WebSocket error:", error);
+          console.error('WebSocket error:', error);
           reject(error);
         };
 
         this.ws.onclose = () => {
-          console.log("WebSocket disconnected");
+          console.log('WebSocket disconnected');
           this.reconnect();
         };
       } catch (error) {
@@ -46,7 +47,7 @@ export class NatsWebSocketClient {
 
   private reconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error("Max reconnection attempts reached");
+      console.error('Max reconnection attempts reached');
       return;
     }
 
@@ -55,7 +56,7 @@ export class NatsWebSocketClient {
 
     setTimeout(() => {
       console.log(
-        `Reconnecting... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`
+        `Reconnecting... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
       );
       this.connect();
     }, delay);
@@ -79,18 +80,28 @@ export class NatsWebSocketClient {
     };
   }
 
+  subscribeAll(callback: (event: string, data: unknown) => void): () => void {
+    this.globalListeners.add(callback);
+    return () => {
+      this.globalListeners.delete(callback);
+    };
+  }
+
   private handleMessage(message: WebSocketMessage): void {
     const callbacks = this.listeners.get(message.event);
     if (callbacks) {
       callbacks.forEach((callback) => callback(message.data));
     }
+
+    // Notify global listeners
+    this.globalListeners.forEach((callback) => callback(message.event, message.data));
   }
 
   send(event: string, data: unknown): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ event, data }));
     } else {
-      console.error("WebSocket is not connected");
+      console.error('WebSocket is not connected');
     }
   }
 

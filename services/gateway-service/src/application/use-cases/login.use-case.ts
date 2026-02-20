@@ -34,6 +34,11 @@ export class LoginUseCase {
       throw new UnauthorizedException('Account is not active');
     }
 
+    if (!user.password) {
+      this.logger.warn(`User has no password: ${loginDto.email}`);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     await this.authService.validatePassword(loginDto.password, user.password);
 
     this.logger.log(`User logged in successfully: ${user.id}`);

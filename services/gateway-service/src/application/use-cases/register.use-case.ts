@@ -6,6 +6,7 @@ import {
 } from '../../domain/repositories/user.repository.interface';
 import { IJwtService, JWT_SERVICE } from '../interfaces/jwt.service.interface';
 import { RegisterDto } from '../dto/register.dto';
+import { UserRole } from '@multi-agent/database';
 
 @Injectable()
 export class RegisterUseCase {
@@ -36,7 +37,7 @@ export class RegisterUseCase {
       password: hashedPassword,
       firstName: registerDto.firstName,
       lastName: registerDto.lastName,
-      role: registerDto.role || 'user',
+      role: registerDto.role || UserRole.USER,
       isActive: true,
     });
 

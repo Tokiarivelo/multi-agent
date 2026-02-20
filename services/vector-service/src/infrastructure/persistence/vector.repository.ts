@@ -10,12 +10,11 @@ export class VectorRepository implements IVectorRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async createCollection(collection: Collection): Promise<Collection> {
-    const created = await this.prisma.collection.create({
+    const created = await this.prisma.vectorCollection.create({
       data: {
         name: collection.name,
         userId: collection.userId,
         dimension: collection.dimension,
-        distance: collection.distance,
       },
     });
 
@@ -24,77 +23,69 @@ export class VectorRepository implements IVectorRepository {
       created.name,
       created.userId,
       created.dimension,
-      created.distance as 'cosine' | 'euclidean' | 'dot',
+      'cosine', // default distance metric, managed by Qdrant
       created.createdAt,
       created.updatedAt,
     );
   }
 
   async findCollectionById(id: string): Promise<Collection | null> {
-    const collection = await this.prisma.collection.findUnique({
+    const record = await this.prisma.vectorCollection.findUnique({
       where: { id },
     });
 
-    if (!collection) {
+    if (!record) {
       return null;
     }
 
     return new Collection(
-      collection.id,
-      collection.name,
-      collection.userId,
-      collection.dimension,
-      collection.distance as 'cosine' | 'euclidean' | 'dot',
-      collection.createdAt,
-      collection.updatedAt,
+      record.id,
+      record.name,
+      record.userId,
+      record.dimension,
+      'cosine',
+      record.createdAt,
+      record.updatedAt,
     );
   }
 
   async findCollectionByNameAndUserId(name: string, userId: string): Promise<Collection | null> {
-    const collection = await this.prisma.collection.findFirst({
+    const record = await this.prisma.vectorCollection.findFirst({
       where: {
         name,
         userId,
       },
     });
 
-    if (!collection) {
+    if (!record) {
       return null;
     }
 
     return new Collection(
-      collection.id,
-      collection.name,
-      collection.userId,
-      collection.dimension,
-      collection.distance as 'cosine' | 'euclidean' | 'dot',
-      collection.createdAt,
-      collection.updatedAt,
+      record.id,
+      record.name,
+      record.userId,
+      record.dimension,
+      'cosine',
+      record.createdAt,
+      record.updatedAt,
     );
   }
 
   async listCollectionsByUserId(userId: string): Promise<Collection[]> {
-    const collections = await this.prisma.collection.findMany({
+    const records = await this.prisma.vectorCollection.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
 
-    return collections.map(
-      (c: any) =>
-        new Collection(
-          c.id,
-          c.name,
-          c.userId,
-          c.dimension,
-          c.distance as 'cosine' | 'euclidean' | 'dot',
-          c.createdAt,
-          c.updatedAt,
-        ),
+    return records.map(
+      (c) =>
+        new Collection(c.id, c.name, c.userId, c.dimension, 'cosine', c.createdAt, c.updatedAt),
     );
   }
 
   async deleteCollection(id: string): Promise<void> {
-    await this.prisma.collection.delete({
+    await this.prisma.vectorCollection.delete({
       where: { id },
     });
   }

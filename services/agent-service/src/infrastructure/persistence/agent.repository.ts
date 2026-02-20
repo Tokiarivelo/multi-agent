@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { IAgentRepository, AgentFilters } from '../../domain/repositories/agent.repository.interface';
+import {
+  IAgentRepository,
+  AgentFilters,
+} from '../../domain/repositories/agent.repository.interface';
 import { Agent, AgentExecution } from '../../domain/entities/agent.entity';
 
 @Injectable()
@@ -8,8 +11,13 @@ export class AgentRepository implements IAgentRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: Partial<Agent>): Promise<Agent> {
+    if (!data.name || !data.modelId || !data.userId) {
+      throw new Error('Agent name, modelId, and userId are required');
+    }
+
     const agent = await this.prisma.agent.create({
       data: {
+        userId: data.userId,
         name: data.name,
         description: data.description,
         modelId: data.modelId,
@@ -20,7 +28,7 @@ export class AgentRepository implements IAgentRepository {
         metadata: data.metadata || {},
       },
     });
-    
+
     return this.mapToEntity(agent);
   }
 
@@ -28,29 +36,29 @@ export class AgentRepository implements IAgentRepository {
     const agent = await this.prisma.agent.findUnique({
       where: { id },
     });
-    
+
     return agent ? this.mapToEntity(agent) : null;
   }
 
   async findAll(filters?: AgentFilters): Promise<Agent[]> {
     const where: any = {};
-    
+
     if (filters?.name) {
       where.name = { contains: filters.name, mode: 'insensitive' };
     }
-    
+
     if (filters?.modelId) {
       where.modelId = filters.modelId;
     }
-    
+
     const agents = await this.prisma.agent.findMany({
       where,
       take: filters?.limit,
       skip: filters?.offset,
       orderBy: { createdAt: 'desc' },
     });
-    
-    return agents.map(agent => this.mapToEntity(agent));
+
+    return agents.map((agent) => this.mapToEntity(agent));
   }
 
   async update(id: string, data: Partial<Agent>): Promise<Agent> {
@@ -67,7 +75,7 @@ export class AgentRepository implements IAgentRepository {
         metadata: data.metadata,
       },
     });
-    
+
     return this.mapToEntity(agent);
   }
 
@@ -78,6 +86,10 @@ export class AgentRepository implements IAgentRepository {
   }
 
   async createExecution(data: Partial<AgentExecution>): Promise<AgentExecution> {
+    if (!data.agentId || !data.input) {
+      throw new Error('AgentId and input are required for execution');
+    }
+
     const execution = await this.prisma.agentExecution.create({
       data: {
         agentId: data.agentId,
@@ -86,7 +98,7 @@ export class AgentRepository implements IAgentRepository {
         startedAt: data.startedAt,
       },
     });
-    
+
     return this.mapExecutionToEntity(execution);
   }
 
@@ -94,7 +106,7 @@ export class AgentRepository implements IAgentRepository {
     const execution = await this.prisma.agentExecution.findUnique({
       where: { id },
     });
-    
+
     return execution ? this.mapExecutionToEntity(execution) : null;
   }
 
@@ -103,8 +115,8 @@ export class AgentRepository implements IAgentRepository {
       where: { agentId },
       orderBy: { startedAt: 'desc' },
     });
-    
-    return executions.map(exec => this.mapExecutionToEntity(exec));
+
+    return executions.map((exec) => this.mapExecutionToEntity(exec));
   }
 
   async updateExecution(id: string, data: Partial<AgentExecution>): Promise<AgentExecution> {
@@ -118,13 +130,14 @@ export class AgentRepository implements IAgentRepository {
         completedAt: data.completedAt,
       },
     });
-    
+
     return this.mapExecutionToEntity(execution);
   }
 
   private mapToEntity(agent: any): Agent {
     return {
       id: agent.id,
+      userId: agent.userId,
       name: agent.name,
       description: agent.description,
       modelId: agent.modelId,

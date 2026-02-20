@@ -4,9 +4,9 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { Logger } from '@multi-agent/common';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -36,14 +36,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message = exception.message;
     }
 
-    this.logger.error(
-      `HTTP Exception: ${request.method} ${request.url}`,
-      exception,
-      {
-        status,
-        message,
-      },
-    );
+    this.logger.error(`HTTP Exception: ${request.method} ${request.url}`, exception, {
+      status,
+      message,
+    });
 
     response.status(status).json({
       statusCode: status,

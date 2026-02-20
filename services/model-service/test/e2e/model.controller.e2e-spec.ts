@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infrastructure/database/prisma.service';
 
@@ -14,7 +14,7 @@ describe('ModelController (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    
+
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -45,6 +45,7 @@ describe('ModelController (e2e)', () => {
           name: 'gpt-4-turbo',
           provider: 'OPENAI',
           modelId: 'gpt-4-turbo-preview',
+          modelName: 'GPT-4 Turbo Preview',
           maxTokens: 128000,
           defaultTemperature: 0.7,
         })
@@ -63,18 +64,18 @@ describe('ModelController (e2e)', () => {
           name: 'invalid-model',
           provider: 'INVALID',
           modelId: 'test',
+          modelName: 'Invalid Model',
         })
         .expect(400);
     });
 
     it('should return 409 for duplicate model name', async () => {
-      await request(app.getHttpServer())
-        .post('/api/models')
-        .send({
-          name: 'gpt-4',
-          provider: 'OPENAI',
-          modelId: 'gpt-4',
-        });
+      await request(app.getHttpServer()).post('/api/models').send({
+        name: 'gpt-4',
+        provider: 'OPENAI',
+        modelId: 'gpt-4',
+        modelName: 'GPT-4',
+      });
 
       return request(app.getHttpServer())
         .post('/api/models')
@@ -82,6 +83,7 @@ describe('ModelController (e2e)', () => {
           name: 'gpt-4',
           provider: 'OPENAI',
           modelId: 'gpt-4-other',
+          modelName: 'GPT-4 Other',
         })
         .expect(409);
     });
@@ -95,6 +97,7 @@ describe('ModelController (e2e)', () => {
             name: 'gpt-4',
             provider: 'OPENAI',
             modelId: 'gpt-4',
+            modelName: 'GPT-4',
             maxTokens: 8000,
             supportsStreaming: true,
           },
@@ -102,6 +105,7 @@ describe('ModelController (e2e)', () => {
             name: 'claude-3-opus',
             provider: 'ANTHROPIC',
             modelId: 'claude-3-opus-20240229',
+            modelName: 'Claude 3 Opus',
             maxTokens: 200000,
             supportsStreaming: true,
           },
@@ -138,6 +142,7 @@ describe('ModelController (e2e)', () => {
           name: 'gpt-4',
           provider: 'OPENAI',
           modelId: 'gpt-4',
+          modelName: 'GPT-4',
           maxTokens: 8000,
           supportsStreaming: true,
         },
@@ -153,9 +158,7 @@ describe('ModelController (e2e)', () => {
     });
 
     it('should return 404 for non-existent model', () => {
-      return request(app.getHttpServer())
-        .get('/api/models/non-existent-id')
-        .expect(404);
+      return request(app.getHttpServer()).get('/api/models/non-existent-id').expect(404);
     });
   });
 
@@ -166,6 +169,7 @@ describe('ModelController (e2e)', () => {
           name: 'gpt-4',
           provider: 'OPENAI',
           modelId: 'gpt-4',
+          modelName: 'GPT-4',
           maxTokens: 8000,
           supportsStreaming: true,
         },
@@ -192,14 +196,13 @@ describe('ModelController (e2e)', () => {
           name: 'gpt-4',
           provider: 'OPENAI',
           modelId: 'gpt-4',
+          modelName: 'GPT-4',
           maxTokens: 8000,
           supportsStreaming: true,
         },
       });
 
-      await request(app.getHttpServer())
-        .delete(`/api/models/${model.id}`)
-        .expect(204);
+      await request(app.getHttpServer()).delete(`/api/models/${model.id}`).expect(204);
 
       const deletedModel = await prisma.model.findUnique({
         where: { id: model.id },
