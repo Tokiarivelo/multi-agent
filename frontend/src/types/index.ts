@@ -102,18 +102,59 @@ export interface ToolParameter {
   enum?: string[];
 }
 
-// Model Types
+export enum ModelProvider {
+  OPENAI = 'OPENAI',
+  ANTHROPIC = 'ANTHROPIC',
+  GOOGLE = 'GOOGLE',
+  AZURE = 'AZURE',
+  OLLAMA = 'OLLAMA',
+}
+
 export interface Model {
   id: string;
   name: string;
-  provider: 'openai' | 'anthropic' | 'google' | 'local';
+  provider: ModelProvider | string;
   modelId: string;
-  capabilities: string[];
+  description?: string;
   maxTokens: number;
-  costPer1kTokens?: number;
-  status: 'available' | 'unavailable';
+  supportsStreaming: boolean;
+  defaultTemperature?: number;
+  isActive: boolean;
+  isDefault: boolean;
+  status?: 'available' | 'unavailable' | string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateModelInput {
+  name: string;
+  provider: ModelProvider | string;
+  modelId: string;
+  description?: string;
+  maxTokens?: number;
+  supportsStreaming?: boolean;
+  defaultTemperature?: number;
+  isActive?: boolean;
+}
+
+export interface ApiKey {
+  id: string;
+  userId: string;
+  provider: ModelProvider | string;
+  keyName: string;
+  apiKeyHash: string;
+  isActive: boolean;
+  isValid: boolean;
+  lastUsedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateApiKeyInput {
+  userId: string;
+  provider: ModelProvider | string;
+  keyName: string;
+  apiKey: string;
 }
 
 // Execution Types

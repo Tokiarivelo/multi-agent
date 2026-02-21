@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ToolRepository } from '@domain/tool.repository.interface';
+import { ToolRepository, PaginatedTools } from '@domain/tool.repository.interface';
 import { ToolEntity, ToolCategory } from '@domain/tool.entity';
 import { PrismaService } from '@infrastructure/database/prisma.service';
 
@@ -38,18 +38,39 @@ export class PrismaToolRepository implements ToolRepository {
     return tool ? ToolEntity.fromPrisma(tool) : null;
   }
 
-  async findAll(filters?: { category?: ToolCategory; isBuiltIn?: boolean }): Promise<ToolEntity[]> {
-    const tools = await this.prisma.tool.findMany({
-      where: {
-        ...(filters?.category && { category: filters.category }),
-        ...(filters?.isBuiltIn !== undefined && { isBuiltIn: filters.isBuiltIn }),
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+  async findAll(filters?: {
+    category?: ToolCategory;
+    isBuiltIn?: boolean;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedTools> {
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const skip = (page - 1) * limit;
 
-    return tools.map(ToolEntity.fromPrisma);
+    const where = {
+      ...(filters?.category && { category: filters.category }),
+      ...(filters?.isBuiltIn !== undefined && { isBuiltIn: filters.isBuiltIn }),
+    };
+
+    const [total, tools] = await Promise.all([
+      this.prisma.tool.count({ where }),
+      this.prisma.tool.findMany({
+        where,
+        take: limit,
+        skip,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+    ]);
+
+    return {
+      data: tools.map(ToolEntity.fromPrisma),
+      total,
+      page,
+      limit,
+    };
   }
 
   async update(id: string, updates: Partial<ToolEntity>): Promise<ToolEntity> {
@@ -73,19 +94,39 @@ export class PrismaToolRepository implements ToolRepository {
     });
   }
 
-  async search(query: string): Promise<ToolEntity[]> {
-    const tools = await this.prisma.tool.findMany({
-      where: {
-        OR: [
-          { name: { contains: query, mode: 'insensitive' } },
-          { description: { contains: query, mode: 'insensitive' } },
-        ],
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+  async search(
+    query: string,
+    pageParam: number = 1,
+    limitParam: number = 20,
+  ): Promise<PaginatedTools> {
+    const page = pageParam || 1;
+    const limit = limitParam || 20;
+    const skip = (page - 1) * limit;
 
-    return tools.map(ToolEntity.fromPrisma);
+    const where = {
+      OR: [
+        { name: { contains: query, mode: 'insensitive' as const } },
+        { description: { contains: query, mode: 'insensitive' as const } },
+      ],
+    };
+
+    const [total, tools] = await Promise.all([
+      this.prisma.tool.count({ where }),
+      this.prisma.tool.findMany({
+        where,
+        take: limit,
+        skip,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+    ]);
+
+    return {
+      data: tools.map(ToolEntity.fromPrisma),
+      total,
+      page,
+      limit,
+    };
   }
 }

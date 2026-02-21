@@ -72,6 +72,9 @@ Enforce:
 - Components must be reusable.
 - No direct coupling to backend internals.
 - Always use the recommanded code and the best practice
+- Always make it compatible with dark and light theme
+- Always use reactquery for request
+- Always use zustand for the stores
 
 ---
 
@@ -158,6 +161,7 @@ When generating solutions, ALWAYS:
 4. Include testing strategy
 5. Mention documentation updates
 6. Mention Makefile updates
+7. Always make it multi-language (en-us and FR)
 
 If one is missing → solution is incomplete.
 

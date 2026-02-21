@@ -57,9 +57,17 @@ export class ExecutionController {
 
   @Get(':id/logs')
   @ApiOperation({ summary: 'Get execution logs' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Execution logs found' })
   @ApiResponse({ status: 404, description: 'Execution not found' })
-  async getExecutionLogs(@Param('id') id: string) {
+  async getExecutionLogs(
+    @Param('id') id: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limitArg?: string,
+    @Query('pageSize') pageSizeArg?: string,
+  ) {
     this.logger.log(`Getting logs for execution ${id}`);
 
     const execution = await this.executionRepository.findById(id);
@@ -67,23 +75,33 @@ export class ExecutionController {
       throw new NotFoundException(`Execution ${id} not found`);
     }
 
-    const logs = await this.getExecutionLogsUseCase.execute(id);
+    const pageNum = parseInt(page, 10);
+    const limitRaw = limitArg || pageSizeArg || '100';
+    const limitNum = parseInt(limitRaw, 10);
 
-    return logs.map((log) => ({
-      id: log.id,
-      executionId: log.executionId,
-      nodeId: log.nodeId,
-      nodeName: log.nodeName,
-      status: log.status,
-      input: log.input,
-      output: log.output,
-      error: log.error,
-      startedAt: log.startedAt,
-      completedAt: log.completedAt,
-      duration: log.duration,
-      createdAt: log.createdAt,
-      updatedAt: log.updatedAt,
-    }));
+    const logsResult = await this.getExecutionLogsUseCase.execute(id, pageNum, limitNum);
+
+    return {
+      data: logsResult.data.map((log) => ({
+        id: log.id,
+        executionId: log.executionId,
+        nodeId: log.nodeId,
+        nodeName: log.nodeName,
+        status: log.status,
+        input: log.input,
+        output: log.output,
+        error: log.error,
+        startedAt: log.startedAt,
+        completedAt: log.completedAt,
+        duration: log.duration,
+        createdAt: log.createdAt,
+        updatedAt: log.updatedAt,
+      })),
+      total: logsResult.total,
+      page: logsResult.page,
+      limit: logsResult.limit,
+      totalPages: logsResult.totalPages,
+    };
   }
 
   @Get()

@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { IExecutionLogRepository } from '../../domain/repositories/execution-log.repository.interface';
+import {
+  PaginationOptions,
+  PaginatedResult,
+} from '../../domain/repositories/execution.repository.interface';
 import { ExecutionLogEntity, ExecutionLogStatus } from '../../domain/entities/execution-log.entity';
 
 @Injectable()
@@ -19,13 +23,31 @@ export class ExecutionLogRepository implements IExecutionLogRepository {
     return this.toDomain(log);
   }
 
-  async findByExecutionId(executionId: string): Promise<ExecutionLogEntity[]> {
-    const logs = await this.prisma.executionLog.findMany({
-      where: { executionId },
-      orderBy: { startedAt: 'asc' },
-    });
+  async findByExecutionId(
+    executionId: string,
+    options?: PaginationOptions,
+  ): Promise<PaginatedResult<ExecutionLogEntity>> {
+    const page = options?.page || 1;
+    const limit = options?.limit || 20;
+    const skip = (page - 1) * limit;
 
-    return logs.map((log) => this.toDomain(log));
+    const [logs, total] = await Promise.all([
+      this.prisma.executionLog.findMany({
+        where: { executionId },
+        take: limit,
+        skip,
+        orderBy: { startedAt: 'asc' },
+      }),
+      this.prisma.executionLog.count({ where: { executionId } }),
+    ]);
+
+    return {
+      data: logs.map((log) => this.toDomain(log)),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async findByNodeId(executionId: string, nodeId: string): Promise<ExecutionLogEntity | null> {

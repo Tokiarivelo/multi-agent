@@ -21,7 +21,7 @@ export const authOptions: NextAuthOptions = {
         try {
           // Call Gateway Service Login
           // Assuming gateway returns { accessToken: string, user: { ... } }
-          const res = await axios.post(`${API_URL}/auth/login`, {
+          const res = await axios.post(`${API_URL}/api/auth/login`, {
             email: credentials.email,
             password: credentials.password,
           });
@@ -64,7 +64,7 @@ export const authOptions: NextAuthOptions = {
             const firstName = nameParts[0] || 'User';
             const lastName = nameParts.slice(1).join(' ') || 'Social';
 
-            const res = await axios.post(`${API_URL}/auth/social-login`, {
+            const res = await axios.post(`${API_URL}/api/auth/social-login`, {
               email: user.email,
               firstName,
               lastName,

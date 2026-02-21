@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { Execution } from "@/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { useRetryExecution, useCancelExecution } from "../hooks/useExecutions";
-import { formatDate, getStatusColor } from "@/lib/utils";
-import { RefreshCw, X } from "lucide-react";
+import { Execution } from '@/types';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useRetryExecution, useCancelExecution } from '../hooks/useExecutions';
+import { formatDate, getStatusColor } from '@/lib/utils';
+import { RefreshCw, X } from 'lucide-react';
 
 interface ExecutionDetailsProps {
   execution: Execution;
@@ -31,7 +31,7 @@ export function ExecutionDetails({ execution }: ExecutionDetailsProps) {
           <div className="flex items-center justify-between">
             <CardTitle>Execution Details</CardTitle>
             <div className="flex gap-2">
-              {execution.status === "failed" && (
+              {execution.status === 'failed' && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -43,7 +43,7 @@ export function ExecutionDetails({ execution }: ExecutionDetailsProps) {
                   Retry
                 </Button>
               )}
-              {(execution.status === "running" || execution.status === "pending") && (
+              {(execution.status === 'running' || execution.status === 'pending') && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -67,7 +67,15 @@ export function ExecutionDetails({ execution }: ExecutionDetailsProps) {
             <div>
               <label className="text-sm font-medium text-muted-foreground">Status</label>
               <div className="mt-1">
-                <Badge variant={getStatusColor(execution.status) as "default" | "success" | "warning" | "destructive"}>
+                <Badge
+                  variant={
+                    getStatusColor(execution.status) as
+                      | 'default'
+                      | 'success'
+                      | 'warning'
+                      | 'destructive'
+                  }
+                >
                   {execution.status}
                 </Badge>
               </div>
@@ -97,7 +105,7 @@ export function ExecutionDetails({ execution }: ExecutionDetailsProps) {
           {execution.input && (
             <div>
               <label className="text-sm font-medium text-muted-foreground">Input</label>
-              <pre className="mt-2 p-4 bg-gray-50 rounded-md text-xs overflow-auto">
+              <pre className="mt-2 p-4 bg-muted/40 border border-border/50 rounded-xl text-xs overflow-auto shadow-inner">
                 {JSON.stringify(execution.input, null, 2)}
               </pre>
             </div>
@@ -106,7 +114,7 @@ export function ExecutionDetails({ execution }: ExecutionDetailsProps) {
           {execution.output && (
             <div>
               <label className="text-sm font-medium text-muted-foreground">Output</label>
-              <pre className="mt-2 p-4 bg-gray-50 rounded-md text-xs overflow-auto">
+              <pre className="mt-2 p-4 bg-muted/40 border border-border/50 rounded-xl text-xs overflow-auto shadow-inner">
                 {JSON.stringify(execution.output, null, 2)}
               </pre>
             </div>

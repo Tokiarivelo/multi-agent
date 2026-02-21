@@ -1,11 +1,11 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Put, 
-  Delete, 
-  Body, 
-  Param, 
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
   Query,
   HttpCode,
   HttpStatus,
@@ -34,14 +34,16 @@ export class AgentController {
   async findAll(
     @Query('name') name?: string,
     @Query('modelId') modelId?: string,
+    @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : pageSize ? parseInt(pageSize, 10) : undefined;
     return this.listAgentsUseCase.execute({
       name,
       modelId,
-      limit: limit ? parseInt(limit, 10) : undefined,
-      offset: offset ? parseInt(offset, 10) : undefined,
+      limit: parsedLimit,
+      page: page ? parseInt(page, 10) : undefined,
     });
   }
 
@@ -51,10 +53,7 @@ export class AgentController {
   }
 
   @Put(':id')
-  async update(
-    @Param('id') id: string,
-    @Body() updateAgentDto: Partial<CreateAgentDto>,
-  ) {
+  async update(@Param('id') id: string, @Body() updateAgentDto: Partial<CreateAgentDto>) {
     return this.listAgentsUseCase.update(id, updateAgentDto);
   }
 
@@ -65,16 +64,13 @@ export class AgentController {
   }
 
   @Post(':id/execute')
-  async execute(
-    @Param('id') id: string,
-    @Body() executeAgentDto: ExecuteAgentDto,
-  ) {
+  async execute(@Param('id') id: string, @Body() executeAgentDto: ExecuteAgentDto) {
     if (executeAgentDto.stream) {
       return {
         message: 'For streaming execution, use WebSocket connection at /agent-execution',
       };
     }
-    
+
     return this.executeAgentUseCase.execute(id, executeAgentDto);
   }
 }

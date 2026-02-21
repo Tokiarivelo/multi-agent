@@ -3,6 +3,8 @@ import { PrismaService } from '../database/prisma.service';
 import {
   IAgentRepository,
   AgentFilters,
+  PaginatedAgents,
+  PaginatedAgentExecutions,
 } from '../../domain/repositories/agent.repository.interface';
 import { Agent, AgentExecution } from '../../domain/entities/agent.entity';
 
@@ -40,7 +42,11 @@ export class AgentRepository implements IAgentRepository {
     return agent ? this.mapToEntity(agent) : null;
   }
 
-  async findAll(filters?: AgentFilters): Promise<Agent[]> {
+  async findAll(filters?: AgentFilters): Promise<PaginatedAgents> {
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const skip = (page - 1) * limit;
+
     const where: any = {};
 
     if (filters?.name) {
@@ -51,14 +57,22 @@ export class AgentRepository implements IAgentRepository {
       where.modelId = filters.modelId;
     }
 
-    const agents = await this.prisma.agent.findMany({
-      where,
-      take: filters?.limit,
-      skip: filters?.offset,
-      orderBy: { createdAt: 'desc' },
-    });
+    const [total, agents] = await Promise.all([
+      this.prisma.agent.count({ where }),
+      this.prisma.agent.findMany({
+        where,
+        take: limit,
+        skip,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
 
-    return agents.map((agent) => this.mapToEntity(agent));
+    return {
+      data: agents.map((agent) => this.mapToEntity(agent)),
+      total,
+      page,
+      limit,
+    };
   }
 
   async update(id: string, data: Partial<Agent>): Promise<Agent> {
@@ -110,13 +124,31 @@ export class AgentRepository implements IAgentRepository {
     return execution ? this.mapExecutionToEntity(execution) : null;
   }
 
-  async findExecutionsByAgentId(agentId: string): Promise<AgentExecution[]> {
-    const executions = await this.prisma.agentExecution.findMany({
-      where: { agentId },
-      orderBy: { startedAt: 'desc' },
-    });
+  async findExecutionsByAgentId(
+    agentId: string,
+    pageParam?: number,
+    limitParam?: number,
+  ): Promise<PaginatedAgentExecutions> {
+    const page = pageParam || 1;
+    const limit = limitParam || 20;
+    const skip = (page - 1) * limit;
 
-    return executions.map((exec) => this.mapExecutionToEntity(exec));
+    const [total, executions] = await Promise.all([
+      this.prisma.agentExecution.count({ where: { agentId } }),
+      this.prisma.agentExecution.findMany({
+        where: { agentId },
+        take: limit,
+        skip,
+        orderBy: { startedAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      data: executions.map((exec) => this.mapExecutionToEntity(exec)),
+      total,
+      page,
+      limit,
+    };
   }
 
   async updateExecution(id: string, data: Partial<AgentExecution>): Promise<AgentExecution> {

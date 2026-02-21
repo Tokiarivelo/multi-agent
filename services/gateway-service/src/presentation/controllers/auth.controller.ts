@@ -1,11 +1,13 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { LoginUseCase } from '../../application/use-cases/login.use-case';
 import { RegisterUseCase } from '../../application/use-cases/register.use-case';
 import { LoginDto } from '../../application/dto/login.dto';
 import { RegisterDto } from '../../application/dto/register.dto';
 import { SocialLoginDto } from '../../application/dto/social-login.dto';
 import { SocialLoginUseCase } from '../../application/use-cases/social-login.use-case';
+import { GetMeUseCase } from '../../application/use-cases/get-me.use-case';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -14,6 +16,7 @@ export class AuthController {
     private readonly loginUseCase: LoginUseCase,
     private readonly registerUseCase: RegisterUseCase,
     private readonly socialLoginUseCase: SocialLoginUseCase,
+    private readonly getMeUseCase: GetMeUseCase,
   ) {}
 
   @Post('register')
@@ -63,5 +66,21 @@ export class AuthController {
   })
   async socialLogin(@Body() socialLoginDto: SocialLoginDto) {
     return this.socialLoginUseCase.execute(socialLoginDto);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get current user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Current user details',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  async getMe(@Req() req: any) {
+    return this.getMeUseCase.execute(req.user.userId);
   }
 }

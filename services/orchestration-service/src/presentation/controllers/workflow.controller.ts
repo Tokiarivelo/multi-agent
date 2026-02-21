@@ -45,14 +45,15 @@ export class WorkflowController {
   async findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('pageSize') pageSize?: string,
     @Query('userId') userId?: string,
   ) {
-    if (userId) {
-      return this.getWorkflowUseCase.getByUserId(userId);
-    }
-
     const pageNum = page ? parseInt(page, 10) : 1;
-    const limitNum = limit ? parseInt(limit, 10) : 10;
+    const limitNum = limit ? parseInt(limit, 10) : pageSize ? parseInt(pageSize, 10) : 10;
+
+    if (userId) {
+      return this.getWorkflowUseCase.getByUserId(userId, pageNum, limitNum);
+    }
 
     return this.getWorkflowUseCase.getAll(pageNum, limitNum);
   }

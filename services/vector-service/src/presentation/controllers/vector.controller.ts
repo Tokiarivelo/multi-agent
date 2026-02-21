@@ -48,11 +48,21 @@ export class VectorController {
   }
 
   @Get('collections')
-  async listCollections(@Query('userId') userId: string) {
+  async listCollections(
+    @Query('userId') userId: string,
+    @Query('page') page?: string,
+    @Query('limit') limitArg?: string,
+    @Query('pageSize') pageSizeArg?: string,
+  ) {
     this.logger.log(`GET /vectors/collections - Listing collections for user: ${userId}`);
-    const collections = await this.vectorRepository.listCollectionsByUserId(userId);
+
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = parseInt(limitArg || pageSizeArg || '20', 10);
+
+    const result = await this.vectorRepository.listCollectionsByUserId(userId, pageNum, limitNum);
+
     return {
-      collections: collections.map(c => ({
+      data: result.data.map((c) => ({
         id: c.id,
         name: c.name,
         userId: c.userId,
@@ -61,6 +71,9 @@ export class VectorController {
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
       })),
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
     };
   }
 
@@ -92,14 +105,18 @@ export class VectorController {
   @Post('documents')
   @HttpCode(HttpStatus.CREATED)
   async upsertDocument(@Body() dto: UpsertDocumentDto) {
-    this.logger.log(`POST /vectors/documents - Upserting document to collection: ${dto.collectionId}`);
+    this.logger.log(
+      `POST /vectors/documents - Upserting document to collection: ${dto.collectionId}`,
+    );
     return await this.upsertDocumentUseCase.execute(dto);
   }
 
   @Post('documents/batch')
   @HttpCode(HttpStatus.CREATED)
   async upsertDocuments(@Body() dto: UpsertDocumentsDto) {
-    this.logger.log(`POST /vectors/documents/batch - Batch upserting ${dto.documents.length} documents`);
+    this.logger.log(
+      `POST /vectors/documents/batch - Batch upserting ${dto.documents.length} documents`,
+    );
     return await this.upsertDocumentUseCase.executeBatch(dto);
   }
 

@@ -58,6 +58,15 @@ Required environment variables:
 - `JWT_EXPIRATION`: Token expiration time (default: 1d)
 - `CORS_ORIGIN`: CORS allowed origins (default: \*)
 
+Proxy Environment variables:
+
+- `ORCHESTRATION_SERVICE_URL`: URL to proxy orchestration service routes (default: http://localhost:3003)
+- `AGENT_SERVICE_URL`: URL to proxy agent service routes (default: http://localhost:3002)
+- `EXECUTION_SERVICE_URL`: URL to proxy execution routes (default: http://localhost:3004)
+- `MODEL_SERVICE_URL`: URL to proxy model service routes (default: http://localhost:3005)
+- `TOOL_SERVICE_URL`: URL to proxy tool service routes (default: http://localhost:3006)
+- `VECTOR_SERVICE_URL`: URL to proxy vector service routes (default: http://localhost:3007)
+
 ## Running the Service
 
 ```bash
@@ -87,6 +96,10 @@ http://localhost:3000/api
 ### Health
 
 - `GET /health` - Service health check
+
+### API Request Routing (ProxyController)
+
+The gateway routes internal API requests to the exact service domain. Requests to `GET /api/workflows` will automatically forward to the Orchestration Service at `HTTP://ORCHESTRATION_SERVICE_URL/api/workflows` after performing JWT validation and authorization mappings. User context is automatically passed downstream.
 
 ## Testing Protected Routes
 
@@ -143,7 +156,7 @@ src/
 │   ├── auth/          # Authentication strategies
 │   └── config/        # Configuration
 ├── presentation/       # Presentation layer
-│   ├── controllers/   # HTTP controllers
+│   ├── controllers/   # HTTP controllers (Auth, Health, ProxyController)
 │   ├── guards/        # Route guards
 │   ├── decorators/    # Custom decorators
 │   └── filters/       # Exception filters

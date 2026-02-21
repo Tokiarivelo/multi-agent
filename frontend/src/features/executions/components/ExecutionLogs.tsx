@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useExecutionLogs } from "../hooks/useExecutions";
-import { useExecutionStore } from "@/store/execution.store";
-import { useTokenStream } from "@/hooks/useTokenStream";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/utils";
-import { Activity } from "lucide-react";
+import { useExecutionLogs } from '../hooks/useExecutions';
+import { useExecutionStore } from '@/store/execution.store';
+import { useTokenStream } from '@/hooks/useTokenStream';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { Badge } from '@/components/ui/badge';
+import { formatDate } from '@/lib/utils';
+import { Activity } from 'lucide-react';
 
 interface ExecutionLogsProps {
   executionId: string;
@@ -30,13 +30,11 @@ export function ExecutionLogs({ executionId }: ExecutionLogsProps) {
                 <Activity className="h-5 w-5 text-green-500" />
                 Live Token Stream
               </CardTitle>
-              {isStreaming && (
-                <Badge variant="success">Streaming</Badge>
-              )}
+              {isStreaming && <Badge variant="success">Streaming</Badge>}
             </div>
           </CardHeader>
           <CardContent>
-            <pre className="p-4 bg-gray-50 rounded-md text-sm whitespace-pre-wrap font-mono">
+            <pre className="p-4 bg-muted/40 border border-border/50 rounded-lg text-sm whitespace-pre-wrap font-mono shadow-inner">
               {streamedContent}
               {isStreaming && <span className="animate-pulse">▊</span>}
             </pre>
@@ -51,26 +49,26 @@ export function ExecutionLogs({ executionId }: ExecutionLogsProps) {
         <CardContent>
           {isLoading ? (
             <LoadingSpinner />
-          ) : !logs || logs.length === 0 ? (
+          ) : !logs?.data || logs.data.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <p>No logs available</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {logs.map((log) => (
+              {logs.data.map((log) => (
                 <div
                   key={log.id}
-                  className="flex items-start gap-3 p-3 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors"
+                  className="flex items-start gap-3 p-3 rounded-lg bg-muted/20 border border-transparent hover:border-border/60 hover:bg-muted/40 transition-all shadow-sm"
                 >
                   <Badge
                     variant={
-                      log.level === "error"
-                        ? "destructive"
-                        : log.level === "warn"
-                        ? "warning"
-                        : log.level === "info"
-                        ? "default"
-                        : "secondary"
+                      log.level === 'error'
+                        ? 'destructive'
+                        : log.level === 'warn'
+                          ? 'warning'
+                          : log.level === 'info'
+                            ? 'default'
+                            : 'secondary'
                     }
                     className="mt-0.5"
                   >

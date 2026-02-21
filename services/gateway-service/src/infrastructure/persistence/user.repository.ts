@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { IUserRepository } from '../../domain/repositories/user.repository.interface';
+import {
+  IUserRepository,
+  PaginatedUsers,
+} from '../../domain/repositories/user.repository.interface';
 import { User } from '../../domain/entities/user.entity';
 import { PrismaService } from '../database/prisma.service';
 import { UserRole, Prisma } from '@multi-agent/database';
@@ -91,10 +94,23 @@ export class UserRepository implements IUserRepository {
     }
   }
 
-  async findAll(): Promise<User[]> {
+  async findAll(pageParam: number = 1, limitParam: number = 20): Promise<PaginatedUsers> {
     try {
-      const users = await this.prisma.user.findMany();
-      return users.map((user) => new User(user));
+      const page = pageParam || 1;
+      const limit = limitParam || 20;
+      const skip = (page - 1) * limit;
+
+      const [total, users] = await Promise.all([
+        this.prisma.user.count(),
+        this.prisma.user.findMany({ skip, take: limit }),
+      ]);
+
+      return {
+        data: users.map((user) => new User(user)),
+        total,
+        page,
+        limit,
+      };
     } catch (error) {
       this.logger.error('Failed to find all users', error);
       throw error;

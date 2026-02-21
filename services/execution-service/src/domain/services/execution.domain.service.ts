@@ -22,13 +22,20 @@ export class ExecutionDomainService {
       return null;
     }
 
-    const logs = await this.executionLogRepository.findByExecutionId(executionId);
+    const result = await this.executionLogRepository.findByExecutionId(executionId, {
+      page: 1,
+      limit: 1000,
+    });
+    const logs = result.data;
 
     return { execution, logs };
   }
 
   async findFailedNode(executionId: string): Promise<ExecutionLogEntity | null> {
-    const logs = await this.executionLogRepository.findByExecutionId(executionId);
-    return logs.find((log) => log.status === 'FAILED') || null;
+    const result = await this.executionLogRepository.findByExecutionId(executionId, {
+      page: 1,
+      limit: 1000,
+    });
+    return result.data.find((log) => log.status === 'FAILED') || null;
   }
 }

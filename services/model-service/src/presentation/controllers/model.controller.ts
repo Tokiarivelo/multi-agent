@@ -38,12 +38,18 @@ export class ModelController {
 
   @Get()
   async findAll(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('limit') limit?: string,
     @Query('provider') provider?: string,
     @Query('isActive') isActive?: string,
     @Query('supportsStreaming') supportsStreaming?: string,
   ) {
     const filters: any = {};
 
+    if (page) filters.page = parseInt(page, 10);
+    if (pageSize) filters.limit = parseInt(pageSize, 10);
+    if (limit) filters.limit = parseInt(limit, 10);
     if (provider) {
       filters.provider = provider as ModelProvider;
     }

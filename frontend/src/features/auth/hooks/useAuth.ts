@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { authApi } from "../api/auth.api";
-import { useAuthStore } from "@/store/auth.store";
-import { useRouter } from "next/navigation";
-import { LoginCredentials, RegisterData } from "@/types";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { authApi } from '../api/auth.api';
+import { useAuthStore } from '@/store/auth.store';
+import { useRouter } from 'next/navigation';
+import { LoginCredentials, RegisterData } from '@/types';
 
 export function useAuth() {
   const { user, isAuthenticated, setUser, logout: logoutStore } = useAuthStore();
@@ -10,7 +10,7 @@ export function useAuth() {
   const queryClient = useQueryClient();
 
   const { data: currentUser, isLoading } = useQuery({
-    queryKey: ["currentUser"],
+    queryKey: ['currentUser'],
     queryFn: authApi.getCurrentUser,
     retry: false,
     staleTime: Infinity,
@@ -20,8 +20,8 @@ export function useAuth() {
     mutationFn: (credentials: LoginCredentials) => authApi.login(credentials),
     onSuccess: (user) => {
       setUser(user);
-      queryClient.invalidateQueries({ queryKey: ["currentUser"] });
-      router.push("/");
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      router.push('/');
     },
   });
 
@@ -29,8 +29,8 @@ export function useAuth() {
     mutationFn: (userData: RegisterData) => authApi.register(userData),
     onSuccess: (user) => {
       setUser(user);
-      queryClient.invalidateQueries({ queryKey: ["currentUser"] });
-      router.push("/");
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      router.push('/');
     },
   });
 
@@ -39,7 +39,7 @@ export function useAuth() {
     onSuccess: () => {
       logoutStore();
       queryClient.clear();
-      router.push("/login");
+      router.push('/login');
     },
   });
 

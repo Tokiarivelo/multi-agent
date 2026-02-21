@@ -12,6 +12,8 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('TOOL_PORT', 3006);
 
+  app.setGlobalPrefix('api');
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

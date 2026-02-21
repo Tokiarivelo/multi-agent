@@ -13,7 +13,8 @@ import { NatsClient } from '@multi-agent/nats-client';
   path: '/ws',
   transports: ['websocket'],
   cors: {
-    origin: '*',
+    origin: true,
+    credentials: true,
   },
 })
 export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {

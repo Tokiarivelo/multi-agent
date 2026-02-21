@@ -21,7 +21,10 @@ export class ModelClientService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.modelServiceUrl = this.configService.get<string>('MODEL_SERVICE_URL', 'http://localhost:3001');
+    this.modelServiceUrl = this.configService.get<string>(
+      'MODEL_SERVICE_URL',
+      'http://localhost:3001',
+    );
   }
 
   async getModelConfig(modelId: string): Promise<ModelConfig> {
@@ -29,9 +32,9 @@ export class ModelClientService {
       const response = await firstValueFrom(
         this.httpService.get(`${this.modelServiceUrl}/api/models/${modelId}`),
       );
-      
+
       const model = response.data;
-      
+
       return {
         id: model.id,
         name: model.name,
@@ -43,12 +46,9 @@ export class ModelClientService {
       };
     } catch (error) {
       if (error.response?.status === 404) {
-        throw new HttpException(
-          `Model with ID ${modelId} not found`,
-          HttpStatus.NOT_FOUND,
-        );
+        throw new HttpException(`Model with ID ${modelId} not found`, HttpStatus.NOT_FOUND);
       }
-      
+
       throw new HttpException(
         `Failed to fetch model configuration: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -61,8 +61,9 @@ export class ModelClientService {
       const response = await firstValueFrom(
         this.httpService.get(`${this.modelServiceUrl}/api/models`),
       );
-      
-      return response.data.map(model => ({
+      const modelsList = Array.isArray(response.data) ? response.data : response.data?.data || [];
+
+      return modelsList.map((model) => ({
         id: model.id,
         name: model.name,
         provider: model.provider,

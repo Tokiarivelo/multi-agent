@@ -3,6 +3,7 @@ import { PrismaService } from './prisma.service';
 import {
   ModelRepositoryInterface,
   ModelFilters,
+  PaginatedModels,
 } from '../../domain/repositories/model.repository.interface';
 import {
   Model,
@@ -55,19 +56,35 @@ export class ModelRepository implements ModelRepositoryInterface {
     return model ? this.mapToEntity(model) : null;
   }
 
-  async findAll(filters?: ModelFilters): Promise<Model[]> {
-    const models = await this.prisma.model.findMany({
-      where: {
-        ...(filters?.provider && { provider: filters.provider }),
-        ...(filters?.isActive !== undefined && { isActive: filters.isActive }),
-        ...(filters?.supportsStreaming !== undefined && {
-          supportsStreaming: filters.supportsStreaming,
-        }),
-      },
-      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
-    });
+  async findAll(filters?: ModelFilters): Promise<PaginatedModels> {
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const skip = (page - 1) * limit;
 
-    return models.map((model) => this.mapToEntity(model));
+    const where = {
+      ...(filters?.provider && { provider: filters.provider }),
+      ...(filters?.isActive !== undefined && { isActive: filters.isActive }),
+      ...(filters?.supportsStreaming !== undefined && {
+        supportsStreaming: filters.supportsStreaming,
+      }),
+    };
+
+    const [total, models] = await Promise.all([
+      this.prisma.model.count({ where }),
+      this.prisma.model.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+      }),
+    ]);
+
+    return {
+      data: models.map((model) => this.mapToEntity(model)),
+      total,
+      page,
+      limit,
+    };
   }
 
   async update(id: string, input: UpdateModelInput): Promise<Model> {

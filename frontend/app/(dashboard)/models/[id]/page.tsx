@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useModel } from "@/features/models/hooks/useModels";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { use } from "react";
-import { getStatusColor } from "@/lib/utils";
+import { useModel } from '@/features/models/hooks/useModels';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { use } from 'react';
+import { getStatusColor } from '@/lib/utils';
 
 export default function ModelDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -19,7 +19,9 @@ export default function ModelDetailPage({ params }: { params: Promise<{ id: stri
     <div className="space-y-4">
       <div>
         <h2 className="text-2xl font-bold">{model.name}</h2>
-        <p className="text-muted-foreground">{model.provider} - {model.modelId}</p>
+        <p className="text-muted-foreground">
+          {model.provider} - {model.modelId}
+        </p>
       </div>
 
       <Card>
@@ -30,11 +32,25 @@ export default function ModelDetailPage({ params }: { params: Promise<{ id: stri
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground">Provider</label>
-              <p><Badge variant="outline">{model.provider}</Badge></p>
+              <p>
+                <Badge variant="outline">{model.provider}</Badge>
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Status</label>
-              <p><Badge variant={getStatusColor(model.status) as "default" | "success" | "warning" | "destructive"}>{model.status}</Badge></p>
+              <p>
+                <Badge
+                  variant={
+                    getStatusColor(model.status || 'available') as
+                      | 'default'
+                      | 'success'
+                      | 'warning'
+                      | 'destructive'
+                  }
+                >
+                  {model.status || 'Available'}
+                </Badge>
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Model ID</label>
@@ -46,23 +62,30 @@ export default function ModelDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {model.capabilities && model.capabilities.length > 0 && (
+          <div className="grid grid-cols-2 gap-4 mt-4">
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Capabilities</label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {model.capabilities.map((cap) => (
-                  <Badge key={cap} variant="secondary">{cap}</Badge>
-                ))}
+              <label className="text-sm font-medium text-muted-foreground">
+                Supports Streaming
+              </label>
+              <p>{model.supportsStreaming ? 'Yes' : 'No'}</p>
+            </div>
+            {model.defaultTemperature !== undefined && (
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Default Temperature
+                </label>
+                <p>{model.defaultTemperature.toFixed(2)}</p>
               </div>
-            </div>
-          )}
-
-          {model.costPer1kTokens && (
+            )}
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Cost per 1K Tokens</label>
-              <p className="text-sm">${model.costPer1kTokens.toFixed(4)}</p>
+              <label className="text-sm font-medium text-muted-foreground">Active</label>
+              <p>{model.isActive ? 'Yes' : 'No'}</p>
             </div>
-          )}
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Default Model</label>
+              <p>{model.isDefault ? 'Yes' : 'No'}</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

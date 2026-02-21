@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { IWorkflowRepository } from '../../domain/repositories/workflow.repository.interface';
+import {
+  IWorkflowRepository,
+  PaginatedWorkflows,
+} from '../../domain/repositories/workflow.repository.interface';
 import {
   Workflow,
   WorkflowStatus as DomainWorkflowStatus,
@@ -21,22 +24,58 @@ export class WorkflowRepository implements IWorkflowRepository {
     return workflow ? this.toDomain(workflow) : null;
   }
 
-  async findByUserId(userId: string): Promise<Workflow[]> {
-    const workflows = await this.prisma.workflow.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findByUserId(
+    userId: string,
+    pageParam: number = 1,
+    limitParam: number = 20,
+  ): Promise<PaginatedWorkflows> {
+    const page = pageParam || 1;
+    const limit = limitParam || 20;
+    const skip = (page - 1) * limit;
 
-    return workflows.map((w: any) => this.toDomain(w));
+    const [total, workflows] = await Promise.all([
+      this.prisma.workflow.count({ where: { userId } }),
+      this.prisma.workflow.findMany({
+        where: { userId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      data: workflows.map((w: any) => this.toDomain(w)),
+      total,
+      page,
+      limit,
+    };
   }
 
-  async findByStatus(status: DomainWorkflowStatus): Promise<Workflow[]> {
-    const workflows = await this.prisma.workflow.findMany({
-      where: { status: status as unknown as PrismaWorkflowStatus },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findByStatus(
+    status: DomainWorkflowStatus,
+    pageParam: number = 1,
+    limitParam: number = 20,
+  ): Promise<PaginatedWorkflows> {
+    const page = pageParam || 1;
+    const limit = limitParam || 20;
+    const skip = (page - 1) * limit;
 
-    return workflows.map((w: any) => this.toDomain(w));
+    const [total, workflows] = await Promise.all([
+      this.prisma.workflow.count({ where: { status: status as unknown as PrismaWorkflowStatus } }),
+      this.prisma.workflow.findMany({
+        where: { status: status as unknown as PrismaWorkflowStatus },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      data: workflows.map((w: any) => this.toDomain(w)),
+      total,
+      page,
+      limit,
+    };
   }
 
   async create(data: {
@@ -92,10 +131,9 @@ export class WorkflowRepository implements IWorkflowRepository {
     this.logger.log(`Deleted workflow ${id}`);
   }
 
-  async findAll(
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<{ workflows: Workflow[]; total: number }> {
+  async findAll(pageParam: number = 1, limitParam: number = 10): Promise<PaginatedWorkflows> {
+    const page = pageParam || 1;
+    const limit = limitParam || 10;
     const skip = (page - 1) * limit;
 
     const [workflows, total] = await Promise.all([
@@ -108,8 +146,10 @@ export class WorkflowRepository implements IWorkflowRepository {
     ]);
 
     return {
-      workflows: workflows.map((w) => this.toDomain(w)),
+      data: workflows.map((w) => this.toDomain(w)),
       total,
+      page,
+      limit,
     };
   }
 

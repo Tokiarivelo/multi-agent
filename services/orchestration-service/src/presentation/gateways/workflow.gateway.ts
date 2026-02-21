@@ -14,7 +14,7 @@ import { WorkflowExecution } from '../../domain/entities/workflow-execution.enti
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: true,
     credentials: true,
   },
   namespace: '/workflows',

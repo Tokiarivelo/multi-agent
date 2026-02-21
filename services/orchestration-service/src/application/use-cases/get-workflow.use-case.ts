@@ -2,6 +2,7 @@ import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import {
   IWorkflowRepository,
   WORKFLOW_REPOSITORY,
+  PaginatedWorkflows,
 } from '../../domain/repositories/workflow.repository.interface';
 import { Workflow } from '../../domain/entities/workflow.entity';
 
@@ -22,11 +23,11 @@ export class GetWorkflowUseCase {
     return workflow;
   }
 
-  async getByUserId(userId: string): Promise<Workflow[]> {
-    return this.workflowRepository.findByUserId(userId);
+  async getByUserId(userId: string, page?: number, limit?: number): Promise<PaginatedWorkflows> {
+    return this.workflowRepository.findByUserId(userId, page, limit);
   }
 
-  async getAll(page?: number, limit?: number): Promise<{ workflows: Workflow[]; total: number }> {
+  async getAll(page?: number, limit?: number): Promise<PaginatedWorkflows> {
     return this.workflowRepository.findAll(page, limit);
   }
 }

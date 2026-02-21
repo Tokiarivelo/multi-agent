@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { IVectorRepository } from '../../domain/repositories/vector.repository.interface';
+import {
+  IVectorRepository,
+  PaginatedCollections,
+} from '../../domain/repositories/vector.repository.interface';
 import { Collection } from '../../domain/entities/collection.entity';
 import { PrismaService } from '../database/prisma.service';
 
@@ -72,16 +75,34 @@ export class VectorRepository implements IVectorRepository {
     );
   }
 
-  async listCollectionsByUserId(userId: string): Promise<Collection[]> {
-    const records = await this.prisma.vectorCollection.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
+  async listCollectionsByUserId(
+    userId: string,
+    pageParam: number = 1,
+    limitParam: number = 20,
+  ): Promise<PaginatedCollections> {
+    const page = pageParam || 1;
+    const limit = limitParam || 20;
+    const skip = (page - 1) * limit;
 
-    return records.map(
-      (c) =>
-        new Collection(c.id, c.name, c.userId, c.dimension, 'cosine', c.createdAt, c.updatedAt),
-    );
+    const [total, records] = await Promise.all([
+      this.prisma.vectorCollection.count({ where: { userId } }),
+      this.prisma.vectorCollection.findMany({
+        where: { userId },
+        take: limit,
+        skip,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      data: records.map(
+        (c) =>
+          new Collection(c.id, c.name, c.userId, c.dimension, 'cosine', c.createdAt, c.updatedAt),
+      ),
+      total,
+      page,
+      limit,
+    };
   }
 
   async deleteCollection(id: string): Promise<void> {
