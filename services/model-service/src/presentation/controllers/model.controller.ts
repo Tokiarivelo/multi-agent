@@ -9,6 +9,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   CreateModelUseCase,
@@ -16,6 +17,7 @@ import {
   ListModelsUseCase,
   UpdateModelUseCase,
   DeleteModelUseCase,
+  FetchProviderModelsUseCase,
 } from '../../application/use-cases';
 import { CreateModelDto, UpdateModelDto } from '../../application/dto';
 import { ModelProvider } from '../../domain/entities/model.entity';
@@ -28,6 +30,7 @@ export class ModelController {
     private readonly listModelsUseCase: ListModelsUseCase,
     private readonly updateModelUseCase: UpdateModelUseCase,
     private readonly deleteModelUseCase: DeleteModelUseCase,
+    private readonly fetchProviderModelsUseCase: FetchProviderModelsUseCase,
   ) {}
 
   @Post()
@@ -66,6 +69,15 @@ export class ModelController {
   @Get('default')
   async getDefault() {
     return this.getModelUseCase.getDefault();
+  }
+
+  @Get('providers/:provider/available-models')
+  async getAvailableModels(@Param('provider') provider: string, @Query('userId') userId: string) {
+    if (!userId) {
+      throw new UnauthorizedException('userId is required');
+    }
+
+    return this.fetchProviderModelsUseCase.execute(userId, provider as ModelProvider);
   }
 
   @Get('provider/:provider')

@@ -108,6 +108,7 @@ export enum ModelProvider {
   GOOGLE = 'GOOGLE',
   AZURE = 'AZURE',
   OLLAMA = 'OLLAMA',
+  CUSTOM = 'CUSTOM',
 }
 
 export interface Model {
@@ -135,6 +136,14 @@ export interface CreateModelInput {
   supportsStreaming?: boolean;
   defaultTemperature?: number;
   isActive?: boolean;
+}
+
+export interface ProviderModel {
+  id: string;
+  name: string;
+  description?: string;
+  maxTokens?: number;
+  supportsStreaming?: boolean;
 }
 
 export interface ApiKey {

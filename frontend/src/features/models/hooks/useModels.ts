@@ -27,6 +27,15 @@ export function useCreateModel() {
   });
 }
 
+export function useProviderModels(provider: string | null) {
+  return useQuery({
+    queryKey: ['providerModels', provider],
+    queryFn: () => modelsApi.fetchProviderModels(provider!),
+    enabled: !!provider,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+}
+
 export function useApiKeys(userId: string | undefined) {
   return useQuery({
     queryKey: ['apiKeys', userId],

@@ -1,6 +1,6 @@
 # Makefile for Multi-Agent Platform Kubernetes Deployment
 
-.PHONY: help setup build deploy dev prod clean status logs port-forward test validate prisma-generate prisma-migrate prisma-studio prisma-reset
+.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset
 
 # Default target
 .DEFAULT_GOAL := help
@@ -110,7 +110,21 @@ port-forward: ## Forward ports for local access
 
 test: ## Run tests
 	@echo "$(GREEN)Running tests...$(NC)"
-	# Add test commands here
+	@echo "$(YELLOW)Backend tests:$(NC)"
+	cd services/model-service && pnpm test
+	@echo ""
+	@echo "$(YELLOW)Frontend tests:$(NC)"
+	cd frontend && pnpm test
+
+test-frontend: ## Run frontend tests
+	@echo "$(GREEN)Running frontend tests...$(NC)"
+	cd frontend && pnpm test
+
+test-frontend-watch: ## Run frontend tests in watch mode
+	cd frontend && pnpm test:watch
+
+test-frontend-cov: ## Run frontend tests with coverage
+	cd frontend && pnpm test:cov
 
 # Database commands (via packages/database)
 prisma-generate: ## Generate Prisma client

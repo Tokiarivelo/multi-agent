@@ -1,10 +1,7 @@
-export enum ModelProvider {
-  OPENAI = 'OPENAI',
-  ANTHROPIC = 'ANTHROPIC',
-  GOOGLE = 'GOOGLE',
-  AZURE = 'AZURE',
-  OLLAMA = 'OLLAMA',
-}
+// Re-export Prisma's ModelProvider as the single source of truth
+// Values are defined in packages/database/prisma/schema.prisma
+import { ModelProvider } from '@multi-agent/database';
+export { ModelProvider };
 
 export interface Model {
   id: string;
@@ -12,29 +9,29 @@ export interface Model {
   provider: ModelProvider;
   modelId: string;
   description?: string;
-  
+
   // Configuration
   maxTokens: number;
   supportsStreaming: boolean;
   defaultTemperature?: number;
-  
+
   // Rate limiting
   rateLimitPerMinute?: number;
   rateLimitPerHour?: number;
   rateLimitPerDay?: number;
-  
+
   // Cost tracking
   inputCostPer1kTokens?: number;
   outputCostPer1kTokens?: number;
-  
+
   // Provider-specific settings
   providerSettings?: Record<string, any>;
-  
+
   // Metadata
   isActive: boolean;
   isDefault: boolean;
   metadata?: Record<string, any>;
-  
+
   createdAt: Date;
   updatedAt: Date;
 }

@@ -8,3 +8,4 @@ export * from './get-api-key.use-case';
 export * from './list-api-keys.use-case';
 export * from './update-api-key.use-case';
 export * from './delete-api-key.use-case';
+export * from './fetch-provider-models.use-case';

@@ -97,6 +97,73 @@ const resources = {
       'docs.events.description':
         "The system is event-driven. Agents emit events (e.g., agent.thought, tool.result) which are published to NATS. The Flux Watcher (/monitor) listens to these events via WebSockets to provide real-time visibility into the system's reasoning process.",
       'docs.backToHome': '← Back to Home',
+
+      // Models - Create Modal
+      'models.create.title': 'Add New Model',
+      'models.create.subtitle': 'Configure a language model for the agents.',
+      'models.create.provider': 'Provider',
+      'models.create.modelEngineId': 'Model Engine ID',
+      'models.create.displayName': 'Model Display Name',
+      'models.create.maxTokens': 'Max Tokens',
+      'models.create.cancel': 'Cancel',
+      'models.create.save': 'Save Model',
+      'models.create.saving': 'Saving...',
+      'models.create.selectModel': '— Select a model —',
+      'models.create.enterManually': 'Enter manually',
+      'models.create.selectFromList': 'Select from list',
+      'models.create.fetchingModels': 'Fetching available models...',
+      'models.create.fetchError':
+        'Could not fetch models. Please add a valid API key for this provider, or enter a model ID manually.',
+      'models.create.customHint': 'Use CUSTOM for self-hosted or OpenAI-compatible endpoints.',
+      'models.create.customModelPlaceholder': 'e.g. my-fine-tuned-model',
+      'models.create.apiBaseUrl': 'API Base URL (optional)',
+      'models.create.apiBaseUrlHint':
+        'The base URL for the model API. Leave empty for standard providers.',
+
+      // Sidebar
+      'API Keys': 'API Keys',
+
+      // API Keys Page
+      'apiKeys.title': 'API Keys',
+      'apiKeys.subtitle': 'Manage authentication keys for your model providers.',
+      'apiKeys.addKey': 'Add API Key',
+      'apiKeys.key': 'key',
+      'apiKeys.keys': 'keys',
+      'apiKeys.error': 'Failed to load API keys.',
+      'apiKeys.stats.total': 'Total Keys',
+      'apiKeys.stats.active': 'Active & Valid',
+      'apiKeys.stats.providers': 'Providers',
+      'apiKeys.empty.title': 'No API keys configured',
+      'apiKeys.empty.description':
+        'Add your first API key to start using LLM providers. Keys are encrypted and securely stored.',
+      'apiKeys.empty.addFirst': 'Add your first key',
+
+      // API Keys Card
+      'apiKeys.card.unnamed': 'Unnamed Key',
+      'apiKeys.card.valid': 'Valid',
+      'apiKeys.card.invalid': 'Invalid',
+      'apiKeys.card.active': 'Active',
+      'apiKeys.card.inactive': 'Inactive',
+      'apiKeys.card.created': 'Created',
+      'apiKeys.card.lastUsed': 'Last used',
+      'apiKeys.card.activate': 'Activate',
+      'apiKeys.card.deactivate': 'Deactivate',
+      'apiKeys.card.delete': 'Delete',
+      'apiKeys.card.confirmDelete':
+        'Are you sure you want to delete this API key? This action cannot be undone.',
+
+      // API Keys Create Modal
+      'apiKeys.create.title': 'Add API Key',
+      'apiKeys.create.subtitle': 'Securely store an API key for a model provider.',
+      'apiKeys.create.securityNote':
+        'Your API key will be encrypted and stored securely. It will never be visible again after creation.',
+      'apiKeys.create.provider': 'Provider',
+      'apiKeys.create.keyName': 'Key Name',
+      'apiKeys.create.keyNamePlaceholder': 'e.g. My Personal OpenAI Key',
+      'apiKeys.create.apiKeyValue': 'API Key Value',
+      'apiKeys.create.cancel': 'Cancel',
+      'apiKeys.create.save': 'Save API Key',
+      'apiKeys.create.saving': 'Saving...',
     },
   },
   fr: {
@@ -194,6 +261,75 @@ const resources = {
       'docs.events.description':
         'Le système est piloté par les événements. Les agents émettent des événements (ex: agent.thought, tool.result) qui sont publiés sur NATS. Le Flux Watcher (/monitor) écoute ces événements via WebSockets pour offrir une visibilité en temps réel sur le processus de raisonnement du système.',
       'docs.backToHome': "← Retour à l'accueil",
+
+      // Models - Create Modal
+      'models.create.title': 'Ajouter un nouveau modèle',
+      'models.create.subtitle': 'Configurer un modèle de langage pour les agents.',
+      'models.create.provider': 'Fournisseur',
+      'models.create.modelEngineId': 'ID du moteur',
+      'models.create.displayName': "Nom d'affichage",
+      'models.create.maxTokens': 'Tokens maximum',
+      'models.create.cancel': 'Annuler',
+      'models.create.save': 'Enregistrer le modèle',
+      'models.create.saving': 'Enregistrement...',
+      'models.create.selectModel': '— Sélectionner un modèle —',
+      'models.create.enterManually': 'Saisir manuellement',
+      'models.create.selectFromList': 'Sélectionner dans la liste',
+      'models.create.fetchingModels': 'Récupération des modèles disponibles...',
+      'models.create.fetchError':
+        'Impossible de récupérer les modèles. Veuillez ajouter une clé API valide pour ce fournisseur, ou saisissez un ID de modèle manuellement.',
+      'models.create.customHint':
+        'Utilisez CUSTOM pour les endpoints auto-hébergés ou compatibles OpenAI.',
+      'models.create.customModelPlaceholder': 'ex. mon-modele-personnalise',
+      'models.create.apiBaseUrl': "URL de base de l'API (optionnel)",
+      'models.create.apiBaseUrlHint':
+        "L'URL de base de l'API du modèle. Laissez vide pour les fournisseurs standards.",
+
+      // Sidebar
+      'API Keys': 'Clés API',
+
+      // API Keys Page
+      'apiKeys.title': 'Clés API',
+      'apiKeys.subtitle': "Gérez les clés d'authentification pour vos fournisseurs de modèles.",
+      'apiKeys.addKey': 'Ajouter une clé API',
+      'apiKeys.key': 'clé',
+      'apiKeys.keys': 'clés',
+      'apiKeys.error': 'Impossible de charger les clés API.',
+      'apiKeys.stats.total': 'Total des clés',
+      'apiKeys.stats.active': 'Actives & valides',
+      'apiKeys.stats.providers': 'Fournisseurs',
+      'apiKeys.empty.title': 'Aucune clé API configurée',
+      'apiKeys.empty.description':
+        'Ajoutez votre première clé API pour commencer à utiliser les fournisseurs LLM. Les clés sont chiffrées et stockées en toute sécurité.',
+      'apiKeys.empty.addFirst': 'Ajouter votre première clé',
+
+      // API Keys Card
+      'apiKeys.card.unnamed': 'Clé sans nom',
+      'apiKeys.card.valid': 'Valide',
+      'apiKeys.card.invalid': 'Invalide',
+      'apiKeys.card.active': 'Active',
+      'apiKeys.card.inactive': 'Inactive',
+      'apiKeys.card.created': 'Créée le',
+      'apiKeys.card.lastUsed': 'Dernière utilisation',
+      'apiKeys.card.activate': 'Activer',
+      'apiKeys.card.deactivate': 'Désactiver',
+      'apiKeys.card.delete': 'Supprimer',
+      'apiKeys.card.confirmDelete':
+        'Êtes-vous sûr de vouloir supprimer cette clé API ? Cette action est irréversible.',
+
+      // API Keys Create Modal
+      'apiKeys.create.title': 'Ajouter une clé API',
+      'apiKeys.create.subtitle':
+        'Stocker une clé API de manière sécurisée pour un fournisseur de modèles.',
+      'apiKeys.create.securityNote':
+        'Votre clé API sera chiffrée et stockée en toute sécurité. Elle ne sera plus jamais visible après la création.',
+      'apiKeys.create.provider': 'Fournisseur',
+      'apiKeys.create.keyName': 'Nom de la clé',
+      'apiKeys.create.keyNamePlaceholder': 'ex. Ma clé OpenAI personnelle',
+      'apiKeys.create.apiKeyValue': 'Valeur de la clé API',
+      'apiKeys.create.cancel': 'Annuler',
+      'apiKeys.create.save': 'Enregistrer la clé API',
+      'apiKeys.create.saving': 'Enregistrement...',
     },
   },
 };

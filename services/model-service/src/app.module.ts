@@ -4,7 +4,12 @@ import { HttpModule } from '@nestjs/axios';
 
 // Infrastructure
 import { PrismaService, ModelRepository, ApiKeyRepository } from './infrastructure/database';
-import { EncryptionService, ProviderValidatorService } from './infrastructure/services';
+import {
+  EncryptionService,
+  ProviderClientFactory,
+  ProviderValidatorService,
+  ProviderModelsService,
+} from './infrastructure/services';
 
 // Use Cases
 import {
@@ -18,6 +23,7 @@ import {
   ListApiKeysUseCase,
   UpdateApiKeyUseCase,
   DeleteApiKeyUseCase,
+  FetchProviderModelsUseCase,
 } from './application/use-cases';
 
 // Controllers
@@ -40,7 +46,9 @@ import { ApiKeyRepositoryInterface } from './domain/repositories/api-key.reposit
     // Infrastructure
     PrismaService,
     EncryptionService,
+    ProviderClientFactory,
     ProviderValidatorService,
+    ProviderModelsService,
 
     // Repositories
     {
@@ -109,6 +117,17 @@ import { ApiKeyRepositoryInterface } from './domain/repositories/api-key.reposit
       provide: DeleteApiKeyUseCase,
       useFactory: (repo: ApiKeyRepositoryInterface) => new DeleteApiKeyUseCase(repo),
       inject: ['ApiKeyRepositoryInterface'],
+    },
+
+    // Use Cases - Provider Models
+    {
+      provide: FetchProviderModelsUseCase,
+      useFactory: (
+        repo: ApiKeyRepositoryInterface,
+        encryption: EncryptionService,
+        providerModels: ProviderModelsService,
+      ) => new FetchProviderModelsUseCase(repo, encryption, providerModels),
+      inject: ['ApiKeyRepositoryInterface', EncryptionService, ProviderModelsService],
     },
   ],
 })

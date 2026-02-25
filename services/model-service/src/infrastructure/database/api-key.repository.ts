@@ -1,7 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
-import { ApiKeyRepositoryInterface, ApiKeyFilters } from '../../domain/repositories/api-key.repository.interface';
-import { ApiKey, CreateApiKeyInput, UpdateApiKeyInput, ModelProvider } from '../../domain/entities/api-key.entity';
+import {
+  ApiKeyRepositoryInterface,
+  ApiKeyFilters,
+} from '../../domain/repositories/api-key.repository.interface';
+import {
+  ApiKey,
+  CreateApiKeyInput,
+  UpdateApiKeyInput,
+  ModelProvider,
+} from '../../domain/entities/api-key.entity';
 
 @Injectable()
 export class ApiKeyRepository implements ApiKeyRepositoryInterface {
@@ -44,7 +52,7 @@ export class ApiKeyRepository implements ApiKeyRepositoryInterface {
       orderBy: { createdAt: 'desc' },
     });
 
-    return apiKeys.map(key => this.mapToEntity(key));
+    return apiKeys.map((key) => this.mapToEntity(key));
   }
 
   async findByUserAndProvider(userId: string, provider: ModelProvider): Promise<ApiKey[]> {
@@ -53,7 +61,7 @@ export class ApiKeyRepository implements ApiKeyRepositoryInterface {
       orderBy: { createdAt: 'desc' },
     });
 
-    return apiKeys.map(key => this.mapToEntity(key));
+    return apiKeys.map((key) => this.mapToEntity(key));
   }
 
   async update(id: string, input: UpdateApiKeyInput): Promise<ApiKey> {
@@ -98,11 +106,15 @@ export class ApiKeyRepository implements ApiKeyRepositoryInterface {
     });
   }
 
-  async validateKeyExists(userId: string, provider: string, keyName: string): Promise<boolean> {
+  async validateKeyExists(
+    userId: string,
+    provider: ModelProvider,
+    keyName: string,
+  ): Promise<boolean> {
     const count = await this.prisma.apiKey.count({
       where: {
         userId,
-        provider: provider as ModelProvider,
+        provider,
         keyName,
       },
     });

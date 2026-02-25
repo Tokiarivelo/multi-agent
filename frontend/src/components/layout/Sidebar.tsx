@@ -10,6 +10,7 @@ import {
   Wrench,
   Layers,
   PlayCircle,
+  KeyRound,
   Sun,
   Moon,
   Languages,
@@ -27,6 +28,7 @@ const navigation = [
   { name: 'Agents', href: '/agents', icon: Bot },
   { name: 'Tools', href: '/tools', icon: Wrench },
   { name: 'Models', href: '/models', icon: Layers },
+  { name: 'API Keys', href: '/api-keys', icon: KeyRound },
   { name: 'Executions', href: '/executions', icon: PlayCircle },
 ];
 

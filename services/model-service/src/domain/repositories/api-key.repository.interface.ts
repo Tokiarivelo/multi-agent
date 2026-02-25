@@ -1,4 +1,9 @@
-import { ApiKey, CreateApiKeyInput, UpdateApiKeyInput, ModelProvider } from '../entities/api-key.entity';
+import {
+  ApiKey,
+  CreateApiKeyInput,
+  UpdateApiKeyInput,
+  ModelProvider,
+} from '../entities/api-key.entity';
 
 export interface ApiKeyRepositoryInterface {
   create(input: CreateApiKeyInput, encryptedKey: string, keyPrefix?: string): Promise<ApiKey>;
@@ -9,7 +14,7 @@ export interface ApiKeyRepositoryInterface {
   delete(id: string): Promise<void>;
   getDecryptedKey(id: string): Promise<string>;
   updateUsage(id: string): Promise<void>;
-  validateKeyExists(userId: string, provider: string, keyName: string): Promise<boolean>;
+  validateKeyExists(userId: string, provider: ModelProvider, keyName: string): Promise<boolean>;
 }
 
 export interface ApiKeyFilters {

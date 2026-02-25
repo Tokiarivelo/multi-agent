@@ -26,6 +26,7 @@ Create a new model configuration.
 **Endpoint**: `POST /api/models`
 
 **Request Body**:
+
 ```json
 {
   "name": "gpt-4-turbo",
@@ -53,6 +54,7 @@ Create a new model configuration.
 ```
 
 **Response**: `201 Created`
+
 ```json
 {
   "id": "uuid",
@@ -89,6 +91,7 @@ Get all models with optional filters.
 **Endpoint**: `GET /api/models`
 
 **Query Parameters**:
+
 - `provider` (optional): Filter by provider (OPENAI, ANTHROPIC, GOOGLE, AZURE, OLLAMA)
 - `isActive` (optional): Filter by active status (true/false)
 - `supportsStreaming` (optional): Filter by streaming support (true/false)
@@ -96,6 +99,7 @@ Get all models with optional filters.
 **Example**: `GET /api/models?provider=OPENAI&isActive=true`
 
 **Response**: `200 OK`
+
 ```json
 [
   {
@@ -115,6 +119,7 @@ Get a specific model by its ID.
 **Endpoint**: `GET /api/models/:id`
 
 **Response**: `200 OK`
+
 ```json
 {
   "id": "uuid",
@@ -130,6 +135,7 @@ Get the default model configuration.
 **Endpoint**: `GET /api/models/default`
 
 **Response**: `200 OK`
+
 ```json
 {
   "id": "uuid",
@@ -148,6 +154,7 @@ Get all models for a specific provider.
 **Example**: `GET /api/models/provider/OPENAI`
 
 **Response**: `200 OK`
+
 ```json
 [
   {
@@ -159,6 +166,50 @@ Get all models for a specific provider.
 ]
 ```
 
+### Fetch Available Provider Models
+
+Fetch the list of available models from a cloud provider using the user's stored API key. This endpoint is useful for populating model selection dropdowns in the UI.
+
+**Endpoint**: `GET /api/models/providers/:provider/available-models`
+
+**Query Parameters**:
+
+- `userId` (required): User ID to find the associated API key
+
+**Example**: `GET /api/models/providers/OPENAI/available-models?userId=user-123`
+
+**Response**: `200 OK`
+
+```json
+[
+  {
+    "id": "gpt-4-turbo",
+    "name": "gpt-4-turbo",
+    "description": "OpenAI model: gpt-4-turbo",
+    "maxTokens": 128000,
+    "supportsStreaming": true
+  },
+  {
+    "id": "gpt-4o",
+    "name": "gpt-4o",
+    "description": "OpenAI model: gpt-4o",
+    "maxTokens": 128000,
+    "supportsStreaming": true
+  }
+]
+```
+
+**Errors**:
+
+- `404 Not Found`: No valid API key found for the specified provider
+- `400 Bad Request`: API key decryption failed (corrupted key)
+
+**Notes**:
+
+- For **OLLAMA** and **AZURE**, no API key is required. Ollama queries the local instance, Azure returns a static list.
+- For **ANTHROPIC**, if the models listing API fails, a curated list of known models is returned as fallback.
+- Results are cached on the frontend for 5 minutes to avoid excessive API calls.
+
 ### Update Model
 
 Update an existing model.
@@ -166,6 +217,7 @@ Update an existing model.
 **Endpoint**: `PUT /api/models/:id`
 
 **Request Body** (all fields optional):
+
 ```json
 {
   "name": "gpt-4-turbo-updated",
@@ -178,6 +230,7 @@ Update an existing model.
 ```
 
 **Response**: `200 OK`
+
 ```json
 {
   "id": "uuid",
@@ -205,6 +258,7 @@ Add a new API key for a provider. The key is validated and encrypted before stor
 **Endpoint**: `POST /api/api-keys`
 
 **Request Body**:
+
 ```json
 {
   "userId": "user-123",
@@ -218,6 +272,7 @@ Add a new API key for a provider. The key is validated and encrypted before stor
 ```
 
 **Response**: `201 Created`
+
 ```json
 {
   "id": "uuid",
@@ -246,6 +301,7 @@ Get all API keys for a user.
 **Endpoint**: `GET /api/api-keys`
 
 **Query Parameters**:
+
 - `userId` (required): User ID
 - `provider` (optional): Filter by provider
 - `isActive` (optional): Filter by active status (true/false)
@@ -254,6 +310,7 @@ Get all API keys for a user.
 **Example**: `GET /api/api-keys?userId=user-123&provider=OPENAI`
 
 **Response**: `200 OK`
+
 ```json
 [
   {
@@ -280,6 +337,7 @@ Get a specific API key (without decryption).
 **Endpoint**: `GET /api/api-keys/:id`
 
 **Response**: `200 OK`
+
 ```json
 {
   "id": "uuid",
@@ -298,9 +356,11 @@ Retrieve the decrypted API key. This endpoint should only be called by internal 
 **Endpoint**: `GET /api/api-keys/:id/decrypt`
 
 **Headers**:
+
 - `x-internal-secret`: Internal secret for authentication
 
 **Response**: `200 OK`
+
 ```json
 {
   "key": "sk-proj-abc123..."
@@ -316,11 +376,13 @@ Get all API keys for a user and provider.
 **Endpoint**: `GET /api/api-keys/provider/:provider`
 
 **Query Parameters**:
+
 - `userId` (required): User ID
 
 **Example**: `GET /api/api-keys/provider/OPENAI?userId=user-123`
 
 **Response**: `200 OK`
+
 ```json
 [
   {
@@ -339,6 +401,7 @@ Update an API key's metadata.
 **Endpoint**: `PUT /api/api-keys/:id`
 
 **Request Body** (all fields optional):
+
 ```json
 {
   "keyName": "Updated Key Name",
@@ -350,6 +413,7 @@ Update an API key's metadata.
 ```
 
 **Response**: `200 OK`
+
 ```json
 {
   "id": "uuid",
@@ -378,6 +442,7 @@ Check service health status.
 **Endpoint**: `GET /api/health`
 
 **Response**: `200 OK`
+
 ```json
 {
   "status": "ok",
@@ -418,7 +483,7 @@ DATABASE_URL=postgresql://user:password@localhost:5432/model_service
 Before storing an API key, the service validates it against the provider's API:
 
 - **OpenAI**: Calls `/v1/models` endpoint
-- **Anthropic**: Calls `/v1/messages` endpoint  
+- **Anthropic**: Calls `/v1/messages` endpoint
 - **Google**: Calls Gemini API models endpoint
 - **Azure**: Basic format validation
 - **Ollama**: No validation (local deployment)
@@ -505,13 +570,13 @@ The service validates all inputs:
 
 ## Supported Providers
 
-| Provider | Value | Validation | Notes |
-|----------|-------|------------|-------|
-| OpenAI | `OPENAI` | ✅ Live API check | GPT-4, GPT-3.5, etc. |
-| Anthropic | `ANTHROPIC` | ✅ Live API check | Claude 3 models |
-| Google | `GOOGLE` | ✅ Live API check | Gemini models |
-| Azure | `AZURE` | ⚠️ Format check | Azure OpenAI Service |
-| Ollama | `OLLAMA` | ❌ No validation | Local deployment |
+| Provider  | Value       | Validation        | Notes                |
+| --------- | ----------- | ----------------- | -------------------- |
+| OpenAI    | `OPENAI`    | ✅ Live API check | GPT-4, GPT-3.5, etc. |
+| Anthropic | `ANTHROPIC` | ✅ Live API check | Claude 3 models      |
+| Google    | `GOOGLE`    | ✅ Live API check | Gemini models        |
+| Azure     | `AZURE`     | ⚠️ Format check   | Azure OpenAI Service |
+| Ollama    | `OLLAMA`    | ❌ No validation  | Local deployment     |
 
 ---
 

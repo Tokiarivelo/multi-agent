@@ -6,6 +6,7 @@ import {
   CreateModelInput,
   ApiKey,
   CreateApiKeyInput,
+  ProviderModel,
 } from '@/types';
 
 export const modelsApi = {
@@ -24,6 +25,14 @@ export const modelsApi = {
   create: async (modelData: CreateModelInput): Promise<Model> => {
     const { data } = await apiClient.post<ApiResponse<Model>>(`/api/models`, modelData);
     return data.data;
+  },
+
+  // Provider Models
+  fetchProviderModels: async (provider: string): Promise<ProviderModel[]> => {
+    const { data } = await apiClient.get<ProviderModel[]>(
+      `/api/models/providers/${provider}/available-models`,
+    );
+    return data;
   },
 
   // API Keys

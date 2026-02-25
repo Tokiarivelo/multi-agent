@@ -169,6 +169,7 @@ enum ModelProvider {
   GOOGLE
   AZURE
   OLLAMA
+  CUSTOM
 }
 
 model ApiKey {

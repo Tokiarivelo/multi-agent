@@ -17,7 +17,6 @@ import { getStatusColor } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { CreateModelModal } from './CreateModelModal';
-import { ApiKeysManager } from './ApiKeysManager';
 
 export function ModelList() {
   const { data, isLoading, error } = useModels();
@@ -94,10 +93,6 @@ export function ModelList() {
           )}
         </CardContent>
       </Card>
-
-      <div className="pt-8">
-        <ApiKeysManager />
-      </div>
 
       {isCreateModelModalOpen && (
         <CreateModelModal onClose={() => setIsCreateModelModalOpen(false)} />

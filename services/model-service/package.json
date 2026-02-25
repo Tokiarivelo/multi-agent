@@ -16,6 +16,8 @@
     "test:cov": "jest --coverage"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@google/genai": "^1.42.0",
     "@multi-agent/common": "workspace:*",
     "@multi-agent/database": "workspace:*",
     "@multi-agent/types": "workspace:*",
@@ -28,6 +30,7 @@
     "axios": "^1.6.5",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "openai": "^6.23.0",
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.1"
