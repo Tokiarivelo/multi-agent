@@ -6,6 +6,7 @@ import './globals.css';
 import '@/lib/i18n';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { ThemeProvider } from '@/components/shared/ThemeProvider';
+import { Toaster } from '@/components/ui/sonner';
 
 import { SessionProvider } from 'next-auth/react';
 
@@ -43,6 +44,7 @@ export default function RootLayout({
             <ErrorBoundary>
               <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
             </ErrorBoundary>
+            <Toaster position="top-right" richColors />
           </SessionProvider>
         </ThemeProvider>
       </body>

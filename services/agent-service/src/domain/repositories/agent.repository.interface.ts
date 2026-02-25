@@ -32,6 +32,7 @@ export interface IAgentRepository {
 }
 
 export interface AgentFilters {
+  userId?: string;
   name?: string;
   modelId?: string;
   page?: number;

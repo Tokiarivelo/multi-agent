@@ -2,6 +2,10 @@ import { IsString, IsOptional, IsNumber, IsArray, Min, Max } from 'class-validat
 
 export class CreateAgentDto {
   @IsString()
+  @IsOptional()
+  userId?: string;
+
+  @IsString()
   name: string;
 
   @IsString()

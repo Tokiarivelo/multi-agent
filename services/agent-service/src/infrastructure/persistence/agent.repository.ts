@@ -49,6 +49,10 @@ export class AgentRepository implements IAgentRepository {
 
     const where: any = {};
 
+    if (filters?.userId) {
+      where.userId = filters.userId;
+    }
+
     if (filters?.name) {
       where.name = { contains: filters.name, mode: 'insensitive' };
     }

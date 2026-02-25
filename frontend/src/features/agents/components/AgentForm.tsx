@@ -1,30 +1,32 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useCreateAgent, useUpdateAgent } from "../hooks/useAgents";
-import { useModels } from "@/features/models/hooks/useModels";
-import { Agent } from "@/types";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save } from "lucide-react";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { useState } from 'react';
+import { useCreateAgent, useUpdateAgent, useDeleteAgent } from '../hooks/useAgents';
+import { useModels } from '@/features/models/hooks/useModels';
+import { Agent } from '@/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Save, ChevronLeft, Trash2 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import Link from 'next/link';
 
 interface AgentFormProps {
   agent?: Agent;
 }
 
 export function AgentForm({ agent }: AgentFormProps) {
-  const [name, setName] = useState(agent?.name || "");
-  const [description, setDescription] = useState(agent?.description || "");
-  const [modelId, setModelId] = useState(agent?.modelId || "");
-  const [systemPrompt, setSystemPrompt] = useState(agent?.systemPrompt || "");
-  const [temperature, setTemperature] = useState(agent?.temperature?.toString() || "0.7");
-  const [maxTokens, setMaxTokens] = useState(agent?.maxTokens?.toString() || "2048");
+  const [name, setName] = useState(agent?.name || '');
+  const [description, setDescription] = useState(agent?.description || '');
+  const [modelId, setModelId] = useState(agent?.modelId || '');
+  const [systemPrompt, setSystemPrompt] = useState(agent?.systemPrompt || '');
+  const [temperature, setTemperature] = useState(agent?.temperature?.toString() || '0.7');
+  const [maxTokens, setMaxTokens] = useState(agent?.maxTokens?.toString() || '2048');
 
   const createAgent = useCreateAgent();
   const updateAgent = useUpdateAgent();
+  const deleteAgent = useDeleteAgent();
   const { data: modelsData, isLoading: modelsLoading } = useModels();
 
   const handleSave = () => {
@@ -45,7 +47,13 @@ export function AgentForm({ agent }: AgentFormProps) {
     }
   };
 
-  const isLoading = createAgent.isPending || updateAgent.isPending;
+  const handleDelete = () => {
+    if (agent?.id && window.confirm('Are you sure you want to delete this agent?')) {
+      deleteAgent.mutate(agent.id);
+    }
+  };
+
+  const isLoading = createAgent.isPending || updateAgent.isPending || deleteAgent.isPending;
   const models = modelsData?.data || [];
 
   if (modelsLoading) return <LoadingSpinner />;
@@ -53,13 +61,31 @@ export function AgentForm({ agent }: AgentFormProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">
-          {agent ? "Edit Agent" : "New Agent"}
-        </h2>
-        <Button onClick={handleSave} disabled={isLoading} className="gap-2">
-          <Save className="h-4 w-4" />
-          {isLoading ? "Saving..." : "Save"}
-        </Button>
+        <div className="flex items-center gap-4">
+          <Link href="/agents">
+            <Button variant="ghost" size="icon">
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+          </Link>
+          <h2 className="text-2xl font-bold">{agent ? 'Edit Agent' : 'New Agent'}</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          {agent && (
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isLoading}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          )}
+          <Button onClick={handleSave} disabled={isLoading} className="gap-2">
+            <Save className="h-4 w-4" />
+            {isLoading ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
       </div>
 
       <Card>

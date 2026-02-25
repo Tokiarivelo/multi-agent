@@ -18,13 +18,13 @@ export const modelsApi = {
   },
 
   getById: async (id: string): Promise<Model> => {
-    const { data } = await apiClient.get<ApiResponse<Model>>(`/api/models/${id}`);
-    return data.data;
+    const { data } = await apiClient.get<Model>(`/api/models/${id}`);
+    return data;
   },
 
   create: async (modelData: CreateModelInput): Promise<Model> => {
-    const { data } = await apiClient.post<ApiResponse<Model>>(`/api/models`, modelData);
-    return data.data;
+    const { data } = await apiClient.post<Model>(`/api/models`, modelData);
+    return data;
   },
 
   // Provider Models
@@ -44,8 +44,8 @@ export const modelsApi = {
   },
 
   createApiKey: async (apiKeyData: CreateApiKeyInput): Promise<ApiKey> => {
-    const { data } = await apiClient.post<ApiResponse<ApiKey>>(`/api/api-keys`, apiKeyData);
-    return data.data;
+    const { data } = await apiClient.post<ApiKey>(`/api/api-keys`, apiKeyData);
+    return data;
   },
 
   deleteApiKey: async (id: string): Promise<void> => {

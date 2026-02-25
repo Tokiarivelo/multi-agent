@@ -9,6 +9,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { CreateAgentUseCase } from '../../application/use-cases/create-agent.use-case';
 import { ListAgentsUseCase } from '../../application/use-cases/list-agents.use-case';
@@ -26,20 +27,28 @@ export class AgentController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() createAgentDto: CreateAgentDto) {
-    return this.createAgentUseCase.execute(createAgentDto);
+  async create(@Body() createAgentDto: CreateAgentDto, @Query('userId') userId: string) {
+    if (!userId) {
+      throw new UnauthorizedException('userId is required');
+    }
+    return this.createAgentUseCase.execute({ ...createAgentDto, userId });
   }
 
   @Get()
   async findAll(
+    @Query('userId') userId: string,
     @Query('name') name?: string,
     @Query('modelId') modelId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('pageSize') pageSize?: string,
   ) {
+    if (!userId) {
+      throw new UnauthorizedException('userId is required');
+    }
     const parsedLimit = limit ? parseInt(limit, 10) : pageSize ? parseInt(pageSize, 10) : undefined;
     return this.listAgentsUseCase.execute({
+      userId,
       name,
       modelId,
       limit: parsedLimit,
@@ -48,19 +57,32 @@ export class AgentController {
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return this.listAgentsUseCase.getById(id);
+  async findOne(@Param('id') id: string, @Query('userId') userId: string) {
+    if (!userId) {
+      throw new UnauthorizedException('userId is required');
+    }
+    return this.listAgentsUseCase.getById(id, userId);
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() updateAgentDto: Partial<CreateAgentDto>) {
-    return this.listAgentsUseCase.update(id, updateAgentDto);
+  async update(
+    @Param('id') id: string,
+    @Body() updateAgentDto: Partial<CreateAgentDto>,
+    @Query('userId') userId: string,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException('userId is required');
+    }
+    return this.listAgentsUseCase.update(id, updateAgentDto, userId);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async delete(@Param('id') id: string) {
-    await this.listAgentsUseCase.delete(id);
+  async delete(@Param('id') id: string, @Query('userId') userId: string) {
+    if (!userId) {
+      throw new UnauthorizedException('userId is required');
+    }
+    await this.listAgentsUseCase.delete(id, userId);
   }
 
   @Post(':id/execute')

@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { AlertCircle } from "lucide-react";
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { AlertCircle } from 'lucide-react';
 
 interface Props {
   children: React.ReactNode;
@@ -25,7 +25,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("ErrorBoundary caught an error:", error, errorInfo);
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
 
   render() {
@@ -41,12 +41,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">
-                {this.state.error?.message || "An unexpected error occurred"}
+                {this.state.error?.message || 'An unexpected error occurred'}
               </p>
-              <Button
-                onClick={() => this.setState({ hasError: false, error: undefined })}
-                className="w-full"
-              >
+              <Button onClick={() => window.location.reload()} className="w-full">
                 Try again
               </Button>
             </CardContent>

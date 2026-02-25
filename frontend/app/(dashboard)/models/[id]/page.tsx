@@ -32,13 +32,13 @@ export default function ModelDetailPage({ params }: { params: Promise<{ id: stri
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground">Provider</label>
-              <p>
+              <div>
                 <Badge variant="outline">{model.provider}</Badge>
-              </p>
+              </div>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Status</label>
-              <p>
+              <div>
                 <Badge
                   variant={
                     getStatusColor(model.status || 'available') as
@@ -50,7 +50,7 @@ export default function ModelDetailPage({ params }: { params: Promise<{ id: stri
                 >
                   {model.status || 'Available'}
                 </Badge>
-              </p>
+              </div>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Model ID</label>
@@ -69,7 +69,7 @@ export default function ModelDetailPage({ params }: { params: Promise<{ id: stri
               </label>
               <p>{model.supportsStreaming ? 'Yes' : 'No'}</p>
             </div>
-            {model.defaultTemperature !== undefined && (
+            {typeof model.defaultTemperature === 'number' && (
               <div>
                 <label className="text-sm font-medium text-muted-foreground">
                   Default Temperature

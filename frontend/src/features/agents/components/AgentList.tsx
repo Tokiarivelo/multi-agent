@@ -1,22 +1,32 @@
-"use client";
+'use client';
 
-import { useAgents } from "../hooks/useAgents";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Edit } from "lucide-react";
-import Link from "next/link";
-import { formatRelativeTime, getStatusColor } from "@/lib/utils";
+import { useAgents } from '../hooks/useAgents';
+import { useModels } from '@/features/models/hooks/useModels';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Plus, Edit } from 'lucide-react';
+import Link from 'next/link';
+import { formatRelativeTime, getStatusColor } from '@/lib/utils';
 
 export function AgentList() {
   const { data, isLoading, error } = useAgents();
+  const { data: modelsData, isLoading: modelsLoading } = useModels();
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading || modelsLoading) return <LoadingSpinner />;
   if (error) return <div className="text-destructive">Error loading agents</div>;
 
   const agents = data?.data || [];
+  const models = modelsData?.data || [];
 
   return (
     <div className="space-y-4">
@@ -37,7 +47,7 @@ export function AgentList() {
         <CardHeader>
           <CardTitle>All Agents</CardTitle>
           <CardDescription>
-            {agents.length} agent{agents.length !== 1 ? "s" : ""} configured
+            {agents.length} agent{agents.length !== 1 ? 's' : ''} configured
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -67,12 +77,27 @@ export function AgentList() {
                       </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {agent.description || "—"}
+                      {agent.description || '—'}
                     </TableCell>
-                    <TableCell>{agent.modelId}</TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/models/${agent.modelId}`}
+                        className="hover:underline text-primary"
+                      >
+                        {models.find((m) => m.id === agent.modelId)?.name || agent.modelId}
+                      </Link>
+                    </TableCell>
                     <TableCell>{agent.tools?.length || 0} tools</TableCell>
                     <TableCell>
-                      <Badge variant={getStatusColor(agent.status) as "default" | "success" | "warning" | "destructive"}>
+                      <Badge
+                        variant={
+                          getStatusColor(agent.status) as
+                            | 'default'
+                            | 'success'
+                            | 'warning'
+                            | 'destructive'
+                        }
+                      >
                         {agent.status}
                       </Badge>
                     </TableCell>
