@@ -13,6 +13,7 @@ import {
 import { CreateCollectionUseCase } from '../../application/use-cases/create-collection.use-case';
 import { UpsertDocumentUseCase } from '../../application/use-cases/upsert-document.use-case';
 import { SearchSimilarUseCase } from '../../application/use-cases/search-similar.use-case';
+import { DeleteCollectionUseCase } from '../../application/use-cases/delete-collection.use-case';
 import { CreateCollectionDto } from '../../application/dto/create-collection.dto';
 import { UpsertDocumentDto, UpsertDocumentsDto } from '../../application/dto/upsert-document.dto';
 import { SearchDto } from '../../application/dto/search.dto';
@@ -27,6 +28,7 @@ export class VectorController {
     private readonly createCollectionUseCase: CreateCollectionUseCase,
     private readonly upsertDocumentUseCase: UpsertDocumentUseCase,
     private readonly searchSimilarUseCase: SearchSimilarUseCase,
+    private readonly deleteCollectionUseCase: DeleteCollectionUseCase,
     @Inject('IVectorRepository')
     private readonly vectorRepository: IVectorRepository,
   ) {}
@@ -99,7 +101,7 @@ export class VectorController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteCollection(@Param('id') id: string) {
     this.logger.log(`DELETE /vectors/collections/${id} - Deleting collection`);
-    await this.vectorRepository.deleteCollection(id);
+    await this.deleteCollectionUseCase.execute(id);
   }
 
   @Post('documents')
