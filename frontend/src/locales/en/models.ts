@@ -1,0 +1,20 @@
+export const models = {
+  "models.create.title": "Add New Model",
+  "models.create.subtitle": "Configure a language model for the agents.",
+  "models.create.provider": "Provider",
+  "models.create.modelEngineId": "Model Engine ID",
+  "models.create.displayName": "Model Display Name",
+  "models.create.maxTokens": "Max Tokens",
+  "models.create.cancel": "Cancel",
+  "models.create.save": "Save Model",
+  "models.create.saving": "Saving...",
+  "models.create.selectModel": "— Select a model —",
+  "models.create.enterManually": "Enter manually",
+  "models.create.selectFromList": "Select from list",
+  "models.create.fetchingModels": "Fetching available models...",
+  "models.create.fetchError": "Could not fetch models. Please add a valid API key for this provider, or enter a model ID manually.",
+  "models.create.customHint": "Use CUSTOM for self-hosted or OpenAI-compatible endpoints.",
+  "models.create.customModelPlaceholder": "e.g. my-fine-tuned-model",
+  "models.create.apiBaseUrl": "API Base URL (optional)",
+  "models.create.apiBaseUrlHint": "The base URL for the model API. Leave empty for standard providers."
+};

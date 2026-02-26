@@ -1,6 +1,6 @@
 # Makefile for Multi-Agent Platform Kubernetes Deployment
 
-.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset
+.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration
 
 # Default target
 .DEFAULT_GOAL := help
@@ -125,6 +125,17 @@ test-frontend-watch: ## Run frontend tests in watch mode
 
 test-frontend-cov: ## Run frontend tests with coverage
 	cd frontend && pnpm test:cov
+
+test-orchestration: ## Run orchestration-service tests
+	@echo "$(GREEN)Running orchestration-service tests…$(NC)"
+	cd services/orchestration-service && pnpm test
+
+test-orchestration-watch: ## Run orchestration-service tests in watch mode
+	cd services/orchestration-service && pnpm test:watch
+
+dev-orchestration: ## Start orchestration-service in dev/watch mode
+	@echo "$(GREEN)Starting orchestration-service in dev mode…$(NC)"
+	cd services/orchestration-service && pnpm dev
 
 # Database commands (via packages/database)
 prisma-generate: ## Generate Prisma client

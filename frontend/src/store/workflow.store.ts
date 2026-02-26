@@ -1,5 +1,5 @@
-import { create } from "zustand";
-import { Workflow, WorkflowNode, WorkflowEdge } from "@/types";
+import { create } from 'zustand';
+import { Workflow, WorkflowNode, WorkflowEdge } from '@/types';
 
 interface WorkflowState {
   currentWorkflow: Workflow | null;
@@ -24,9 +24,12 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       return {
         currentWorkflow: {
           ...state.currentWorkflow,
-          nodes: state.currentWorkflow.nodes.map((node) =>
-            node.id === nodeId ? { ...node, ...updates } : node
-          ),
+          definition: {
+            ...state.currentWorkflow.definition,
+            nodes: state.currentWorkflow.definition.nodes.map((node: WorkflowNode) =>
+              node.id === nodeId ? { ...node, ...updates } : node,
+            ),
+          },
         },
       };
     }),
@@ -36,7 +39,10 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       return {
         currentWorkflow: {
           ...state.currentWorkflow,
-          nodes: [...state.currentWorkflow.nodes, node],
+          definition: {
+            ...state.currentWorkflow.definition,
+            nodes: [...state.currentWorkflow.definition.nodes, node],
+          },
         },
       };
     }),
@@ -46,12 +52,15 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       return {
         currentWorkflow: {
           ...state.currentWorkflow,
-          nodes: state.currentWorkflow.nodes.filter(
-            (node) => node.id !== nodeId
-          ),
-          edges: state.currentWorkflow.edges.filter(
-            (edge) => edge.source !== nodeId && edge.target !== nodeId
-          ),
+          definition: {
+            ...state.currentWorkflow.definition,
+            nodes: state.currentWorkflow.definition.nodes.filter(
+              (node: WorkflowNode) => node.id !== nodeId,
+            ),
+            edges: state.currentWorkflow.definition.edges.filter(
+              (edge: WorkflowEdge) => edge.source !== nodeId && edge.target !== nodeId,
+            ),
+          },
         },
       };
     }),
@@ -61,7 +70,10 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       return {
         currentWorkflow: {
           ...state.currentWorkflow,
-          edges: [...state.currentWorkflow.edges, edge],
+          definition: {
+            ...state.currentWorkflow.definition,
+            edges: [...state.currentWorkflow.definition.edges, edge],
+          },
         },
       };
     }),
@@ -71,9 +83,12 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       return {
         currentWorkflow: {
           ...state.currentWorkflow,
-          edges: state.currentWorkflow.edges.filter(
-            (edge) => edge.id !== edgeId
-          ),
+          definition: {
+            ...state.currentWorkflow.definition,
+            edges: state.currentWorkflow.definition.edges.filter(
+              (edge: WorkflowEdge) => edge.id !== edgeId,
+            ),
+          },
         },
       };
     }),

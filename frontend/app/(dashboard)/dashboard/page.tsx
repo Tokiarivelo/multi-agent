@@ -102,7 +102,7 @@ export default function DashboardPage() {
                     <div>
                       <p className="font-medium">{workflow.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {workflow.nodes?.length || 0} nodes
+                        {workflow.definition?.nodes?.length || 0} nodes
                       </p>
                     </div>
                     <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 group-hover:bg-primary/20 transition-colors">

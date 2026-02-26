@@ -56,6 +56,9 @@ export class ProxyController {
           case 'collections':
             target = this.configService.get<string>('VECTOR_SERVICE_URL', 'http://localhost:3007');
             break;
+          case 'files':
+            target = this.configService.get<string>('FILE_SERVICE_URL', 'http://localhost:3008');
+            break;
         }
         return target;
       },
@@ -90,6 +93,7 @@ export class ProxyController {
       case 'tools':
       case 'vectors':
       case 'collections':
+      case 'files':
         break;
       default:
         return next(

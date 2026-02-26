@@ -1,7 +1,6 @@
 import { apiClient } from '@/lib/api-client';
 import {
   Model,
-  ApiResponse,
   PaginatedResponse,
   CreateModelInput,
   ApiKey,

@@ -41,6 +41,12 @@ build:
         dockerfile: Dockerfile
         buildArgs:
           NODE_ENV: production
+    - image: file-service
+      context: services/file-service
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          NODE_ENV: production
     - image: execution-service
       context: services/execution-service
       docker:
@@ -65,6 +71,7 @@ deploy:
       - k8s/qdrant/qdrant.yaml
       - k8s/nats/nats.yaml
       - k8s/services/*.yaml
+      - k8s/file-service/file-service.yaml
       - k8s/frontend/frontend.yaml
       - k8s/ingress.yaml
 
@@ -94,6 +101,11 @@ portForward:
     namespace: multi-agent
     port: 4222
     localPort: 4222
+  - resourceType: service
+    resourceName: file-service
+    namespace: multi-agent
+    port: 3008
+    localPort: 3008
 
 profiles:
   - name: dev

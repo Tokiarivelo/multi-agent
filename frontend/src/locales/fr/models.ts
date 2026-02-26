@@ -1,0 +1,20 @@
+export const models = {
+  "models.create.title": "Ajouter un nouveau modèle",
+  "models.create.subtitle": "Configurer un modèle de langage pour les agents.",
+  "models.create.provider": "Fournisseur",
+  "models.create.modelEngineId": "ID du moteur",
+  "models.create.displayName": "Nom d'affichage",
+  "models.create.maxTokens": "Tokens maximum",
+  "models.create.cancel": "Annuler",
+  "models.create.save": "Enregistrer le modèle",
+  "models.create.saving": "Enregistrement...",
+  "models.create.selectModel": "— Sélectionner un modèle —",
+  "models.create.enterManually": "Saisir manuellement",
+  "models.create.selectFromList": "Sélectionner dans la liste",
+  "models.create.fetchingModels": "Récupération des modèles disponibles...",
+  "models.create.fetchError": "Impossible de récupérer les modèles. Veuillez ajouter une clé API valide pour ce fournisseur, ou saisissez un ID de modèle manuellement.",
+  "models.create.customHint": "Utilisez CUSTOM pour les endpoints auto-hébergés ou compatibles OpenAI.",
+  "models.create.customModelPlaceholder": "ex. mon-modele-personnalise",
+  "models.create.apiBaseUrl": "URL de base de l'API (optionnel)",
+  "models.create.apiBaseUrlHint": "L'URL de base de l'API du modèle. Laissez vide pour les fournisseurs standards."
+};

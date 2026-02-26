@@ -12,11 +12,15 @@ export enum NodeType {
   TRANSFORM = 'TRANSFORM',
   START = 'START',
   END = 'END',
+  PROMPT = 'PROMPT',
+  TEXT = 'TEXT',
+  FILE = 'FILE',
 }
 
 export interface WorkflowNode {
   id: string;
   type: NodeType;
+  customName?: string;
   config: Record<string, any>;
   position?: { x: number; y: number };
 }

@@ -18,6 +18,8 @@ import { WORKFLOW_REPOSITORY } from './domain/repositories/workflow.repository.i
 import { CreateWorkflowUseCase } from './application/use-cases/create-workflow.use-case';
 import { GetWorkflowUseCase } from './application/use-cases/get-workflow.use-case';
 import { ExecuteWorkflowUseCase } from './application/use-cases/execute-workflow.use-case';
+import { UpdateWorkflowUseCase } from './application/use-cases/update-workflow.use-case';
+import { DeleteWorkflowUseCase } from './application/use-cases/delete-workflow.use-case';
 import { WORKFLOW_EXECUTOR } from './application/interfaces/workflow-executor.interface';
 
 // Presentation
@@ -49,6 +51,8 @@ import { WorkflowGateway } from './presentation/gateways/workflow.gateway';
     CreateWorkflowUseCase,
     GetWorkflowUseCase,
     ExecuteWorkflowUseCase,
+    UpdateWorkflowUseCase,
+    DeleteWorkflowUseCase,
 
     // Repositories
     {

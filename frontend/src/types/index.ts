@@ -28,22 +28,43 @@ export interface Workflow {
   id: string;
   name: string;
   description?: string;
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  status: 'draft' | 'active' | 'archived';
+  definition: {
+    nodes: WorkflowNode[];
+    edges: WorkflowEdge[];
+    version: number;
+  };
+  status: 'draft' | 'active' | 'archived' | 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
   createdAt: string;
   updatedAt: string;
 }
 
 export interface WorkflowNode {
   id: string;
-  type: 'agent' | 'tool' | 'condition';
+  /** Backend sends uppercase: AGENT | TOOL | CONDITIONAL | TRANSFORM | START | END */
+  type:
+    | 'AGENT'
+    | 'TOOL'
+    | 'CONDITIONAL'
+    | 'TRANSFORM'
+    | 'START'
+    | 'END'
+    | 'PROMPT'
+    | 'TEXT'
+    | 'FILE'
+    | 'agent'
+    | 'tool'
+    | 'condition'
+    | 'prompt'
+    | 'text'
+    | 'file';
   data: {
     agentId?: string;
     toolId?: string;
     config?: Record<string, unknown>;
+    [key: string]: unknown;
   };
   position: { x: number; y: number };
+  config?: Record<string, unknown>;
 }
 
 export interface WorkflowEdge {

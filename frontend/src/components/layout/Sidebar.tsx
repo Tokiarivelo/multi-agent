@@ -16,6 +16,8 @@ import {
   Languages,
   LogOut,
   User,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -41,6 +43,8 @@ export function Sidebar() {
 
   // Mounted state for theme hydration issues
   const [mounted, setMounted] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   useEffect(() => {
     const timer = setTimeout(() => setMounted(true), 0);
     return () => clearTimeout(timer);
@@ -56,17 +60,41 @@ export function Sidebar() {
   };
 
   return (
-    <div className="flex h-full w-64 flex-col bg-card border-r border-border/50 text-foreground transition-all duration-300 shadow-sm z-20">
-      <div className="flex h-16 items-center px-6 border-b border-border/50">
-        <div className="flex items-center gap-2">
-          <div className="bg-primary/10 p-1.5 rounded-lg border border-primary/20">
-            <Bot className="w-5 h-5 text-primary" />
+    <div
+      className={cn(
+        'flex h-full flex-col bg-card border-r border-border/50 text-foreground transition-all duration-300 shadow-sm z-20',
+        isCollapsed ? 'w-20' : 'w-64',
+      )}
+    >
+      <div
+        className={cn(
+          'flex h-16 items-center border-b border-border/50',
+          isCollapsed ? 'justify-center' : 'px-4 justify-between',
+        )}
+      >
+        {!isCollapsed && (
+          <div className="flex items-center gap-2">
+            <div className="bg-primary/10 p-1.5 rounded-lg border border-primary/20">
+              <Bot className="w-5 h-5 text-primary" />
+            </div>
+            <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-linear-to-r from-foreground to-foreground/70">
+              {t('Multi-Agent')}
+            </h1>
           </div>
-          <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-linear-to-r from-foreground to-foreground/70">
-            {t('Multi-Agent')}
-          </h1>
-        </div>
+        )}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="p-2 rounded-lg hover:bg-muted/50 text-muted-foreground transition-colors"
+          title="Toggle Sidebar"
+        >
+          {isCollapsed ? (
+            <PanelLeftOpen className="w-5 h-5" />
+          ) : (
+            <PanelLeftClose className="w-5 h-5" />
+          )}
+        </button>
       </div>
+
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navigation.map((item) => {
           const Icon = item.icon;
@@ -78,19 +106,21 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                'group flex items-center rounded-xl p-2.5 text-sm font-medium transition-all duration-200',
+                isCollapsed ? 'justify-center mx-auto w-10 h-10' : 'gap-3 px-3 w-full',
                 isActive
                   ? 'bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20'
                   : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
               )}
+              title={isCollapsed ? t(item.name) : undefined}
             >
               <Icon
                 className={cn(
-                  'h-5 w-5 transition-colors',
+                  'h-5 w-5 transition-colors shrink-0',
                   isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
                 )}
               />
-              {t(item.name)}
+              {!isCollapsed && <span className="truncate">{t(item.name)}</span>}
             </Link>
           );
         })}
@@ -99,16 +129,23 @@ export function Sidebar() {
       {/* Footer Section */}
       <div className="p-4 border-t border-border/50 space-y-4">
         {/* Utilities: Lang & Theme */}
-        <div className="flex items-center justify-between px-2">
+        <div
+          className={cn(
+            'flex items-center',
+            isCollapsed ? 'flex-col gap-4 justify-center' : 'justify-between px-2',
+          )}
+        >
           <button
             onClick={toggleLanguage}
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             title="Toggle Language"
           >
-            <Languages className="h-4 w-4" />
-            <span className="uppercase text-xs font-semibold">
-              {mounted ? i18n.language : 'EN'}
-            </span>
+            <Languages className="h-4 w-4 shrink-0" />
+            {!isCollapsed && (
+              <span className="uppercase text-xs font-semibold">
+                {mounted ? i18n.language : 'EN'}
+              </span>
+            )}
           </button>
 
           <button
@@ -117,23 +154,36 @@ export function Sidebar() {
             title="Toggle Theme"
           >
             {mounted && theme === 'dark' ? (
-              <Sun className="h-4 w-4" />
+              <Sun className="h-4 w-4 shrink-0" />
             ) : (
-              <Moon className="h-4 w-4" />
+              <Moon className="h-4 w-4 shrink-0" />
             )}
           </button>
         </div>
 
         {/* User Info & Logout */}
         {user ? (
-          <div className="flex items-center justify-between rounded-xl bg-muted/40 border border-border/50 p-2.5 shadow-sm">
-            <div className="flex items-center gap-2 overflow-hidden text-sm">
+          <div
+            className={cn(
+              'flex items-center rounded-xl bg-muted/40 border border-border/50 shadow-sm',
+              isCollapsed ? 'flex-col p-2 gap-3' : 'justify-between p-2.5',
+            )}
+          >
+            <div
+              className={cn(
+                'flex items-center gap-2 overflow-hidden text-sm',
+                isCollapsed && 'justify-center',
+              )}
+              title={isCollapsed ? user.name || user.email || '' : undefined}
+            >
               <div className="bg-background shadow-sm border border-border/50 p-1.5 rounded-full shrink-0 text-primary">
                 <User className="h-4 w-4" />
               </div>
-              <span className="truncate max-w-[110px] font-medium text-foreground/90">
-                {user.name || user.email}
-              </span>
+              {!isCollapsed && (
+                <span className="truncate max-w-[110px] font-medium text-foreground/90">
+                  {user.name || user.email}
+                </span>
+              )}
             </div>
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}
