@@ -1,0 +1,36 @@
+{
+  "name": "multi-agent-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-ready AI workflow orchestration platform",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "prisma:generate": "pnpm --filter @multi-agent/database prisma:generate && pnpm --filter @multi-agent/database build",
+    "prisma:migrate": "pnpm --filter @multi-agent/database prisma:migrate",
+    "prisma:studio": "pnpm --filter @multi-agent/database prisma:studio",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@prisma/client": "^7.4.0",
+    "@types/node": "^20.10.6",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "dotenv": "^17.3.1",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.2",
+    "husky": "^8.0.3",
+    "prettier": "^3.1.1",
+    "prisma": "^7.4.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@10.29.3+sha512.498e1fb4cca5aa06c1dcf2611e6fafc50972ffe7189998c409e90de74566444298ffe43e6cd2acdc775ba1aa7cc5e092a8b7054c811ba8c5770f84693d33d2dc"
+}

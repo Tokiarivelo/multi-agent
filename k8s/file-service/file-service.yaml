@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: file-service
+  namespace: multi-agent
+  labels:
+    app: file-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: file-service
+  template:
+    metadata:
+      labels:
+        app: file-service
+    spec:
+      containers:
+        - name: file-service
+          image: file-service
+          ports:
+            - containerPort: 3008
+          envFrom:
+            - configMapRef:
+                name: multi-agent-config
+            - secretRef:
+                name: multi-agent-secrets
+          env:
+            - name: PORT
+              value: '3008'
+            - name: MINIO_ENDPOINT
+              value: 'minio'
+            - name: MINIO_PORT
+              value: '9000'
+            - name: MINIO_USE_SSL
+              value: 'false'
+            - name: MINIO_ACCESS_KEY
+              value: 'minioadmin'
+            - name: MINIO_SECRET_KEY
+              value: 'minioadmin'
+            - name: MINIO_BUCKET
+              value: 'multi-agent-files'
+          # livenessProbe:
+          #   httpGet:
+          #     path: /api/health
+          #     port: 3008
+          #   initialDelaySeconds: 15
+          #   periodSeconds: 20
+          # readinessProbe:
+          #   httpGet:
+          #     path: /api/health
+          #     port: 3008
+          #   initialDelaySeconds: 5
+          #   periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: file-service
+  namespace: multi-agent
+  labels:
+    app: file-service
+spec:
+  ports:
+    - port: 3008
+      targetPort: 3008
+      protocol: TCP
+  selector:
+    app: file-service

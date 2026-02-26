@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vector-service
+  namespace: multi-agent
+  labels:
+    app: vector-service
+    component: vector
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3005
+      targetPort: 3005
+      protocol: TCP
+      name: http
+  selector:
+    app: vector-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vector-service
+  namespace: multi-agent
+  labels:
+    app: vector-service
+    component: vector
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: vector-service
+  template:
+    metadata:
+      labels:
+        app: vector-service
+        component: vector
+    spec:
+      containers:
+        - name: vector-service
+          image: vector-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3005
+              name: http
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "3005"
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-agent-config
+                  key: NODE_ENV
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-agent-config
+                  key: LOG_LEVEL
+            - name: NATS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-agent-config
+                  key: NATS_URL
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: multi-agent-secrets
+                  key: DATABASE_URL
+            - name: QDRANT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-agent-config
+                  key: QDRANT_URL
+            - name: QDRANT_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-agent-config
+                  key: QDRANT_HOST
+            - name: QDRANT_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-agent-config
+                  key: QDRANT_PORT
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: multi-agent-secrets
+                  key: OPENAI_API_KEY
+                  optional: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3005
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3005
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 300m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: vector-service-hpa
+  namespace: multi-agent
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vector-service
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

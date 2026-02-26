@@ -1,0 +1,14 @@
+packages:
+  - packages/*
+  - services/*
+  - frontend
+
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - '@prisma/client'
+  - '@prisma/engines'
+  - '@scarf/scarf'
+  - bcrypt
+  - isolated-vm
+  - prisma
+  - protobufjs

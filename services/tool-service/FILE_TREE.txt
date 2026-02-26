@@ -1,0 +1,38 @@
+.
+├── API.md
+├── Dockerfile
+├── EXAMPLES.md
+├── FILE_TREE.txt
+├── Makefile
+├── QUICKSTART.md
+├── README.md
+├── SECURITY.md
+├── docker-compose.yml
+├── nest-cli.json
+├── package.json
+├── prisma
+│   └── schema.prisma
+├── src
+│   ├── app.module.ts
+│   ├── application
+│   │   ├── dto
+│   │   ├── interfaces
+│   │   └── use-cases
+│   ├── domain
+│   │   ├── tool-execution.interface.ts
+│   │   ├── tool.entity.ts
+│   │   └── tool.repository.interface.ts
+│   ├── infrastructure
+│   │   ├── config
+│   │   ├── database
+│   │   ├── persistence
+│   │   └── sandbox
+│   ├── main.ts
+│   └── presentation
+│       ├── controllers
+│       └── filters
+├── test
+│   └── app.e2e-spec.ts
+└── tsconfig.json
+
+17 directories, 19 files

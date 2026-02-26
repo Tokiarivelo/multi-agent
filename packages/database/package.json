@@ -1,0 +1,29 @@
+{
+  "name": "@multi-agent/database",
+  "version": "1.0.0",
+  "description": "Shared Prisma database client for multi-agent platform",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push",
+    "prisma:studio": "prisma studio",
+    "prisma:reset": "prisma migrate reset"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.3.0",
+    "@prisma/adapter-pg": "^7.4.0",
+    "@prisma/client": "^7.4.0",
+    "pg": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "@types/pg": "^8.16.0",
+    "dotenv": "^17.3.1",
+    "prisma": "^7.4.0",
+    "typescript": "^5.3.3"
+  }
+}
