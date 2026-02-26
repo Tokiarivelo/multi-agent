@@ -96,7 +96,7 @@ export class VectorRepository implements IVectorRepository {
 
     return {
       data: records.map(
-        (c) =>
+        (c: { id: string; name: string; userId: string; dimension: number; createdAt: Date; updatedAt: Date }) =>
           new Collection(c.id, c.name, c.userId, c.dimension, 'cosine', c.createdAt, c.updatedAt),
       ),
       total,
