@@ -153,9 +153,6 @@ export class WorkflowGateway implements OnGatewayInit, OnGatewayConnection, OnGa
               ?.nodeName
           : undefined;
 
-        console.log('execution :>>>>>>>>>>>>>>>>>>>>>>>>><> ', execution);
-        console.log('currentNodeName :>>>>>>>>>>>>>>>>>>>>>>>>><> ', currentNodeName);
-
         client.emit('execution:update', {
           executionId: execution.id,
           workflowId: execution.workflowId,

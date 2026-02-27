@@ -61,7 +61,6 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
     if (!executionId) return;
 
     const url = wsUrl || process.env.NEXT_PUBLIC_ORCHESTRATION_WS_URL || 'http://localhost:3003';
-    console.log('url :>>>>>>>>>>>>>>>>>>>>>>>>><> ', url);
 
     const socket = io(`${url}/workflows`, {
       path: '/socket.io',
@@ -102,8 +101,6 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
     });
 
     socket.on('node:update', (event: NodeUpdateEvent) => {
-      console.log('event :>>>>>>>>>>>>>>>>>>>>>>>>><> ', event);
-
       setNodeStatus(event.nodeId, event.status as NodeStatus);
       const emoji =
         event.status === 'COMPLETED'
@@ -124,8 +121,6 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
     });
 
     socket.on('execution:update', (event: ExecutionUpdateEvent) => {
-      console.log('event :>>>>>>>>>>>>>>>>>>>>>>>>>>>><> ', event);
-
       setExecutionStatus(event.status);
       const emoji =
         event.status === 'COMPLETED'

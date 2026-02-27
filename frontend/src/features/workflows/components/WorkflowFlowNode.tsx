@@ -27,9 +27,6 @@ export const WorkflowFlowNode = memo(
     const nodeStatus = useWorkflowExecutionStore((s) => s.nodeStatuses[id]);
     const activeExecutionId = useWorkflowExecutionStore((s) => s.activeExecutionId);
 
-    console.log('nodeStatus :>>>>>>>>>>>>>>>><>>>>>>>>>> ', nodeStatus);
-    console.log('data :>>>>>>>>>>>>>>>><>>>>>>>>>> ', data);
-
     const [promptInput, setPromptInput] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
