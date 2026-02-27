@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { useWorkflowExecutionStore, NodeStatus } from '../store/workflowExecution.store';
 
 export type NodeUpdateEvent = {
   executionId: string;
   nodeId: string;
+  nodeName?: string;
   status: string;
   data?: unknown;
   timestamp: string;
@@ -16,6 +18,7 @@ export type ExecutionUpdateEvent = {
   workflowId: string;
   status: string;
   currentNodeId?: string;
+  currentNodeName?: string;
   nodeExecutions: unknown[];
   output?: unknown;
   error?: string;
@@ -39,7 +42,11 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
   const socketRef = useRef<Socket | null>(null);
   const [logs, setLogs] = useState<ExecutionLogLine[]>([]);
   const [connected, setConnected] = useState(false);
-  const [executionStatus, setExecutionStatus] = useState<string | null>(null);
+
+  const setExecutionStatus = useWorkflowExecutionStore((s) => s.setExecutionStatus);
+  const executionStatus = useWorkflowExecutionStore((s) => s.executionStatus);
+  const setNodeStatus = useWorkflowExecutionStore((s) => s.setNodeStatus);
+  const clearExecution = useWorkflowExecutionStore((s) => s.clearExecution);
 
   const addLog = useCallback((log: ExecutionLogLine) => {
     setLogs((prev) => [...prev, log]);
@@ -47,13 +54,14 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
 
   const clearLogs = useCallback(() => {
     setLogs([]);
-    setExecutionStatus(null);
-  }, []);
+    clearExecution();
+  }, [clearExecution]);
 
   useEffect(() => {
     if (!executionId) return;
 
-    const url = wsUrl || process.env.NEXT_PUBLIC_ORCHESTRATION_WS_URL || 'http://localhost:3002';
+    const url = wsUrl || process.env.NEXT_PUBLIC_ORCHESTRATION_WS_URL || 'http://localhost:3003';
+    console.log('url :>>>>>>>>>>>>>>>>>>>>>>>>><> ', url);
 
     const socket = io(`${url}/workflows`, {
       path: '/socket.io',
@@ -94,23 +102,30 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
     });
 
     socket.on('node:update', (event: NodeUpdateEvent) => {
+      console.log('event :>>>>>>>>>>>>>>>>>>>>>>>>><> ', event);
+
+      setNodeStatus(event.nodeId, event.status as NodeStatus);
       const emoji =
         event.status === 'COMPLETED'
           ? '✅'
           : event.status === 'FAILED'
             ? '❌'
-            : event.status === 'RUNNING'
-              ? '⚙️'
-              : '⏳';
+            : event.status === 'WAITING_INPUT'
+              ? '💬'
+              : event.status === 'RUNNING'
+                ? '⚙️'
+                : '⏳';
       addLog({
         type: 'node_update',
         timestamp: event.timestamp,
-        message: `${emoji} Node [${event.nodeId}] → ${event.status}`,
+        message: `${emoji} Node ${event.nodeName ? `${event.nodeName} ` : ''}[${event.nodeId}] → ${event.status}`,
         data: event.data as ExecutionLogLine['data'],
       });
     });
 
     socket.on('execution:update', (event: ExecutionUpdateEvent) => {
+      console.log('event :>>>>>>>>>>>>>>>>>>>>>>>>>>>><> ', event);
+
       setExecutionStatus(event.status);
       const emoji =
         event.status === 'COMPLETED'
@@ -126,7 +141,9 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
         type: 'execution_update',
         timestamp: event.timestamp,
         message: `${emoji} Execution → ${event.status}${
-          event.currentNodeId ? ` (current: ${event.currentNodeId})` : ''
+          event.currentNodeId
+            ? ` (current: ${event.currentNodeName ? `${event.currentNodeName} ` : ''}[${event.currentNodeId}])`
+            : ''
         }`,
         data: (event.output ?? event.error) as ExecutionLogLine['data'],
       });
@@ -149,7 +166,7 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
       socketRef.current = null;
       setConnected(false);
     };
-  }, [executionId, wsUrl, addLog]);
+  }, [executionId, wsUrl, addLog, setNodeStatus, setExecutionStatus]);
 
   return { logs, connected, executionStatus, clearLogs };
 }

@@ -138,6 +138,12 @@ export const workflowsApi = {
     await apiClient.post(`/api/workflows/executions/${executionId}/cancel`);
   },
 
+  resumeNode: async (executionId: string, nodeId: string, input: string): Promise<void> => {
+    await apiClient.post(`/api/workflows/executions/${executionId}/nodes/${nodeId}/resume`, {
+      input,
+    });
+  },
+
   // ─── Files ────────────────────────────────────────────────────────
 
   uploadFile: async (

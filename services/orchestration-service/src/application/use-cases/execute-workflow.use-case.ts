@@ -68,4 +68,8 @@ export class ExecuteWorkflowUseCase {
   async cancelExecution(executionId: string): Promise<void> {
     await this.workflowExecutor.cancelExecution(executionId);
   }
+
+  resumeNode(executionId: string, nodeId: string, response: string): void {
+    this.workflowExecutor.resumePromptNode(executionId, nodeId, response);
+  }
 }

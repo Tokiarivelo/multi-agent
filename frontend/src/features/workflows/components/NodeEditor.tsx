@@ -36,6 +36,7 @@ interface NodeEditorProps {
     config?: Record<string, unknown>;
     position?: { x: number; y: number };
   };
+  defaultPosition?: { x: number; y: number };
   isSaving?: boolean;
   /** Existing agents for AGENT node dropdown */
   agents?: { id: string; name: string }[];
@@ -49,6 +50,7 @@ function NodeEditorForm({
   onClose,
   onSave,
   initialNode,
+  defaultPosition,
   isSaving,
   agents = [],
   tools = [],
@@ -89,7 +91,7 @@ function NodeEditorForm({
       type,
       customName: customName.trim() || undefined,
       config,
-      position: initialNode?.position ?? { x: 100, y: 100 },
+      position: initialNode?.position ?? defaultPosition ?? { x: 100, y: 100 },
     });
   };
 

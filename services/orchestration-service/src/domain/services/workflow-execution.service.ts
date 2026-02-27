@@ -35,7 +35,7 @@ export class WorkflowExecutionService {
       }
     }
 
-    return nextNodes;
+    return [...new Set(nextNodes)];
   }
 
   findStartNode(workflow: Workflow): string | null {

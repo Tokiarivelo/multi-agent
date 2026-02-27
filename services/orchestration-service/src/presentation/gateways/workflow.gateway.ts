@@ -11,6 +11,7 @@ import {
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { WorkflowExecution } from '../../domain/entities/workflow-execution.entity';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 @WebSocketGateway({
   cors: {
@@ -25,6 +26,8 @@ export class WorkflowGateway implements OnGatewayInit, OnGatewayConnection, OnGa
 
   private readonly logger = new Logger(WorkflowGateway.name);
   private readonly subscriptions = new Map<string, Set<string>>();
+
+  constructor(private readonly prisma: PrismaService) {}
 
   afterInit() {
     this.logger.log('WebSocket Gateway initialized');
@@ -78,12 +81,16 @@ export class WorkflowGateway implements OnGatewayInit, OnGatewayConnection, OnGa
 
   sendExecutionUpdate(execution: WorkflowExecution) {
     const room = `execution:${execution.id}`;
+    const currentNodeName = execution.currentNodeId
+      ? execution.nodeExecutions?.find((n) => n.nodeId === execution.currentNodeId)?.nodeName
+      : undefined;
 
     this.server.to(room).emit('execution:update', {
       executionId: execution.id,
       workflowId: execution.workflowId,
       status: execution.status,
       currentNodeId: execution.currentNodeId,
+      currentNodeName,
       nodeExecutions: execution.nodeExecutions,
       output: execution.output,
       error: execution.error,
@@ -96,12 +103,19 @@ export class WorkflowGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     }
   }
 
-  sendNodeUpdate(executionId: string, nodeId: string, status: string, data?: any) {
+  sendNodeUpdate(
+    executionId: string,
+    nodeId: string,
+    nodeName: string,
+    status: string,
+    data?: any,
+  ) {
     const room = `execution:${executionId}`;
 
     this.server.to(room).emit('node:update', {
       executionId,
       nodeId,
+      nodeName,
       status,
       data,
       timestamp: new Date().toISOString(),
@@ -119,11 +133,57 @@ export class WorkflowGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   }
 
   @SubscribeMessage('join')
-  handleJoinRoom(@MessageBody() data: { executionId: string }, @ConnectedSocket() client: Socket) {
+  async handleJoinRoom(
+    @MessageBody() data: { executionId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
     const room = `execution:${data.executionId}`;
     client.join(room);
     this.logger.log(`Client ${client.id} joined room ${room}`);
     client.emit('joined', { executionId: data.executionId });
+
+    try {
+      const execution = await this.prisma.workflowExecution.findUnique({
+        where: { id: data.executionId },
+      });
+
+      if (execution) {
+        const currentNodeName = execution.currentNodeId
+          ? (execution.nodeExecutions as any[])?.find((n) => n.nodeId === execution.currentNodeId)
+              ?.nodeName
+          : undefined;
+
+        console.log('execution :>>>>>>>>>>>>>>>>>>>>>>>>><> ', execution);
+        console.log('currentNodeName :>>>>>>>>>>>>>>>>>>>>>>>>><> ', currentNodeName);
+
+        client.emit('execution:update', {
+          executionId: execution.id,
+          workflowId: execution.workflowId,
+          status: execution.status,
+          currentNodeId: execution.currentNodeId,
+          currentNodeName,
+          nodeExecutions: execution.nodeExecutions,
+          output: execution.output,
+          error: execution.error,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (Array.isArray(execution.nodeExecutions)) {
+          for (const nodeExecution of execution.nodeExecutions as any[]) {
+            client.emit('node:update', {
+              executionId: execution.id,
+              nodeId: nodeExecution.nodeId,
+              nodeName: nodeExecution.nodeName,
+              status: nodeExecution.status,
+              data: nodeExecution.output || nodeExecution.input,
+              timestamp: nodeExecution.updatedAt || new Date().toISOString(),
+            });
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.error(`Failed to fetch latest execution state for ${data.executionId}`, err);
+    }
   }
 
   @SubscribeMessage('leave')

@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, Settings2 } from 'lucide-react';
 import { NodeEditor } from './NodeEditor';
 import { WorkflowFlowNode } from './WorkflowFlowNode';
+import { WorkflowEdge } from './WorkflowEdge';
 import { AddNodePayload, AddEdgePayload } from '../api/workflows.api';
 import {
   useAddNode,
@@ -40,6 +41,7 @@ import {
 import { useAgents } from '../../agents/hooks/useAgents';
 import { useTools } from '../../tools/hooks/useTools';
 import { getNodeTypeMeta, NodeTypeId } from './nodeTypes';
+import { useWorkflowExecutionStore } from '../store/workflowExecution.store';
 
 interface WorkflowCanvasProps {
   workflow: Workflow;
@@ -61,6 +63,10 @@ type FlowNode = Node<WorkflowNodeData>;
 /* ─── Registered custom node types ───────────────────────────────────── */
 const nodeTypes: NodeTypes = {
   workflowNode: WorkflowFlowNode,
+};
+
+const edgeTypes = {
+  workflowEdge: WorkflowEdge,
 };
 
 /* ─── Converters ──────────────────────────────────────────────────────── */
@@ -125,6 +131,7 @@ function toFlowEdge(edge: Workflow['definition']['edges'][0]): Edge {
     id: edge.id,
     source: edge.source,
     target: edge.target,
+    type: 'workflowEdge',
     label: edge.condition,
     animated: false,
     style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
@@ -170,6 +177,10 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [splittingEdgeId, setSplittingEdgeId] = useState<string | null>(null);
+  const [newNodePosition, setNewNodePosition] = useState<{ x: number; y: number } | undefined>(
+    undefined,
+  );
 
   const addNodeMutation = useAddNode(workflow.id);
   const updateNodeMutation = useUpdateNode(workflow.id);
@@ -179,7 +190,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
 
   const { resolvedTheme } = useTheme();
   const { t, i18n } = useTranslation();
-  const { zoomIn, zoomOut } = useReactFlow();
+  const { zoomIn, zoomOut, screenToFlowPosition } = useReactFlow();
 
   const { data: agentsData } = useAgents(1, 100);
   const { data: toolsData } = useTools(1, 100);
@@ -204,6 +215,40 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [zoomIn, zoomOut]);
 
+  /* Listen for edge split (plus button) */
+  useEffect(() => {
+    const handleSplitEvent = (e: Event) => {
+      const detail = (e as CustomEvent<{ edgeId: string }>).detail;
+      setSplittingEdgeId(detail.edgeId);
+
+      setEdges((currentEdges) => {
+        const edge = currentEdges.find((ed) => ed.id === detail.edgeId);
+        if (edge) {
+          setNodes((currentNodes) => {
+            const sourceNode = currentNodes.find((n) => n.id === edge.source);
+            const targetNode = currentNodes.find((n) => n.id === edge.target);
+            if (sourceNode && targetNode) {
+              setNewNodePosition({
+                x: (sourceNode.position.x + targetNode.position.x) / 2,
+                y: (sourceNode.position.y + targetNode.position.y) / 2,
+              });
+            } else {
+              setNewNodePosition({ x: 200, y: 200 });
+            }
+            return currentNodes;
+          });
+        }
+        return currentEdges;
+      });
+
+      setEditingNodeId(null);
+      setEditorOpen(true);
+    };
+
+    window.addEventListener('workflow-split-edge', handleSplitEvent);
+    return () => window.removeEventListener('workflow-split-edge', handleSplitEvent);
+  }, [setEdges, setNodes]);
+
   /* Sync when workflow prop changes externally, or when agents/tools load */
   useEffect(() => {
     const agents = agentsData?.data ?? [];
@@ -213,34 +258,79 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflow.definition?.nodes, workflow.definition?.edges, agentsData?.data, toolsData?.data]);
 
+  const activeExecutionId = useWorkflowExecutionStore((s) => s.activeExecutionId);
+  const nodeStatuses = useWorkflowExecutionStore((s) => s.nodeStatuses);
+
+  /* Execution highlights for edges */
+  useEffect(() => {
+    setEdges((eds) =>
+      eds.map((e) => {
+        const sourceStatus = nodeStatuses[e.source];
+        const targetStatus = nodeStatuses[e.target];
+        const isExecuting = activeExecutionId !== null;
+
+        let stroke = 'hsl(var(--border))';
+        let strokeWidth = 2;
+        let animated = false;
+        let opacity = 1;
+
+        if (isExecuting) {
+          if (sourceStatus === 'COMPLETED') {
+            // Traversed if target also has a status (engine arrived there)
+            if (targetStatus && targetStatus !== 'PENDING') {
+              stroke = 'hsl(var(--primary))';
+              strokeWidth = 3;
+              animated = true;
+              opacity = 1;
+            } else {
+              opacity = 0.3; // path not taken
+            }
+          } else {
+            opacity = 0.3;
+          }
+        }
+
+        return {
+          ...e,
+          animated,
+          style: { stroke, strokeWidth, opacity },
+        };
+      }),
+    );
+  }, [nodeStatuses, activeExecutionId, setEdges]);
+
   /* User draws a new edge */
   const onConnect = useCallback(
     (connection: Connection) => {
+      const exists = edges.some(
+        (e) => e.source === connection.source && e.target === connection.target,
+      );
+      if (exists) return;
+
+      const newEdge: AddEdgePayload = {
+        id: uuidv4(),
+        source: connection.source!,
+        target: connection.target!,
+      };
+
+      addEdgeMutation.mutate(newEdge);
+
       setEdges((eds) => {
-        // Prevent duplicate edges
-        const exists = eds.some(
-          (e) => e.source === connection.source && e.target === connection.target,
-        );
-        if (exists) return eds;
-
-        const newEdge: AddEdgePayload = {
-          id: uuidv4(),
-          source: connection.source!,
-          target: connection.target!,
-        };
-
-        addEdgeMutation.mutate(newEdge);
-
+        // Double check to prevent duplicates in strict mode
+        if (eds.some((e) => e.source === connection.source && e.target === connection.target)) {
+          return eds;
+        }
         return addEdge(
           {
             ...newEdge,
+            type: 'workflowEdge',
             style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
           },
           eds,
         );
       });
     },
-    [setEdges, addEdgeMutation],
+    [edges, setEdges, addEdgeMutation],
   );
 
   /* Save node from dialog */
@@ -269,6 +359,47 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
             makeFlowNode(node, agentsData?.data ?? [], toolsData?.data ?? []),
           ]);
           setEditorOpen(false);
+
+          if (splittingEdgeId) {
+            const edgeToSplit = edges.find((e) => e.id === splittingEdgeId);
+            if (edgeToSplit) {
+              // Physically delete the original edge on the backend
+              deleteEdgeMutation.mutate(edgeToSplit.id);
+
+              // Create exactly two new edges connecting Source->New and New->Target
+              const edge1: AddEdgePayload = {
+                id: uuidv4(),
+                source: edgeToSplit.source,
+                target: node.id,
+              };
+              const edge2: AddEdgePayload = {
+                id: uuidv4(),
+                source: node.id,
+                target: edgeToSplit.target,
+              };
+
+              addEdgeMutation.mutate(edge1);
+              addEdgeMutation.mutate(edge2);
+
+              setEdges((prev) => {
+                const filtered = prev.filter((e) => e.id !== splittingEdgeId);
+                return [
+                  ...filtered,
+                  {
+                    ...edge1,
+                    type: 'workflowEdge',
+                    style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
+                  },
+                  {
+                    ...edge2,
+                    type: 'workflowEdge',
+                    style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
+                  },
+                ];
+              });
+            }
+            setSplittingEdgeId(null);
+          }
         },
       });
     }
@@ -330,6 +461,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
           setEditorOpen(true);
         }}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         deleteKeyCode={null}
         className="bg-background"
@@ -367,6 +499,15 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
               className="h-7 gap-1 text-xs"
               onClick={() => {
                 setEditingNodeId(null);
+                const flowEl = document.querySelector('.react-flow');
+                if (flowEl) {
+                  const rect = flowEl.getBoundingClientRect();
+                  const x = rect.left + rect.width / 2;
+                  const y = rect.top + rect.height / 2;
+                  setNewNodePosition(screenToFlowPosition({ x, y }));
+                } else {
+                  setNewNodePosition({ x: 200, y: 200 });
+                }
                 setEditorOpen(true);
               }}
             >
@@ -424,9 +565,13 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
       {/* Node Editor Dialog */}
       <NodeEditor
         open={editorOpen}
-        onClose={() => setEditorOpen(false)}
+        onClose={() => {
+          setEditorOpen(false);
+          setSplittingEdgeId(null);
+        }}
         onSave={handleSaveNode}
         initialNode={editingInitial}
+        defaultPosition={newNodePosition}
         isSaving={addNodeMutation.isPending || updateNodeMutation.isPending}
         agents={agentsData?.data ?? []}
         tools={toolsData?.data ?? []}

@@ -16,12 +16,14 @@ import { ToolClientService } from './tool-client.service';
 import { PrismaService } from '../database/prisma.service';
 import { WorkflowGateway } from '../../presentation/gateways/workflow.gateway';
 import { ExecutionStatus as PrismaExecutionStatus } from '@prisma/client';
+import { EventEmitter } from 'events';
 
 @Injectable()
 export class WorkflowExecutorService implements IWorkflowExecutor {
   private readonly logger = new Logger(WorkflowExecutorService.name);
   private readonly maxRetries: number;
   private readonly executionTimeout: number;
+  private readonly promptEmitter = new EventEmitter();
 
   constructor(
     @Inject(WORKFLOW_REPOSITORY)
@@ -123,25 +125,50 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       throw new Error(`Node ${nodeId} not found`);
     }
 
+    const input = this.workflowExecutionService.buildNodeInput(node, execution, context);
+
     if (this.workflowExecutionService.isEndNode(workflow, nodeId)) {
       this.logger.log(`Reached END node ${nodeId}`);
+
+      execution.startNodeExecution(nodeId, node.customName || node.type, input);
+      await this.updateExecution(execution);
+      this.workflowGateway.sendNodeUpdate(
+        execution.id,
+        nodeId,
+        node.customName || node.type,
+        'RUNNING',
+        input,
+      );
+
+      execution.completeNodeExecution(nodeId, input);
+      await this.updateExecution(execution);
+      this.workflowGateway.sendNodeUpdate(
+        execution.id,
+        nodeId,
+        node.customName || node.type,
+        'COMPLETED',
+        input,
+      );
+
       return;
     }
 
-    const input = this.workflowExecutionService.buildNodeInput(node, execution, context);
-
-    execution.startNodeExecution(nodeId, input);
+    execution.startNodeExecution(nodeId, node.customName || node.type, input);
     await this.updateExecution(execution);
     this.workflowGateway.sendExecutionUpdate(execution);
+    this.workflowGateway.sendNodeUpdate(
+      execution.id,
+      nodeId,
+      node.customName || node.type,
+      'RUNNING',
+      input,
+    );
 
     try {
-      const output = await this.executeNodeByType(node, input);
+      const output = await this.executeNodeByType(node, input, execution);
 
       execution.completeNodeExecution(nodeId, output);
       context.variables = { ...context.variables, ...output };
-
-      await this.updateExecution(execution);
-      this.workflowGateway.sendExecutionUpdate(execution);
 
       const nextNodes = this.workflowExecutionService.determineNextNodes(
         workflow,
@@ -149,8 +176,22 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         execution,
       );
 
-      for (const nextNodeId of nextNodes) {
-        await this.executeNode(nextNodeId, workflow, execution, context);
+      await this.updateExecution(execution);
+      this.workflowGateway.sendExecutionUpdate(execution);
+      this.workflowGateway.sendNodeUpdate(
+        execution.id,
+        nodeId,
+        node.customName || node.type,
+        'COMPLETED',
+        output,
+      );
+
+      if (nextNodes.length === 0) {
+        this.logger.log(`No next nodes found after ${nodeId}, assuming implicit END of branch`);
+      } else {
+        for (const nextNodeId of nextNodes) {
+          await this.executeNode(nextNodeId, workflow, execution, context);
+        }
       }
     } catch (error) {
       this.logger.error(
@@ -173,12 +214,23 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           error instanceof Error ? error.message : 'Unknown error',
         );
         await this.updateExecution(execution);
+        this.workflowGateway.sendNodeUpdate(
+          execution.id,
+          nodeId,
+          node.customName || node.type,
+          'FAILED',
+          { error: error instanceof Error ? error.message : 'Unknown error' },
+        );
         throw error;
       }
     }
   }
 
-  private async executeNodeByType(node: any, input: any): Promise<any> {
+  private async executeNodeByType(
+    node: any,
+    input: any,
+    execution?: WorkflowExecution,
+  ): Promise<any> {
     switch (node.type) {
       case NodeType.START:
         return input;
@@ -210,6 +262,68 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
       case NodeType.CONDITIONAL:
         return input;
+
+      case NodeType.PROMPT: {
+        const promptTemplate = node.config?.prompt as string;
+        if (!promptTemplate) return { prompt: '' };
+
+        // Resolve {{variables}} from input
+        const resolvedPrompt = promptTemplate.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
+          const value = path
+            .trim()
+            .split('.')
+            .reduce((acc: any, key: string) => acc?.[key], input);
+          return value !== undefined ? String(value) : match;
+        });
+
+        if (execution && execution.id) {
+          execution.waitNodeExecution(node.id);
+          await this.updateExecution(execution);
+          this.workflowGateway.sendExecutionUpdate(execution);
+          this.workflowGateway.sendNodeUpdate(
+            execution.id,
+            node.id,
+            node.customName || node.type,
+            'WAITING_INPUT',
+            {
+              prompt: resolvedPrompt,
+            },
+          );
+
+          this.logger.log(
+            `Prompt node waiting. Registering listener for: resume_${execution.id}_${node.id}`,
+          );
+          const userInput = await new Promise((resolve) => {
+            this.promptEmitter.once(`resume_${execution.id}_${node.id}`, (data) => {
+              this.logger.log(
+                `Prompt listener fired for: resume_${execution.id}_${node.id} with data: ${data}`,
+              );
+              resolve(data);
+            });
+          });
+
+          // Resume status
+          execution.startNodeExecution(node.id, node.customName || node.type, input);
+          await this.updateExecution(execution);
+          this.workflowGateway.sendExecutionUpdate(execution);
+          this.workflowGateway.sendNodeUpdate(
+            execution.id,
+            node.id,
+            node.customName || node.type,
+            'RUNNING',
+          );
+
+          return { prompt: resolvedPrompt, response: userInput };
+        }
+
+        return { prompt: resolvedPrompt };
+      }
+
+      case NodeType.TEXT:
+        return { text: node.config?.text || '' };
+
+      case NodeType.FILE:
+        return { files: node.config?.files || [] };
 
       case NodeType.END:
         return input;
@@ -278,5 +392,14 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       await this.updateExecution(execution);
       this.workflowGateway.sendExecutionUpdate(execution);
     }
+  }
+
+  resumePromptNode(executionId: string, nodeId: string, response: string): void {
+    this.logger.log(`Emitting resume event for: resume_${executionId}_${nodeId}`);
+    const hasListeners = this.promptEmitter.listenerCount(`resume_${executionId}_${nodeId}`);
+    if (hasListeners === 0) {
+      this.logger.warn(`No listeners found for event: resume_${executionId}_${nodeId}`);
+    }
+    this.promptEmitter.emit(`resume_${executionId}_${nodeId}`, response);
   }
 }

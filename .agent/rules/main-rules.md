@@ -75,6 +75,7 @@ Enforce:
 - Always make it compatible with dark and light theme
 - Always use reactquery for request
 - Always use zustand for the stores
+- Always split components for preventing long lines of codes
 
 ---
 

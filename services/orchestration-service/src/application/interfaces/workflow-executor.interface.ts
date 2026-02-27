@@ -6,6 +6,8 @@ export interface IWorkflowExecutor {
   getExecutionStatus(executionId: string): Promise<WorkflowExecution | null>;
 
   cancelExecution(executionId: string): Promise<void>;
+
+  resumePromptNode(executionId: string, nodeId: string, response: string): void;
 }
 
 export const WORKFLOW_EXECUTOR = Symbol('WORKFLOW_EXECUTOR');

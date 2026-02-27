@@ -13,6 +13,7 @@ import {
 import { useWorkflowLogs } from '../hooks/useWorkflowLogs';
 import { Workflow, WorkflowNode } from '@/types';
 import { WorkflowExecution } from '../api/workflows.api';
+import { useWorkflowExecutionStore } from '../store/workflowExecution.store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -71,6 +72,9 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const [status, setStatus] = useState(workflow?.status?.toUpperCase() ?? 'DRAFT');
   const [logsOpen, setLogsOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+
+  const setActiveExecutionId = useWorkflowExecutionStore((s) => s.setActiveExecutionId);
+
   const [activeExecution, setActiveExecution] = useState<WorkflowExecution | null>(null);
 
   const createWorkflow = useCreateWorkflow();
@@ -132,6 +136,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
       {
         onSuccess: (execution) => {
           setActiveExecution(execution);
+          setActiveExecutionId(execution.id);
         },
       },
     );
@@ -141,7 +146,10 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const handleCancelExecution = () => {
     if (!activeExecution) return;
     cancelExecution.mutate(activeExecution.id, {
-      onSuccess: () => setActiveExecution(null),
+      onSuccess: () => {
+        setActiveExecution(null);
+        setActiveExecutionId(null);
+      },
     });
   };
 

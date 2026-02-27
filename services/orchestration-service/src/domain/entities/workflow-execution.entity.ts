@@ -12,10 +12,12 @@ export enum NodeExecutionStatus {
   COMPLETED = 'COMPLETED',
   FAILED = 'FAILED',
   SKIPPED = 'SKIPPED',
+  WAITING_INPUT = 'WAITING_INPUT',
 }
 
 export interface NodeExecution {
   nodeId: string;
+  nodeName?: string;
   status: NodeExecutionStatus;
   input?: any;
   output?: any;
@@ -69,13 +71,14 @@ export class WorkflowExecution {
     this.completedAt = new Date();
   }
 
-  startNodeExecution(nodeId: string, input?: any): void {
+  startNodeExecution(nodeId: string, nodeName: string, input?: any): void {
     this.currentNodeId = nodeId;
     const existingIndex = this.nodeExecutions.findIndex((n) => n.nodeId === nodeId);
 
     if (existingIndex >= 0) {
       this.nodeExecutions[existingIndex] = {
         ...this.nodeExecutions[existingIndex],
+        nodeName: nodeName || this.nodeExecutions[existingIndex].nodeName,
         status: NodeExecutionStatus.RUNNING,
         input,
         startedAt: new Date(),
@@ -83,6 +86,7 @@ export class WorkflowExecution {
     } else {
       this.nodeExecutions.push({
         nodeId,
+        nodeName,
         status: NodeExecutionStatus.RUNNING,
         input,
         startedAt: new Date(),
@@ -97,6 +101,13 @@ export class WorkflowExecution {
       execution.status = NodeExecutionStatus.COMPLETED;
       execution.output = output;
       execution.completedAt = new Date();
+    }
+  }
+
+  waitNodeExecution(nodeId: string): void {
+    const execution = this.nodeExecutions.find((n) => n.nodeId === nodeId);
+    if (execution) {
+      execution.status = NodeExecutionStatus.WAITING_INPUT;
     }
   }
 

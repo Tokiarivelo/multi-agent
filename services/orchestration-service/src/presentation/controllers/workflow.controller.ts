@@ -199,4 +199,18 @@ export class WorkflowController {
   async cancelExecution(@Param('executionId') executionId: string) {
     await this.executeWorkflowUseCase.cancelExecution(executionId);
   }
+
+  @Post('executions/:executionId/nodes/:nodeId/resume')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resume a waiting node' })
+  @ApiParam({ name: 'executionId', type: String })
+  @ApiParam({ name: 'nodeId', type: String })
+  async resumeNode(
+    @Param('executionId') executionId: string,
+    @Param('nodeId') nodeId: string,
+    @Body() body: { input: string },
+  ) {
+    this.executeWorkflowUseCase.resumeNode(executionId, nodeId, body.input);
+    return { success: true };
+  }
 }
