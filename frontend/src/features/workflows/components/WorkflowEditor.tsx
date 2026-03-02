@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -45,7 +45,11 @@ import {
   ChevronLeft,
   PanelRightClose,
   PanelRightOpen,
+  X,
+  FileJson,
 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { ExecutionLogsPanel } from './ExecutionLogsPanel';
 import { useRouter } from 'next/navigation';
 
@@ -74,8 +78,38 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const [panelOpen, setPanelOpen] = useState(true);
 
   const setActiveExecutionId = useWorkflowExecutionStore((s) => s.setActiveExecutionId);
+  const selectedNodeId = useWorkflowExecutionStore((s) => s.selectedNodeId);
+  const selectedNodeName = useWorkflowExecutionStore((s) => s.selectedNodeName);
+  const nodeData = useWorkflowExecutionStore((s) => s.nodeData);
+  const nodeStatuses = useWorkflowExecutionStore((s) => s.nodeStatuses);
 
   const [activeExecution, setActiveExecution] = useState<WorkflowExecution | null>(null);
+
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(350);
+
+  const handleDragStart = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startHeight = bottomPanelHeight;
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        const deltaY = startY - moveEvent.clientY;
+        setBottomPanelHeight(
+          Math.max(150, Math.min(window.innerHeight - 100, startHeight + deltaY)),
+        );
+      };
+
+      const handlePointerUp = () => {
+        document.removeEventListener('pointermove', handlePointerMove);
+        document.removeEventListener('pointerup', handlePointerUp);
+      };
+
+      document.addEventListener('pointermove', handlePointerMove);
+      document.addEventListener('pointerup', handlePointerUp);
+    },
+    [bottomPanelHeight],
+  );
 
   const createWorkflow = useCreateWorkflow();
   const updateWorkflow = useUpdateWorkflow();
@@ -155,10 +189,6 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
 
   const handleToggleLogs = () => {
     setLogsOpen((v) => !v);
-    // open pannel if not open
-    if (!panelOpen && !logsOpen) {
-      setPanelOpen(true);
-    }
   };
 
   const isSaving = createWorkflow.isPending || updateWorkflow.isPending;
@@ -326,24 +356,115 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
                 </div>
               </CardContent>
             </Card>
-
-            {/* ─── Execution Logs Panel ─── */}
-            {logsOpen && workflow?.id && (
-              <div className="flex-1 min-h-[300px] flex flex-col shadow-xl rounded-xl overflow-hidden border border-border/50 bg-white/40 dark:bg-black/40 backdrop-blur-xl pointer-events-auto">
-                <ExecutionLogsPanel
-                  logs={logs}
-                  connected={connected}
-                  executionStatus={executionStatus}
-                  executionId={activeExecution?.id ?? null}
-                  onClear={clearLogs}
-                  onCancel={handleCancelExecution}
-                  isCancelling={cancelExecution.isPending}
-                />
-              </div>
-            )}
           </div>
         )}
       </div>
+
+      {/* ─── Bottom Panel (Execution & Node Data) ─── */}
+      {logsOpen && workflow?.id && (
+        <div
+          className="relative w-full shrink-0 shadow-xl rounded-t-xl overflow-hidden border border-border/50 bg-white/60 dark:bg-black/60 backdrop-blur-xl pointer-events-auto flex flex-col"
+          style={{ height: bottomPanelHeight }}
+        >
+          {/* Resize Handle */}
+          <div
+            className="absolute top-0 left-0 right-0 h-[6px] cursor-row-resize z-50 bg-transparent hover:bg-primary/20 transition-colors"
+            onPointerDown={handleDragStart}
+          />
+          <Tabs defaultValue="logs" className="flex-1 flex flex-col min-h-0 pt-1">
+            <div className="flex items-center justify-between px-4 pt-2 border-b border-border/50 pb-2">
+              <TabsList className="bg-background/50 backdrop-blur-sm">
+                <TabsTrigger value="logs" className="gap-2 text-xs">
+                  <Terminal className="h-3.5 w-3.5" />
+                  Execution Logs
+                </TabsTrigger>
+                <TabsTrigger value="node-data" className="gap-2 text-xs">
+                  <FileJson className="h-3.5 w-3.5" />
+                  Node Execution Data
+                </TabsTrigger>
+              </TabsList>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={() => setLogsOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <TabsContent
+              value="logs"
+              className="flex-1 min-h-0 m-0 border-0 p-0 overflow-hidden outline-none flex flex-col"
+            >
+              <ExecutionLogsPanel
+                logs={logs}
+                connected={connected}
+                executionStatus={executionStatus}
+                executionId={activeExecution?.id ?? null}
+                onClear={clearLogs}
+                onCancel={handleCancelExecution}
+                isCancelling={cancelExecution.isPending}
+              />
+            </TabsContent>
+
+            <TabsContent
+              value="node-data"
+              className="flex-1 min-h-0 m-0 border-0 overflow-hidden outline-none flex flex-col"
+            >
+              <ScrollArea className="h-full">
+                <div className="p-4 flex flex-col gap-4">
+                  {!selectedNodeId ? (
+                    <div className="text-sm text-muted-foreground italic flex h-full items-center justify-center min-h-[100px]">
+                      {t(
+                        'workflows.editor.selectNodeMsg',
+                        'Select a node on the canvas to view its execution data.',
+                      )}
+                    </div>
+                  ) : !nodeStatuses[selectedNodeId] ? (
+                    <div className="text-sm text-muted-foreground flex h-full items-center justify-center min-h-[100px]">
+                      {selectedNodeName ? `Node '${selectedNodeName}'` : `Node`} [{selectedNodeId}]
+                      has not executed yet.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-sm">
+                          Node:{' '}
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded mr-1">
+                            {selectedNodeName || 'Unknown'}
+                          </code>
+                          <span className="text-muted-foreground text-xs font-normal">
+                            [{selectedNodeId}]
+                          </span>
+                        </span>
+                        <Badge
+                          variant={
+                            nodeStatuses[selectedNodeId] === 'COMPLETED'
+                              ? 'success'
+                              : nodeStatuses[selectedNodeId] === 'FAILED'
+                                ? 'destructive'
+                                : 'secondary'
+                          }
+                        >
+                          {nodeStatuses[selectedNodeId]}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 bg-muted/30 rounded-lg border border-border/50 p-4">
+                        <pre className="text-xs font-mono overflow-auto max-w-full text-foreground/80">
+                          {nodeData[selectedNodeId] !== undefined
+                            ? JSON.stringify(nodeData[selectedNodeId], null, 2)
+                            : 'No output/input recorded.'}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        </div>
+      )}
     </div>
   );
 }

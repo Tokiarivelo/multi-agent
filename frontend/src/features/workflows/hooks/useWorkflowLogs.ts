@@ -9,6 +9,7 @@ export type NodeUpdateEvent = {
   nodeId: string;
   nodeName?: string;
   status: string;
+  /** data.logs contains captured console.* lines from the sandbox */
   data?: unknown;
   timestamp: string;
 };
@@ -46,6 +47,7 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
   const setExecutionStatus = useWorkflowExecutionStore((s) => s.setExecutionStatus);
   const executionStatus = useWorkflowExecutionStore((s) => s.executionStatus);
   const setNodeStatus = useWorkflowExecutionStore((s) => s.setNodeStatus);
+  const setNodeData = useWorkflowExecutionStore((s) => s.setNodeData);
   const clearExecution = useWorkflowExecutionStore((s) => s.clearExecution);
 
   const addLog = useCallback((log: ExecutionLogLine) => {
@@ -102,6 +104,9 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
 
     socket.on('node:update', (event: NodeUpdateEvent) => {
       setNodeStatus(event.nodeId, event.status as NodeStatus);
+      if (event.data !== undefined) {
+        setNodeData(event.nodeId, event.data);
+      }
       const emoji =
         event.status === 'COMPLETED'
           ? '✅'
@@ -118,6 +123,26 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
         message: `${emoji} Node ${event.nodeName ? `${event.nodeName} ` : ''}[${event.nodeId}] → ${event.status}`,
         data: event.data as ExecutionLogLine['data'],
       });
+
+      // Append captured console.log lines from the node sandbox
+      // NOTE: logs is inside event.data (emitted as { input, output, logs })
+      const consoleLogs = (event.data as Record<string, unknown> | undefined)?.logs as
+        | string[]
+        | undefined;
+
+      console.log('consoleLogs :>> ', consoleLogs);
+
+      if (consoleLogs && consoleLogs.length > 0) {
+        consoleLogs.forEach((line) => {
+          const isError = line.startsWith('[ERROR]');
+          const isWarn = line.startsWith('[WARN]');
+          addLog({
+            type: 'node_update',
+            timestamp: event.timestamp,
+            message: `${isError ? '🔴' : isWarn ? '🟡' : '⬜'} console › ${line}`,
+          });
+        });
+      }
     });
 
     socket.on('execution:update', (event: ExecutionUpdateEvent) => {
@@ -161,7 +186,7 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
       socketRef.current = null;
       setConnected(false);
     };
-  }, [executionId, wsUrl, addLog, setNodeStatus, setExecutionStatus]);
+  }, [executionId, wsUrl, addLog, setNodeStatus, setExecutionStatus, setNodeData]);
 
   return { logs, connected, executionStatus, clearLogs };
 }

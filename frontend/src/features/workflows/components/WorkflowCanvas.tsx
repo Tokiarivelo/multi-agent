@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
 import {
@@ -26,7 +26,7 @@ import { Workflow } from '@/types';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Settings2 } from 'lucide-react';
+import { Plus, Trash2, Settings2, Undo2, Redo2 } from 'lucide-react';
 import { NodeEditor } from './NodeEditor';
 import { WorkflowFlowNode } from './WorkflowFlowNode';
 import { WorkflowEdge } from './WorkflowEdge';
@@ -42,6 +42,7 @@ import { useAgents } from '../../agents/hooks/useAgents';
 import { useTools } from '../../tools/hooks/useTools';
 import { getNodeTypeMeta, NodeTypeId } from './nodeTypes';
 import { useWorkflowExecutionStore } from '../store/workflowExecution.store';
+import { useWorkflowHistory } from '../hooks/useWorkflowHistory';
 
 interface WorkflowCanvasProps {
   workflow: Workflow;
@@ -134,6 +135,8 @@ function toFlowEdge(edge: Workflow['definition']['edges'][0]): Edge {
     type: 'workflowEdge',
     label: edge.condition,
     animated: false,
+    selectable: true,
+    focusable: true,
     style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
     labelStyle: { fill: 'hsl(var(--muted-foreground))', fontSize: 11 },
   };
@@ -191,6 +194,15 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
   const { resolvedTheme } = useTheme();
   const { t, i18n } = useTranslation();
   const { zoomIn, zoomOut, screenToFlowPosition } = useReactFlow();
+
+  /**
+   * Edges deleted in the same JS tick as a node deletion are collected here.
+   * `onEdgesDelete` fires before `onNodesDelete` (ReactFlow order), so we use
+   * a setTimeout(0) to flush individual edge-history entries ONLY if no node
+   * deletion happened in the same tick.
+   */
+  const pendingEdgeDeletes = useRef<AddEdgePayload[]>([]);
+  const pendingEdgeFlushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: agentsData } = useAgents(1, 100);
   const { data: toolsData } = useTools(1, 100);
@@ -260,6 +272,37 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
 
   const activeExecutionId = useWorkflowExecutionStore((s) => s.activeExecutionId);
   const nodeStatuses = useWorkflowExecutionStore((s) => s.nodeStatuses);
+  const nodeData = useWorkflowExecutionStore((s) => s.nodeData);
+  const setSelectedNodeId = useWorkflowExecutionStore((s) => s.setSelectedNodeId);
+  const setSelectedNodeName = useWorkflowExecutionStore((s) => s.setSelectedNodeName);
+
+  /** Input that the node received during the last execution run */
+  const editingNodeLastInput = editingNodeId
+    ? ((nodeData[editingNodeId] as Record<string, unknown> | undefined)?.input as
+        | Record<string, unknown>
+        | undefined)
+    : undefined;
+
+  /* Selected node */
+  const selectedNode = nodes.find((n) => n.selected) ?? null;
+
+  useEffect(() => {
+    setSelectedNodeId(selectedNode?.id ?? null);
+    if (selectedNode) {
+      const data = selectedNode.data as WorkflowNodeData;
+      const name = data.customName || (i18n.language.startsWith('fr') ? data.labelFr : data.label);
+      setSelectedNodeName(name);
+    } else {
+      setSelectedNodeName(null);
+    }
+  }, [
+    selectedNode,
+    selectedNode?.id,
+    selectedNode?.data,
+    i18n.language,
+    setSelectedNodeId,
+    setSelectedNodeName,
+  ]);
 
   /* Execution highlights for edges */
   useEffect(() => {
@@ -333,9 +376,167 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
     [edges, setEdges, addEdgeMutation],
   );
 
+  /* ─── Undo / Redo ────────────────────────────────────────────────── */
+  const {
+    push: pushHistory,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useWorkflowHistory({
+    onUndo: (entry) => {
+      switch (entry.op) {
+        case 'node_added':
+          deleteNodeMutation.mutate(entry.node.id, {
+            onSuccess: () => setNodes((prev) => prev.filter((n) => n.id !== entry.node.id)),
+          });
+          break;
+        case 'node_deleted':
+          addNodeMutation.mutate(entry.node, {
+            onSuccess: () => {
+              setNodes((prev) => [
+                ...prev,
+                makeFlowNode(entry.node, agentsData?.data ?? [], toolsData?.data ?? []),
+              ]);
+              // Restore connected edges after the node is back
+              entry.connectedEdges.forEach((ep) => {
+                addEdgeMutation.mutate(ep, {
+                  onSuccess: () =>
+                    setEdges((prev) => [
+                      ...prev,
+                      {
+                        ...ep,
+                        type: 'workflowEdge',
+                        selectable: true,
+                        focusable: true,
+                        style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
+                      },
+                    ]),
+                });
+              });
+            },
+          });
+          break;
+        case 'node_updated':
+          updateNodeMutation.mutate(
+            { nodeId: entry.nodeId, node: entry.before },
+            {
+              onSuccess: () =>
+                setNodes((prev) =>
+                  prev.map((n) =>
+                    n.id === entry.nodeId
+                      ? makeFlowNode(
+                          {
+                            ...(n.data as WorkflowNodeData),
+                            ...entry.before,
+                            id: entry.nodeId,
+                          } as AddNodePayload,
+                          agentsData?.data ?? [],
+                          toolsData?.data ?? [],
+                        )
+                      : n,
+                  ),
+                ),
+            },
+          );
+          break;
+        case 'edge_added':
+          deleteEdgeMutation.mutate(entry.edge.id, {
+            onSuccess: () => setEdges((prev) => prev.filter((e) => e.id !== entry.edge.id)),
+          });
+          break;
+        case 'edge_deleted':
+          addEdgeMutation.mutate(entry.edge, {
+            onSuccess: () =>
+              setEdges((prev) => [
+                ...prev,
+                {
+                  ...entry.edge,
+                  type: 'workflowEdge',
+                  selectable: true,
+                  focusable: true,
+                  style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
+                },
+              ]),
+          });
+          break;
+      }
+    },
+    onRedo: (entry) => {
+      switch (entry.op) {
+        case 'node_added':
+          addNodeMutation.mutate(entry.node, {
+            onSuccess: () =>
+              setNodes((prev) => [
+                ...prev,
+                makeFlowNode(entry.node, agentsData?.data ?? [], toolsData?.data ?? []),
+              ]),
+          });
+          break;
+        case 'node_deleted':
+          deleteNodeMutation.mutate(entry.node.id, {
+            onSuccess: () => setNodes((prev) => prev.filter((n) => n.id !== entry.node.id)),
+          });
+          break;
+        case 'node_updated':
+          updateNodeMutation.mutate(
+            { nodeId: entry.nodeId, node: entry.after },
+            {
+              onSuccess: () =>
+                setNodes((prev) =>
+                  prev.map((n) =>
+                    n.id === entry.nodeId
+                      ? makeFlowNode(
+                          {
+                            ...(n.data as WorkflowNodeData),
+                            ...entry.after,
+                            id: entry.nodeId,
+                          } as AddNodePayload,
+                          agentsData?.data ?? [],
+                          toolsData?.data ?? [],
+                        )
+                      : n,
+                  ),
+                ),
+            },
+          );
+          break;
+        case 'edge_added':
+          addEdgeMutation.mutate(entry.edge, {
+            onSuccess: () =>
+              setEdges((prev) => [
+                ...prev,
+                {
+                  ...entry.edge,
+                  type: 'workflowEdge',
+                  selectable: true,
+                  focusable: true,
+                  style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
+                },
+              ]),
+          });
+          break;
+        case 'edge_deleted':
+          deleteEdgeMutation.mutate(entry.edge.id, {
+            onSuccess: () => setEdges((prev) => prev.filter((e) => e.id !== entry.edge.id)),
+          });
+          break;
+      }
+    },
+  });
+
   /* Save node from dialog */
   const handleSaveNode = (node: AddNodePayload) => {
     if (editingNodeId) {
+      // Capture the before-state for undo
+      const existingNode = nodes.find((n) => n.id === editingNodeId);
+      const existingData = existingNode?.data as WorkflowNodeData | undefined;
+      const before: Partial<AddNodePayload> = {
+        type: existingData?.nodeType as AddNodePayload['type'],
+        customName: existingData?.customName,
+        config: existingData?.config,
+        position: existingNode?.position as { x: number; y: number },
+      };
       updateNodeMutation.mutate(
         { nodeId: node.id, node },
         {
@@ -347,7 +548,9 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
                   : n,
               ),
             );
-            setEditorOpen(false);
+            pushHistory({ op: 'node_updated', nodeId: node.id, before, after: node });
+            // User requested not to close the sidebar when updating
+            // setEditorOpen(false);
           },
         },
       );
@@ -358,14 +561,12 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
             ...prev,
             makeFlowNode(node, agentsData?.data ?? [], toolsData?.data ?? []),
           ]);
+          pushHistory({ op: 'node_added', node });
           setEditorOpen(false);
 
           if (splittingEdgeId) {
             const edgeToSplit = edges.find((e) => e.id === splittingEdgeId);
             if (edgeToSplit) {
-              // Physically delete the original edge on the backend
-              deleteEdgeMutation.mutate(edgeToSplit.id);
-
               // Create exactly two new edges connecting Source->New and New->Target
               const edge1: AddEdgePayload = {
                 id: uuidv4(),
@@ -378,8 +579,18 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
                 target: edgeToSplit.target,
               };
 
-              addEdgeMutation.mutate(edge1);
-              addEdgeMutation.mutate(edge2);
+              // Chain backend updates sequentially to prevent read-modify-write concurrency errors
+              const chainMutations = async () => {
+                try {
+                  await deleteEdgeMutation.mutateAsync(edgeToSplit.id);
+                  await addEdgeMutation.mutateAsync(edge1);
+                  await addEdgeMutation.mutateAsync(edge2);
+                } catch (error) {
+                  console.error('Failed to complete edge splitting mutations', error);
+                }
+              };
+
+              chainMutations();
 
               setEdges((prev) => {
                 const filtered = prev.filter((e) => e.id !== splittingEdgeId);
@@ -405,8 +616,6 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
     }
   };
 
-  /* Selected node */
-  const selectedNode = nodes.find((n) => n.selected) ?? null;
   const selectedData = selectedNode?.data as WorkflowNodeData | undefined;
   const selectedMeta = selectedData ? getNodeTypeMeta(selectedData.nodeType as NodeTypeId) : null;
 
@@ -414,12 +623,42 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
 
   const handleDeleteSelected = () => {
     if (selectedNode) {
+      const data = selectedNode.data as WorkflowNodeData;
+      if (data?.nodeType === 'START' || data?.nodeType === 'END') return;
+      const nodePayload: AddNodePayload = {
+        id: selectedNode.id,
+        type: data.nodeType as AddNodePayload['type'],
+        customName: data.customName,
+        config: data.config,
+        position: selectedNode.position as { x: number; y: number },
+      };
+      // Capture edges connected to this node before deleting
+      const connectedEdges: AddEdgePayload[] = edges
+        .filter((e) => e.source === selectedNode.id || e.target === selectedNode.id)
+        .map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          condition: e.label as string | undefined,
+        }));
       deleteNodeMutation.mutate(selectedNode.id, {
-        onSuccess: () => setNodes((prev) => prev.filter((n) => n.id !== selectedNode.id)),
+        onSuccess: () => {
+          setNodes((prev) => prev.filter((n) => n.id !== selectedNode.id));
+          pushHistory({ op: 'node_deleted', node: nodePayload, connectedEdges });
+        },
       });
     } else if (selectedEdge) {
+      const edgePayload: AddEdgePayload = {
+        id: selectedEdge.id,
+        source: selectedEdge.source,
+        target: selectedEdge.target,
+        condition: selectedEdge.label as string | undefined,
+      };
       deleteEdgeMutation.mutate(selectedEdge.id, {
-        onSuccess: () => setEdges((prev) => prev.filter((e) => e.id !== selectedEdge.id)),
+        onSuccess: () => {
+          setEdges((prev) => prev.filter((e) => e.id !== selectedEdge.id));
+          pushHistory({ op: 'edge_deleted', edge: edgePayload });
+        },
       });
     }
   };
@@ -438,6 +677,35 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
           position: editingNode.position as { x: number; y: number },
         }
       : undefined;
+  const computeAvailableTypings = (nodeId: string | null): string => {
+    if (!nodeId) return 'declare const data: any;\ndeclare const $: any;\n';
+    const incomingEdges = edges.filter((e) => e.target === nodeId);
+    const sourceNodeIds = incomingEdges.map((e) => e.source);
+    const sourceNodes = nodes.filter((n) => sourceNodeIds.includes(n.id));
+
+    let typings = '';
+    const dataTypes: string[] = [];
+
+    sourceNodes.forEach((n, idx) => {
+      const config = (n.data as WorkflowNodeData)?.config;
+      const nodeName =
+        (n.data as WorkflowNodeData)?.customName || (n.data as WorkflowNodeData)?.label || n.id;
+      if (config?.outputType) {
+        typings += `// ─── Output from: "${nodeName}" ───\n`;
+        const interfaceName = `NodeOutputType_${idx}`;
+        typings += `type ${interfaceName} = ${config.outputType as string}\n\n`;
+        dataTypes.push(interfaceName);
+      }
+    });
+
+    const unionType = dataTypes.length > 0 ? dataTypes.join(' & ') : 'Record<string, unknown>';
+    typings += `/** All data passed from upstream nodes */\n`;
+    typings += `declare const data: ${unionType};\n`;
+    typings += `/** Alias for data — use \$.field or \$['field'] */\n`;
+    typings += `declare const $: ${unionType};\n`;
+
+    return typings;
+  };
 
   return (
     <div className="h-full w-full relative overflow-hidden bg-background">
@@ -460,10 +728,63 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
           setEditingNodeId(node.id);
           setEditorOpen(true);
         }}
+        onNodesDelete={(deletedNodes) => {
+          // Cancel the edge-only flush — these edges belong to the node deletion
+          if (pendingEdgeFlushTimer.current) {
+            clearTimeout(pendingEdgeFlushTimer.current);
+            pendingEdgeFlushTimer.current = null;
+          }
+          const capturedEdges = [...pendingEdgeDeletes.current];
+          pendingEdgeDeletes.current = [];
+
+          deletedNodes.forEach((node) => {
+            const data = node.data as WorkflowNodeData;
+            if (data?.nodeType === 'START' || data?.nodeType === 'END') return;
+            const nodePayload: AddNodePayload = {
+              id: node.id,
+              type: data.nodeType as AddNodePayload['type'],
+              customName: data.customName,
+              config: data.config,
+              position: node.position as { x: number; y: number },
+            };
+            const connectedEdges = capturedEdges.filter(
+              (e) => e.source === node.id || e.target === node.id,
+            );
+            deleteNodeMutation.mutate(node.id, {
+              onSuccess: () => {
+                setNodes((prev) => prev.filter((n) => n.id !== node.id));
+                pushHistory({ op: 'node_deleted', node: nodePayload, connectedEdges });
+              },
+            });
+          });
+        }}
+        onEdgesDelete={(deletedEdges) => {
+          deletedEdges.forEach((edge) => {
+            const edgePayload: AddEdgePayload = {
+              id: edge.id,
+              source: edge.source,
+              target: edge.target,
+              condition: edge.label as string | undefined,
+            };
+            pendingEdgeDeletes.current.push(edgePayload);
+            deleteEdgeMutation.mutate(edge.id, {
+              onSuccess: () => setEdges((prev) => prev.filter((e) => e.id !== edge.id)),
+            });
+          });
+          // Schedule flush — cancelled by onNodesDelete if a node is also being deleted
+          if (pendingEdgeFlushTimer.current) clearTimeout(pendingEdgeFlushTimer.current);
+          pendingEdgeFlushTimer.current = setTimeout(() => {
+            pendingEdgeDeletes.current.forEach((ep) =>
+              pushHistory({ op: 'edge_deleted', edge: ep }),
+            );
+            pendingEdgeDeletes.current = [];
+            pendingEdgeFlushTimer.current = null;
+          }, 0);
+        }}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
-        deleteKeyCode={null}
+        deleteKeyCode={['Delete', 'Backspace']}
         className="bg-background"
         colorMode={resolvedTheme === 'dark' ? 'dark' : 'light'}
       >
@@ -548,6 +869,30 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
                 {t('workflows.canvas.delete')}
               </Button>
             )}
+
+            {/* Undo / Redo */}
+            <div className="flex gap-1 ml-1 border-l border-border/40 pl-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                onClick={undo}
+                disabled={!canUndo}
+                title="Undo (Ctrl+Z)"
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                onClick={redo}
+                disabled={!canRedo}
+                title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+              >
+                <Redo2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </Panel>
 
@@ -575,6 +920,9 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
         isSaving={addNodeMutation.isPending || updateNodeMutation.isPending}
         agents={agentsData?.data ?? []}
         tools={toolsData?.data ?? []}
+        availableTypings={computeAvailableTypings(editingNodeId)}
+        workflowId={workflow?.id}
+        initialTestInput={editingNodeLastInput}
       />
     </div>
   );

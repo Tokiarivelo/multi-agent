@@ -28,7 +28,21 @@ export const WorkflowEdge = memo(
 
     return (
       <>
-        <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
+        <BaseEdge
+          path={edgePath}
+          markerEnd={markerEnd}
+          style={{
+            ...style,
+            ...(selected
+              ? {
+                  stroke: 'hsl(var(--primary))',
+                  strokeWidth: 2.5,
+                  filter: 'drop-shadow(0 0 4px hsl(var(--primary)/0.5))',
+                }
+              : {}),
+          }}
+          interactionWidth={20}
+        />
         <EdgeLabelRenderer>
           <div
             style={{

@@ -172,7 +172,11 @@ export class WorkflowGateway implements OnGatewayInit, OnGatewayConnection, OnGa
               nodeId: nodeExecution.nodeId,
               nodeName: nodeExecution.nodeName,
               status: nodeExecution.status,
-              data: nodeExecution.output || nodeExecution.input,
+              data: {
+                input: nodeExecution.input,
+                output: nodeExecution.output,
+                error: nodeExecution.error,
+              },
               timestamp: nodeExecution.updatedAt || new Date().toISOString(),
             });
           }

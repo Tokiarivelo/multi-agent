@@ -39,7 +39,8 @@ export interface AddNodePayload {
     | 'END'
     | 'PROMPT'
     | 'TEXT'
-    | 'FILE';
+    | 'FILE'
+    | 'LOOP';
   customName?: string;
   config?: Record<string, unknown>;
   position?: { x: number; y: number };
@@ -142,6 +143,17 @@ export const workflowsApi = {
     await apiClient.post(`/api/workflows/executions/${executionId}/nodes/${nodeId}/resume`, {
       input,
     });
+  },
+
+  testNode: async (
+    workflowId: string,
+    nodeId: string,
+    input: Record<string, unknown>,
+  ): Promise<{ input: unknown; output: unknown; error?: string; logs: string[] }> => {
+    const { data } = await apiClient.post(`/api/workflows/${workflowId}/nodes/${nodeId}/test`, {
+      input,
+    });
+    return data;
   },
 
   // ─── Files ────────────────────────────────────────────────────────

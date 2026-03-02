@@ -137,7 +137,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         nodeId,
         node.customName || node.type,
         'RUNNING',
-        input,
+        { input },
       );
 
       execution.completeNodeExecution(nodeId, input);
@@ -147,7 +147,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         nodeId,
         node.customName || node.type,
         'COMPLETED',
-        input,
+        { input, output: input },
       );
 
       return;
@@ -161,11 +161,12 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       nodeId,
       node.customName || node.type,
       'RUNNING',
-      input,
+      { input },
     );
 
     try {
-      const output = await this.executeNodeByType(node, input, execution);
+      const nodeLogs: string[] = [];
+      const output = await this.executeNodeByType(node, input, execution, nodeLogs);
 
       execution.completeNodeExecution(nodeId, output);
       context.variables = { ...context.variables, ...output };
@@ -183,7 +184,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         nodeId,
         node.customName || node.type,
         'COMPLETED',
-        output,
+        { input, output, logs: nodeLogs.length > 0 ? nodeLogs : undefined },
       );
 
       if (nextNodes.length === 0) {
@@ -219,7 +220,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           nodeId,
           node.customName || node.type,
           'FAILED',
-          { error: error instanceof Error ? error.message : 'Unknown error' },
+          { input, error: error instanceof Error ? error.message : 'Unknown error' },
         );
         throw error;
       }
@@ -230,6 +231,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     node: any,
     input: any,
     execution?: WorkflowExecution,
+    logSink?: string[],
   ): Promise<any> {
     switch (node.type) {
       case NodeType.START:
@@ -257,8 +259,15 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         }
         return toolResult.output;
 
-      case NodeType.TRANSFORM:
-        return this.workflowExecutionService.transformData(input, node.config);
+      case NodeType.TRANSFORM: {
+        const transformLogs: string[] = logSink ?? [];
+        const result = await this.workflowExecutionService.transformData(
+          input,
+          node.config,
+          transformLogs,
+        );
+        return result;
+      }
 
       case NodeType.CONDITIONAL:
         return input;
@@ -286,6 +295,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
             node.customName || node.type,
             'WAITING_INPUT',
             {
+              input,
               prompt: resolvedPrompt,
             },
           );
@@ -311,6 +321,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
             node.id,
             node.customName || node.type,
             'RUNNING',
+            { input, prompt: resolvedPrompt, output: { response: userInput } },
           );
 
           return { prompt: resolvedPrompt, response: userInput };
@@ -327,6 +338,99 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
       case NodeType.END:
         return input;
+
+      case NodeType.LOOP: {
+        const {
+          collection: collectionPath = '',
+          itemScript = '',
+          filterScript = '',
+          maxIterations = 100,
+        } = node.config ?? {};
+
+        // Resolve nested dot-path (e.g. "data.items" or "$.results")
+        const resolvePath = (obj: any, dotPath: string): any => {
+          const cleaned = dotPath.replace(/^\$\.?/, '');
+          if (!cleaned) return obj;
+          return cleaned.split('.').reduce((acc: any, k: string) => acc?.[k], obj);
+        };
+
+        const raw = resolvePath(input, collectionPath);
+        const items: any[] = Array.isArray(raw) ? raw : raw !== undefined ? [raw] : [];
+
+        const cap = Math.min(Number(maxIterations) || 100, 10_000);
+        const sliced = items.slice(0, cap);
+
+        if (logSink) {
+          logSink.push(
+            `[LOG] LOOP: iterating ${sliced.length} item(s) from "${collectionPath || 'root'}"`,
+          );
+        }
+
+        // Build sandbox console
+        const push = (level: string, ...args: any[]) => {
+          const line = `[${level}] ${args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}`;
+          if (logSink) logSink.push(line);
+          this.logger.log(line);
+        };
+        const sandboxConsole = {
+          log: (...a: any[]) => push('LOG', ...a),
+          warn: (...a: any[]) => push('WARN', ...a),
+          error: (...a: any[]) => push('ERROR', ...a),
+          info: (...a: any[]) => push('INFO', ...a),
+        };
+
+        const results: any[] = [];
+        for (let idx = 0; idx < sliced.length; idx++) {
+          const item = sliced[idx];
+
+          // Optional filter
+          if (filterScript) {
+            try {
+              const shouldInclude = new Function(
+                'item',
+                'index',
+                'data',
+                '$',
+                'console',
+                filterScript,
+              )(item, idx, input, input, sandboxConsole);
+              if (!shouldInclude) {
+                if (logSink)
+                  logSink.push(`[LOG] LOOP: skipping item[${idx}] (filter returned falsy)`);
+                continue;
+              }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              if (logSink) logSink.push(`[ERROR] LOOP filter error at index ${idx}: ${msg}`);
+              throw new Error(`Loop filter error at index ${idx}: ${msg}`);
+            }
+          }
+
+          // Transform script (optional — identity if empty)
+          if (itemScript) {
+            try {
+              const transformed = new Function('item', 'index', 'data', '$', 'console', itemScript)(
+                item,
+                idx,
+                input,
+                input,
+                sandboxConsole,
+              );
+              results.push(transformed);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              if (logSink) logSink.push(`[ERROR] LOOP script error at index ${idx}: ${msg}`);
+              throw new Error(`Loop script error at index ${idx}: ${msg}`);
+            }
+          } else {
+            results.push(item);
+          }
+        }
+
+        if (logSink) logSink.push(`[LOG] LOOP: completed — ${results.length} result(s) produced`);
+
+        return { results, count: results.length, collection: collectionPath };
+      }
 
       default:
         throw new Error(`Unknown node type: ${node.type}`);
@@ -401,5 +505,36 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       this.logger.warn(`No listeners found for event: resume_${executionId}_${nodeId}`);
     }
     this.promptEmitter.emit(`resume_${executionId}_${nodeId}`, response);
+  }
+
+  async testNode(
+    workflowId: string,
+    nodeId: string,
+    input: Record<string, unknown>,
+    _userId: string,
+  ): Promise<{ input: unknown; output: unknown; error?: string; logs: string[] }> {
+    const logs: string[] = [];
+    const push = (msg: string) => logs.push(`[${new Date().toISOString()}] ${msg}`);
+
+    const workflow = await this.workflowRepository.findById(workflowId);
+    if (!workflow) throw new Error(`Workflow ${workflowId} not found`);
+
+    const node = workflow.definition.nodes.find((n) => n.id === nodeId);
+    if (!node) throw new Error(`Node ${nodeId} not found in workflow`);
+
+    push(`Testing node "${node.customName || node.type}" (${node.type})`);
+    push(`Input: ${JSON.stringify(input, null, 2)}`);
+
+    try {
+      const output = await this.executeNodeByType(node as any, input, undefined, logs);
+      push(`Output: ${JSON.stringify(output, null, 2)}`);
+      push(`Status: SUCCESS`);
+      return { input, output, logs };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      push(`Error: ${errMsg}`);
+      push(`Status: FAILED`);
+      return { input, output: null, error: errMsg, logs };
+    }
   }
 }

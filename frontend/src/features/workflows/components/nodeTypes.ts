@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Type,
   File,
+  Repeat2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -20,7 +21,8 @@ export type NodeTypeId =
   | 'TRANSFORM'
   | 'PROMPT'
   | 'TEXT'
-  | 'FILE';
+  | 'FILE'
+  | 'LOOP';
 
 export interface NodeTypeMeta {
   id: NodeTypeId;
@@ -143,6 +145,23 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     bgColor: 'bg-pink-500/10',
     borderColor: 'border-pink-500/40',
     defaultConfig: { files: [] },
+  },
+  {
+    id: 'LOOP',
+    label: 'Loop',
+    labelFr: 'Boucle',
+    description: 'Iterate over an array and transform each item',
+    descriptionFr: 'Itérer sur un tableau et transformer chaque élément',
+    icon: Repeat2,
+    color: 'text-teal-500',
+    bgColor: 'bg-teal-500/10',
+    borderColor: 'border-teal-500/40',
+    defaultConfig: {
+      collection: '',
+      itemScript: 'return item;',
+      filterScript: '',
+      maxIterations: 100,
+    },
   },
 ];
 

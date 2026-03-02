@@ -213,4 +213,20 @@ export class WorkflowController {
     this.executeWorkflowUseCase.resumeNode(executionId, nodeId, body.input);
     return { success: true };
   }
+
+  @Post(':id/nodes/:nodeId/test')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Test a single node in isolation with manual input' })
+  @ApiParam({ name: 'id', description: 'Workflow ID', type: String })
+  @ApiParam({ name: 'nodeId', description: 'Node ID to test', type: String })
+  @ApiResponse({ status: 200, description: 'Node test result with input, output and logs' })
+  async testNode(
+    @Param('id') id: string,
+    @Param('nodeId') nodeId: string,
+    @Query('userId') userId: string,
+    @Body() body: { input?: Record<string, unknown> },
+  ) {
+    this.logger.log(`Testing node ${nodeId} in workflow ${id} for user ${userId}`);
+    return this.executeWorkflowUseCase.testNode(id, nodeId, body.input ?? {}, userId);
+  }
 }

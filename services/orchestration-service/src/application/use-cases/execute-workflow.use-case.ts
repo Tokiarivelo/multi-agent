@@ -72,4 +72,13 @@ export class ExecuteWorkflowUseCase {
   resumeNode(executionId: string, nodeId: string, response: string): void {
     this.workflowExecutor.resumePromptNode(executionId, nodeId, response);
   }
+
+  async testNode(
+    workflowId: string,
+    nodeId: string,
+    input: Record<string, unknown>,
+    userId: string,
+  ): Promise<{ input: unknown; output: unknown; error?: string; logs: string[] }> {
+    return this.workflowExecutor.testNode(workflowId, nodeId, input, userId);
+  }
 }

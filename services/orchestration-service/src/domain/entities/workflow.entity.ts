@@ -15,6 +15,7 @@ export enum NodeType {
   PROMPT = 'PROMPT',
   TEXT = 'TEXT',
   FILE = 'FILE',
+  LOOP = 'LOOP',
 }
 
 export interface WorkflowNode {
