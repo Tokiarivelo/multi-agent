@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useTool } from "@/features/tools/hooks/useTools";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { use } from "react";
-import { getStatusColor } from "@/lib/utils";
+import { useTool } from '@/features/tools/hooks/useTools';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { use } from 'react';
+import { getStatusColor } from '@/lib/utils';
 
 export default function ToolDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -30,11 +30,21 @@ export default function ToolDetailPage({ params }: { params: Promise<{ id: strin
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground">Type</label>
-              <p><Badge variant="outline">{tool.type}</Badge></p>
+              <div>
+                <Badge variant="outline">{tool.type}</Badge>
+              </div>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Status</label>
-              <p><Badge variant={getStatusColor(tool.status) as "default" | "success" | "warning" | "destructive"}>{tool.status}</Badge></p>
+              <div>
+                <Badge
+                  variant={
+                    getStatusColor(tool.status) as 'default' | 'success' | 'warning' | 'destructive'
+                  }
+                >
+                  {tool.status}
+                </Badge>
+              </div>
             </div>
           </div>
 

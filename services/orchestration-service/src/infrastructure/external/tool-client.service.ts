@@ -4,7 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 
 export interface ToolExecutionRequest {
-  toolId: string;
+  toolId?: string;
+  toolName?: string;
   input: any;
   config?: Record<string, any>;
 }
@@ -29,24 +30,26 @@ export class ToolClientService {
 
   async executeTool(request: ToolExecutionRequest): Promise<ToolExecutionResponse> {
     try {
-      this.logger.log(`Executing tool ${request.toolId}`);
+      this.logger.log(`Executing tool ${request.toolId || request.toolName}`);
 
       const response = await firstValueFrom(
         this.httpService.post(`${this.baseUrl}/tools/execute`, {
           toolId: request.toolId,
-          input: request.input,
+          toolName: request.toolName,
+          parameters:
+            typeof request.input === 'object' ? request.input : { default: request.input },
           config: request.config,
         }),
       );
 
-      this.logger.log(`Tool ${request.toolId} executed successfully`);
+      this.logger.log(`Tool ${request.toolId || request.toolName} executed successfully`);
       return {
         success: true,
         output: response.data,
       };
     } catch (error) {
       this.logger.error(
-        `Failed to execute tool ${request.toolId}`,
+        `Failed to execute tool ${request.toolId || request.toolName}`,
         error instanceof Error ? error.stack : String(error),
       );
 

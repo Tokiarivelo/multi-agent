@@ -1,6 +1,6 @@
 # Makefile for Multi-Agent Platform Kubernetes Deployment
 
-.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration
+.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp
 
 # Default target
 .DEFAULT_GOAL := help
@@ -136,6 +136,23 @@ test-orchestration-watch: ## Run orchestration-service tests in watch mode
 dev-orchestration: ## Start orchestration-service in dev/watch mode
 	@echo "$(GREEN)Starting orchestration-service in dev mode…$(NC)"
 	cd services/orchestration-service && pnpm dev
+
+dev-agent: ## Start agent-service in dev/watch mode
+	@echo "$(GREEN)Starting agent-service in dev mode…$(NC)"
+	cd services/agent-service && pnpm dev
+
+test-agent: ## Run agent-service tests
+	@echo "$(GREEN)Running agent-service tests…$(NC)"
+	cd services/agent-service && pnpm test
+
+test-agent-watch: ## Run agent-service tests in watch mode
+	cd services/agent-service && pnpm test:watch
+
+test-mcp: ## Smoke-test the MCP endpoint (requires agent-service running on :3002)
+	@echo "$(GREEN)Testing MCP initialize handshake…$(NC)"
+	curl -s -X POST http://localhost:3002/mcp \
+	  -H 'Content-Type: application/json' \
+	  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | jq .
 
 # Database commands (via packages/database)
 prisma-generate: ## Generate Prisma client

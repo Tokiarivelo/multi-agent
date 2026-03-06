@@ -56,6 +56,10 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   nodeType: string;
   config: Record<string, unknown>;
   meta: ReturnType<typeof getNodeTypeMeta>;
+  /** Resolved tool names for the node — for AGENT nodes, from toolIds override OR agent's native tools */
+  resolvedToolNames: string[];
+  /** Resolved sub-agent names for the node */
+  resolvedSubAgents: { name: string; role?: string }[];
 }
 
 /* ─── Derived full-node type ──────────────────────────────────────────── */
@@ -71,11 +75,38 @@ const edgeTypes = {
 };
 
 /* ─── Converters ──────────────────────────────────────────────────────── */
+function resolveAgentExtras(
+  config: Record<string, unknown>,
+  agents: { id: string; name: string; tools?: string[] }[],
+  tools: { id: string; name: string }[],
+): { resolvedToolNames: string[]; resolvedSubAgents: { name: string; role?: string }[] } {
+  // Node-level toolIds override → use those; otherwise fall back to agent's native tools
+  const explicitToolIds = (config.toolIds as string[] | undefined) ?? [];
+  let resolvedToolNames: string[];
+  if (explicitToolIds.length > 0) {
+    resolvedToolNames = explicitToolIds.map((tid) => tools.find((t) => t.id === tid)?.name ?? tid);
+  } else {
+    const agentId = config.agentId as string | undefined;
+    const agent = agents.find((a) => a.id === agentId);
+    resolvedToolNames = (agent?.tools ?? []).map(
+      (tid) => tools.find((t) => t.id === tid)?.name ?? tid,
+    );
+  }
+
+  const subAgents = (config.subAgents as { agentId: string; role?: string }[] | undefined) ?? [];
+  const resolvedSubAgents = subAgents.map((sa) => ({
+    name: agents.find((a) => a.id === sa.agentId)?.name ?? sa.agentId,
+    role: sa.role,
+  }));
+
+  return { resolvedToolNames, resolvedSubAgents };
+}
+
 function resolveNodeLabel(
   nodeType: string,
   config: Record<string, unknown>,
   meta: ReturnType<typeof getNodeTypeMeta>,
-  agents: { id: string; name: string }[],
+  agents: { id: string; name: string; tools?: string[] }[],
   tools: { id: string; name: string }[],
   customName?: string,
 ): { label: string; labelFr: string } {
@@ -95,7 +126,7 @@ function resolveNodeLabel(
 
 function toFlowNode(
   n: Workflow['definition']['nodes'][0],
-  agents: { id: string; name: string }[],
+  agents: { id: string; name: string; tools?: string[] }[],
   tools: { id: string; name: string }[],
 ): FlowNode {
   const raw = n as unknown as Record<string, unknown>;
@@ -111,6 +142,7 @@ function toFlowNode(
     tools,
     customName,
   );
+  const { resolvedToolNames, resolvedSubAgents } = resolveAgentExtras(config, agents, tools);
 
   return {
     id: n.id,
@@ -123,6 +155,8 @@ function toFlowNode(
       customName,
       config,
       meta,
+      resolvedToolNames,
+      resolvedSubAgents,
     },
   };
 }
@@ -144,7 +178,7 @@ function toFlowEdge(edge: Workflow['definition']['edges'][0]): Edge {
 
 function makeFlowNode(
   node: AddNodePayload,
-  agents: { id: string; name: string }[],
+  agents: { id: string; name: string; tools?: string[] }[],
   tools: { id: string; name: string }[],
 ): FlowNode {
   const meta = getNodeTypeMeta(node.type);
@@ -157,6 +191,7 @@ function makeFlowNode(
     tools,
     node.customName,
   );
+  const { resolvedToolNames, resolvedSubAgents } = resolveAgentExtras(config, agents, tools);
 
   return {
     id: node.id,
@@ -169,6 +204,8 @@ function makeFlowNode(
       customName: node.customName,
       config,
       meta,
+      resolvedToolNames,
+      resolvedSubAgents,
     },
   };
 }
@@ -261,12 +298,97 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
     return () => window.removeEventListener('workflow-split-edge', handleSplitEvent);
   }, [setEdges, setNodes]);
 
+  /* Listen for node quick-action events (edit / delete) dispatched from WorkflowFlowNode */
+  useEffect(() => {
+    const handleNodeAction = (e: Event) => {
+      const { nodeId, action } = (e as CustomEvent<{ nodeId: string; action: 'edit' | 'delete' }>)
+        .detail;
+
+      if (action === 'edit') {
+        setEditingNodeId(nodeId);
+        setEditorOpen(true);
+        return;
+      }
+
+      if (action === 'delete') {
+        setNodes((currentNodes) => {
+          const node = currentNodes.find((n) => n.id === nodeId);
+          if (!node) return currentNodes;
+          const data = node.data as WorkflowNodeData;
+          if (data?.nodeType === 'START' || data?.nodeType === 'END') return currentNodes;
+
+          const nodePayload: AddNodePayload = {
+            id: node.id,
+            type: data.nodeType as AddNodePayload['type'],
+            customName: data.customName,
+            config: data.config,
+            position: node.position as { x: number; y: number },
+          };
+
+          const connectedEdges: AddEdgePayload[] = edges
+            .filter((ed) => ed.source === nodeId || ed.target === nodeId)
+            .map((ed) => ({
+              id: ed.id,
+              source: ed.source,
+              target: ed.target,
+              condition: ed.label as string | undefined,
+            }));
+
+          deleteNodeMutation.mutate(nodeId, {
+            onSuccess: () => {
+              setNodes((prev) => prev.filter((n) => n.id !== nodeId));
+              pushHistory({ op: 'node_deleted', node: nodePayload, connectedEdges });
+            },
+          });
+
+          return currentNodes;
+        });
+      }
+    };
+
+    window.addEventListener('workflow-node-action', handleNodeAction);
+    return () => window.removeEventListener('workflow-node-action', handleNodeAction);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edges, deleteNodeMutation, setNodes]);
+
   /* Sync when workflow prop changes externally, or when agents/tools load */
   useEffect(() => {
     const agents = agentsData?.data ?? [];
     const tools = toolsData?.data ?? [];
-    setNodes(workflow.definition?.nodes?.map((n) => toFlowNode(n, agents, tools)) ?? []);
-    setEdges(workflow.definition?.edges?.map(toFlowEdge) ?? []);
+
+    setNodes((prevNodes) => {
+      const newNodes = workflow.definition?.nodes?.map((n) => toFlowNode(n, agents, tools)) ?? [];
+      return newNodes.map((nn) => {
+        const existing = prevNodes.find((p) => p.id === nn.id);
+        if (existing) {
+          return {
+            ...nn,
+            // Preserve current React Flow state to prevent UI resets while executing
+            position: existing.position,
+            selected: existing.selected,
+            dragging: existing.dragging,
+          };
+        }
+        return nn;
+      });
+    });
+
+    setEdges((prevEdges) => {
+      const newEdges = workflow.definition?.edges?.map(toFlowEdge) ?? [];
+      return newEdges.map((ne) => {
+        const existing = prevEdges.find((p) => p.id === ne.id);
+        if (existing) {
+          return {
+            ...ne,
+            // Preserve execution highlights and selection
+            selected: existing.selected,
+            animated: existing.animated,
+            style: existing.style,
+          };
+        }
+        return ne;
+      });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflow.definition?.nodes, workflow.definition?.edges, agentsData?.data, toolsData?.data]);
 

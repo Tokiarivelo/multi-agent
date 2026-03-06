@@ -12,30 +12,48 @@ import {
   AlertCircle,
   MessageCircleQuestion,
   SendHorizontal,
+  Wrench,
+  Bot,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { workflowsApi } from '../api/workflows.api';
+import { Trash2, Settings2 } from 'lucide-react';
 
 export const WorkflowFlowNode = memo(
   ({ data, selected, id }: NodeProps & { data: WorkflowNodeData; selected?: boolean }) => {
     const { i18n } = useTranslation();
-    const { meta, label, labelFr, config, nodeType } = data;
+    const { meta, label, labelFr, config, nodeType, resolvedToolNames, resolvedSubAgents } = data;
     const Icon = meta?.icon;
 
     const nodeStatus = useWorkflowExecutionStore((s) => s.nodeStatuses[id]);
     const activeExecutionId = useWorkflowExecutionStore((s) => s.activeExecutionId);
+    const nodeData = useWorkflowExecutionStore((s) => s.nodeData[id]) as
+      | Record<string, unknown>
+      | undefined;
+    const proposals = Array.isArray(nodeData?.proposals)
+      ? (nodeData.proposals as Array<string | Record<string, unknown>>)
+      : [];
 
     const [promptInput, setPromptInput] = useState('');
+    const [selectedProposals, setSelectedProposals] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleResume = async () => {
-      if (!promptInput.trim() || !activeExecutionId) return;
+      let finalInput = promptInput;
+      if (selectedProposals.length > 0) {
+        finalInput = JSON.stringify(selectedProposals);
+      } else if (!promptInput.trim()) {
+        return;
+      }
+      if (!activeExecutionId) return;
+
       setIsSubmitting(true);
       try {
-        await workflowsApi.resumeNode(activeExecutionId, id, promptInput);
+        await workflowsApi.resumeNode(activeExecutionId, id, finalInput);
         setPromptInput('');
+        setSelectedProposals([]);
       } catch (err) {
         console.error('Failed to submit prompt input', err);
       } finally {
@@ -46,15 +64,20 @@ export const WorkflowFlowNode = memo(
     const isStart = nodeType === 'START';
     const isEnd = nodeType === 'END';
     const isCondition = nodeType === 'CONDITIONAL';
+    const isAgent = nodeType === 'AGENT';
 
-    // Config summary line
+    // Config summary line (for non-agent nodes)
     let configSummary = '';
-    if (typeof config?.agentId === 'string' && config.agentId)
+    if (!isAgent && typeof config?.agentId === 'string' && config.agentId)
       configSummary = `Agent: ${config.agentId.slice(0, 16)}`;
     else if (typeof config?.toolId === 'string' && config.toolId)
       configSummary = `Tool: ${config.toolId.slice(0, 16)}`;
     else if (typeof config?.condition === 'string' && config.condition)
       configSummary = config.condition.slice(0, 24);
+
+    const safeToolNames = (resolvedToolNames as string[] | undefined) ?? [];
+    const safeSubAgents =
+      (resolvedSubAgents as { name: string; role?: string }[] | undefined) ?? [];
 
     // Color maps for dynamic styling
     const colorKey = meta?.color?.split('-')[1] ?? 'violet';
@@ -109,105 +132,232 @@ export const WorkflowFlowNode = memo(
       shapeClass = 'rounded-lg px-4 py-3 border-dashed border-[2.5px] min-w-[150px]';
     }
 
+    const isDeletable = !isStart && !isEnd;
+
+    const dispatchNodeAction = (type: 'delete' | 'edit') => {
+      window.dispatchEvent(
+        new CustomEvent(`workflow-node-action`, { detail: { nodeId: id, action: type } }),
+      );
+    };
+
     return (
-      <div
-        className={cn(
-          'relative border shadow-sm transition-all backdrop-blur-xl group',
-          shapeClass,
-          nodeTheme,
-          statusBorder,
-          selected &&
-            !isExecuting &&
-            'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg scale-105 z-10',
-        )}
-      >
-        {StatusIcon && (
-          <div className="absolute -top-2 -right-2 bg-background rounded-full shrink-0 z-20 shadow-sm border border-border">
-            <StatusIcon className={cn('w-5 h-5', statusIconColor)} />
+      // Outer wrapper extends hover zone upward to cover the action bar (pt-8)
+      <div className={cn('relative group', isDeletable && !isExecuting && 'pt-8 -mt-8')}>
+        {/* Node action bar — pinned at the top of the outer wrapper */}
+        {isDeletable && !isExecuting && (
+          <div className="absolute top-0 left-0 right-0 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-30 px-0.5">
+            <button
+              className="flex items-center justify-center h-6 w-6 rounded-md bg-background/95 border border-border/60 text-muted-foreground hover:text-foreground hover:border-border shadow-md backdrop-blur-sm transition-all hover:scale-105 active:scale-95"
+              title="Edit node"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatchNodeAction('edit');
+              }}
+            >
+              <Settings2 className="h-3 w-3" />
+            </button>
+            <button
+              className="flex items-center justify-center h-6 w-6 rounded-md bg-background/95 border border-destructive/30 text-destructive/60 hover:text-destructive hover:border-destructive shadow-md backdrop-blur-sm transition-all hover:scale-105 active:scale-95"
+              title="Delete node"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatchNodeAction('delete');
+              }}
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
           </div>
         )}
-        {/* Input handle (top) — not for START */}
-        {!isStart && (
-          <Handle
-            type="target"
-            position={Position.Top}
-            className="bg-primary/80! border-background! w-3! h-3! transition-transform group-hover:scale-125"
-          />
-        )}
 
+        {/* ── Actual node card ── */}
         <div
           className={cn(
-            'flex items-center gap-2',
-            isStart || isEnd ? 'justify-center' : 'justify-start',
+            'relative border shadow-sm transition-all backdrop-blur-xl',
+            shapeClass,
+            nodeTheme,
+            statusBorder,
+            selected &&
+              !isExecuting &&
+              'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg scale-105 z-10',
           )}
         >
-          {Icon && (
-            <div
-              className={cn(
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background/60 border border-border/10 shadow-sm',
-              )}
-            >
-              <Icon className="h-4 w-4" />
+          {StatusIcon && (
+            <div className="absolute -top-2 -right-2 bg-background rounded-full shrink-0 z-20 shadow-sm border border-border">
+              <StatusIcon className={cn('w-5 h-5', statusIconColor)} />
             </div>
           )}
-          <div className="min-w-0">
-            <p className="text-[12px] font-bold leading-tight truncate text-foreground">
-              {i18n.language.startsWith('fr') ? labelFr : label}
-            </p>
-          </div>
-        </div>
+          {/* Input handle (top) — not for START */}
+          {!isStart && (
+            <Handle
+              type="target"
+              position={Position.Top}
+              className="bg-primary/80! border-background! w-3! h-3! transition-transform group-hover:scale-125"
+            />
+          )}
 
-        {configSummary && (
-          <p className="mt-2 text-[10px] leading-tight text-foreground/70 font-medium truncate border-t border-foreground/10 pt-1.5 mix-blend-luminosity">
-            {configSummary}
-          </p>
-        )}
-
-        {/* Output handle (bottom) — not for END */}
-        {!isEnd && (
-          <Handle
-            type="source"
-            position={Position.Bottom}
-            className="bg-primary/80! border-background! w-3! h-3! transition-transform group-hover:scale-125"
-          />
-        )}
-
-        {/* Chat input popover if waiting for input */}
-        {nodeStatus === 'WAITING_INPUT' && activeExecutionId && (
-          <div className="absolute top-[110%] left-1/2 -translate-x-1/2 w-[280px] bg-background border border-border/50 shadow-xl rounded-xl p-3 z-50 animate-in fade-in slide-in-from-top-4">
-            <p className="text-xs font-semibold mb-2 text-blue-500 flex items-center gap-1.5">
-              <MessageCircleQuestion className="w-4 h-4" /> Wait: Input Required
-            </p>
-            <div className="flex items-center gap-2">
-              <Input
-                autoFocus
-                placeholder="Type your response..."
-                className="h-8 text-xs bg-muted/50"
-                value={promptInput}
-                onChange={(e) => setPromptInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleResume();
-                }}
-                disabled={isSubmitting}
-              />
-              <Button
-                size="icon"
-                variant="default"
-                className="h-8 w-8 shrink-0 bg-blue-500 hover:bg-blue-600"
-                onClick={handleResume}
-                disabled={isSubmitting || !promptInput.trim()}
-              >
-                {isSubmitting ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <SendHorizontal className="w-3 h-3" />
+          <div
+            className={cn(
+              'flex items-center gap-2',
+              isStart || isEnd ? 'justify-center' : 'justify-start',
+            )}
+          >
+            {Icon && (
+              <div
+                className={cn(
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background/60 border border-border/10 shadow-sm',
                 )}
-              </Button>
+              >
+                <Icon className="h-4 w-4" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-[12px] font-bold leading-tight truncate text-foreground">
+                {i18n.language.startsWith('fr') ? labelFr : label}
+              </p>
             </div>
-            {/* Pointer arrow pointing to node */}
-            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-background border-t border-l border-border/50 rotate-45" />
           </div>
-        )}
+
+          {configSummary && (
+            <p className="mt-2 text-[10px] leading-tight text-foreground/70 font-medium truncate border-t border-foreground/10 pt-1.5 mix-blend-luminosity">
+              {configSummary}
+            </p>
+          )}
+
+          {/* AGENT node: tool & sub-agent badges */}
+          {isAgent && (safeToolNames.length > 0 || safeSubAgents.length > 0) && (
+            <div className="mt-2 border-t border-foreground/10 pt-1.5 space-y-1">
+              {safeToolNames.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {safeToolNames.slice(0, 3).map((name, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/25 text-amber-600 dark:text-amber-400 font-medium leading-none"
+                    >
+                      <Wrench className="h-2 w-2 shrink-0" />
+                      {name.length > 10 ? `${name.slice(0, 10)}…` : name}
+                    </span>
+                  ))}
+                  {safeToolNames.length > 3 && (
+                    <span className="text-[9px] text-muted-foreground/60 leading-none py-0.5">
+                      +{safeToolNames.length - 3}
+                    </span>
+                  )}
+                </div>
+              )}
+              {safeSubAgents.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {safeSubAgents.slice(0, 2).map((sa, i) => (
+                    <span
+                      key={i}
+                      title={sa.role ?? ''}
+                      className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/25 text-violet-600 dark:text-violet-400 font-medium leading-none"
+                    >
+                      <Bot className="h-2 w-2 shrink-0" />
+                      {sa.name.length > 10 ? `${sa.name.slice(0, 10)}…` : sa.name}
+                    </span>
+                  ))}
+                  {safeSubAgents.length > 2 && (
+                    <span className="text-[9px] text-muted-foreground/60 leading-none py-0.5">
+                      +{safeSubAgents.length - 2}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Output handle (bottom) — not for END */}
+          {!isEnd && (
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              className="bg-primary/80! border-background! w-3! h-3! transition-transform group-hover:scale-125"
+            />
+          )}
+
+          {/* Chat input popover if waiting for input */}
+          {nodeStatus === 'WAITING_INPUT' && activeExecutionId && (
+            <div className="absolute top-[110%] left-1/2 -translate-x-1/2 w-[300px] bg-background border border-border/50 shadow-xl rounded-xl p-3 z-50 animate-in fade-in slide-in-from-top-4">
+              <p className="text-xs font-semibold mb-2 text-blue-500 flex items-center gap-1.5">
+                <MessageCircleQuestion className="w-4 h-4" /> Wait: Input Required
+              </p>
+
+              {proposals.length > 0 && (
+                <div className="mb-3 space-y-2 max-h-[150px] overflow-y-auto pr-1">
+                  <p className="text-[10px] text-muted-foreground font-medium">
+                    Select from proposals:
+                  </p>
+                  {proposals.map((proposal: string | Record<string, unknown>, i: number) => {
+                    const value =
+                      typeof proposal === 'object' && proposal !== null
+                        ? String(proposal.value || proposal.id || JSON.stringify(proposal))
+                        : String(proposal);
+                    const label =
+                      typeof proposal === 'object' && proposal !== null
+                        ? String(proposal.label || proposal.description || JSON.stringify(proposal))
+                        : String(proposal);
+                    const isSelected = selectedProposals.includes(value);
+                    return (
+                      <label
+                        key={i}
+                        className={cn(
+                          'flex items-start gap-2 p-2 rounded-md border text-xs cursor-pointer transition-colors',
+                          isSelected
+                            ? 'bg-primary/10 border-primary/30'
+                            : 'bg-muted/30 border-border/50 hover:bg-muted/50',
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedProposals((prev) => [...prev, value]);
+                            else setSelectedProposals((prev) => prev.filter((p) => p !== value));
+                          }}
+                          className="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary w-3.5 h-3.5"
+                        />
+                        <span className="leading-tight">{label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <Input
+                  autoFocus
+                  placeholder={
+                    proposals.length ? 'Or type your own response...' : 'Type your response...'
+                  }
+                  className="h-8 text-xs bg-muted/50"
+                  value={promptInput}
+                  onChange={(e) => setPromptInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleResume();
+                  }}
+                  disabled={isSubmitting}
+                />
+                <Button
+                  size="icon"
+                  variant="default"
+                  className="h-8 w-8 shrink-0 bg-blue-500 hover:bg-blue-600"
+                  onClick={handleResume}
+                  disabled={isSubmitting || (!promptInput.trim() && selectedProposals.length === 0)}
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <SendHorizontal className="w-3 h-3" />
+                  )}
+                </Button>
+              </div>
+              {/* Pointer arrow pointing to node */}
+              <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-background border-t border-l border-border/50 rotate-45" />
+            </div>
+          )}
+        </div>
       </div>
     );
   },

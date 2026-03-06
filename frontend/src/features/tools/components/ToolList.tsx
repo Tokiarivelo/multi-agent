@@ -1,12 +1,21 @@
-"use client";
+'use client';
 
-import { useTools } from "../hooks/useTools";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import Link from "next/link";
-import { getStatusColor } from "@/lib/utils";
+import { useTools } from '../hooks/useTools';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
+import Link from 'next/link';
+import { getStatusColor } from '@/lib/utils';
 
 export function ToolList() {
   const { data, isLoading, error } = useTools();
@@ -18,16 +27,24 @@ export function ToolList() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-bold">Tools</h2>
-        <p className="text-muted-foreground">Available tools for agents</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Tools</h2>
+          <p className="text-muted-foreground">Available tools for agents</p>
+        </div>
+        <Link href="/tools/new">
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Tool
+          </Button>
+        </Link>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>All Tools</CardTitle>
           <CardDescription>
-            {tools.length} tool{tools.length !== 1 ? "s" : ""} available
+            {tools.length} tool{tools.length !== 1 ? 's' : ''} available
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -53,14 +70,20 @@ export function ToolList() {
                         {tool.name}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {tool.description}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground">{tool.description}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{tool.type}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getStatusColor(tool.status) as "default" | "success" | "warning" | "destructive"}>
+                      <Badge
+                        variant={
+                          getStatusColor(tool.status) as
+                            | 'default'
+                            | 'success'
+                            | 'warning'
+                            | 'destructive'
+                        }
+                      >
                         {tool.status}
                       </Badge>
                     </TableCell>

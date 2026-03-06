@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
@@ -14,10 +14,19 @@ import {
   AlertCircle,
   Loader2,
   GitFork,
+  Bot,
+  Wrench,
+  Plus,
+  Layers,
+  GripVertical,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Select,
@@ -35,6 +44,342 @@ import Editor from '@monaco-editor/react';
 import { Resizable } from 're-resizable';
 import { FileConfigEditor } from './FileConfigEditor';
 
+/** Sub-agent configuration inside an AGENT node */
+export interface SubAgentConfig {
+  agentId: string;
+  role?: string;
+  /** If true, the parent agent will summarize context before handing off to save tokens */
+  compactHandoff?: boolean;
+}
+
+// ─── Schema field types ───────────────────────────────────────────────────────
+const FIELD_TYPES = ['string', 'number', 'boolean', 'object', 'array', 'any'] as const;
+type FieldType = (typeof FIELD_TYPES)[number];
+
+export interface SchemaField {
+  id: string;
+  name: string;
+  type: FieldType;
+  required: boolean;
+  description?: string;
+}
+
+// ─── Pipeline step types ──────────────────────────────────────────────────────
+export type PipelineStepType = 'TOOL' | 'TRANSFORM';
+
+export interface PipelineStep {
+  id: string;
+  type: PipelineStepType;
+  label: string;
+  /** TOOL: toolId; TRANSFORM: script */
+  config: Record<string, unknown>;
+}
+
+// ─── SchemaFieldEditor ────────────────────────────────────────────────────────
+function SchemaFieldEditor({
+  fields,
+  onChange,
+  label,
+  accent = 'blue',
+}: {
+  fields: SchemaField[];
+  onChange: (fields: SchemaField[]) => void;
+  label: string;
+  accent?: 'blue' | 'green';
+}) {
+  const colors = {
+    blue: 'text-sky-500 bg-sky-500/10 border-sky-500/20',
+    green: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+  };
+  const typeColors: Record<FieldType, string> = {
+    string: 'text-amber-400',
+    number: 'text-blue-400',
+    boolean: 'text-purple-400',
+    object: 'text-emerald-400',
+    array: 'text-pink-400',
+    any: 'text-muted-foreground',
+  };
+
+  const addField = () =>
+    onChange([
+      ...fields,
+      { id: uuidv4(), name: '', type: 'string', required: true, description: '' },
+    ]);
+
+  const removeField = (id: string) => onChange(fields.filter((f) => f.id !== id));
+
+  const updateField = (id: string, patch: Partial<SchemaField>) =>
+    onChange(fields.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+
+  return (
+    <div className="space-y-2">
+      <div className={`rounded-md border px-2 pt-1.5 pb-2 ${colors[accent]}`}>
+        <p className="text-[10px] font-semibold uppercase tracking-wider mb-2 opacity-70">
+          {label}
+        </p>
+        {fields.length === 0 && (
+          <p className="text-[11px] text-muted-foreground italic py-1">No fields defined.</p>
+        )}
+        <div className="space-y-1.5">
+          {fields.map((f) => (
+            <div
+              key={f.id}
+              className="flex items-start gap-1.5 bg-background/60 rounded-md px-2 py-1.5 border border-border/30"
+            >
+              <GripVertical className="h-3.5 w-3.5 mt-1.5 text-muted-foreground/40 shrink-0" />
+              <div className="flex-1 grid grid-cols-2 gap-1.5">
+                {/* Name */}
+                <Input
+                  className="h-6 text-[11px] font-mono col-span-1"
+                  placeholder="fieldName"
+                  value={f.name}
+                  onChange={(e) => updateField(f.id, { name: e.target.value })}
+                />
+                {/* Type */}
+                <Select
+                  value={f.type}
+                  onValueChange={(v) => updateField(f.id, { type: v as FieldType })}
+                >
+                  <SelectTrigger className="h-6 text-[11px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FIELD_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        <span className={typeColors[t]}>{t}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Description — full width */}
+                <Input
+                  className="h-6 text-[11px] col-span-2 text-muted-foreground"
+                  placeholder="description (optional)"
+                  value={f.description ?? ''}
+                  onChange={(e) => updateField(f.id, { description: e.target.value })}
+                />
+              </div>
+              {/* Required toggle */}
+              <div className="flex flex-col items-center gap-0.5 pt-1">
+                <button
+                  title={f.required ? 'Required' : 'Optional'}
+                  onClick={() => updateField(f.id, { required: !f.required })}
+                  className={`text-[9px] font-bold rounded px-1 py-0.5 leading-none border ${
+                    f.required
+                      ? 'bg-primary/20 text-primary border-primary/30'
+                      : 'bg-muted/40 text-muted-foreground border-border/30'
+                  }`}
+                >
+                  {f.required ? 'req' : 'opt'}
+                </button>
+              </div>
+              {/* Remove */}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 text-destructive/50 hover:text-destructive shrink-0"
+                onClick={() => removeField(f.id)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 text-[10px] gap-1 mt-1 w-full opacity-60 hover:opacity-100"
+          onClick={addField}
+        >
+          <Plus className="h-3 w-3" /> Add field
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Helper: generate TypeScript interface from schema fields
+function schemaToTypeScript(fields: SchemaField[]): string {
+  if (fields.length === 0) return '';
+  const lines = fields.map((f) => {
+    const optional = f.required ? '' : '?';
+    const comment = f.description ? `  // ${f.description}` : '';
+    return `  ${f.name}${optional}: ${f.type};${comment}`;
+  });
+  return `{
+${lines.join('\n')}
+}`;
+}
+
+// ─── PipelineStepEditor ───────────────────────────────────────────────────────
+function PipelineStepEditor({
+  steps,
+  tools,
+  onChange,
+  theme,
+}: {
+  steps: PipelineStep[];
+  tools: { id: string; name: string }[];
+  onChange: (steps: PipelineStep[]) => void;
+  theme: string;
+}) {
+  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
+
+  const addStep = (type: PipelineStepType) =>
+    onChange([
+      ...steps,
+      {
+        id: uuidv4(),
+        type,
+        label: type === 'TOOL' ? 'Tool Step' : 'Transform Step',
+        config: type === 'TOOL' ? { toolId: '' } : { script: 'return { ...data };' },
+      },
+    ]);
+
+  const removeStep = (id: string) => onChange(steps.filter((s) => s.id !== id));
+
+  const updateStep = (id: string, patch: Partial<PipelineStep>) =>
+    onChange(steps.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+
+  const updateStepConfig = (id: string, key: string, value: unknown) =>
+    onChange(steps.map((s) => (s.id === id ? { ...s, config: { ...s.config, [key]: value } } : s)));
+
+  const toggle = (id: string) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  return (
+    <div className="space-y-2">
+      {steps.length === 0 && (
+        <p className="text-[11px] text-muted-foreground italic">No pipeline steps yet.</p>
+      )}
+      {steps.map((step, idx) => (
+        <div
+          key={step.id}
+          className="rounded-md border border-border/50 bg-muted/10 overflow-hidden"
+        >
+          {/* Step header */}
+          <div
+            className="flex items-center gap-2 px-2 py-1.5 cursor-pointer select-none hover:bg-muted/20"
+            onClick={() => toggle(step.id)}
+          >
+            <span className="text-[10px] font-mono text-muted-foreground/50 w-4">{idx + 1}.</span>
+            <Badge
+              variant="secondary"
+              className={`text-[10px] px-1.5 py-0 ${
+                step.type === 'TOOL' ? 'text-amber-500' : 'text-violet-500'
+              }`}
+            >
+              {step.type}
+            </Badge>
+            <Input
+              className="h-6 text-[11px] flex-1 border-0 bg-transparent shadow-none px-0 focus-visible:ring-0"
+              placeholder="Step label…"
+              value={step.label}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => updateStep(step.id, { label: e.target.value })}
+            />
+            {expanded[step.id] ? (
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-3 w-3 text-muted-foreground" />
+            )}
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-5 w-5 text-destructive/50 hover:text-destructive shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeStep(step.id);
+              }}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+
+          {/* Step config body */}
+          {expanded[step.id] && (
+            <div className="px-3 pb-3 pt-1 space-y-2 border-t border-border/30">
+              {step.type === 'TOOL' ? (
+                <div className="space-y-1">
+                  <Label className="text-[10px]">Tool</Label>
+                  {tools.length > 0 ? (
+                    <Select
+                      value={(step.config.toolId as string) ?? ''}
+                      onValueChange={(v) => updateStepConfig(step.id, 'toolId', v)}
+                    >
+                      <SelectTrigger className="h-7 text-xs">
+                        <SelectValue placeholder="Select tool…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tools.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      className="h-7 text-xs font-mono"
+                      placeholder="tool-id"
+                      value={(step.config.toolId as string) ?? ''}
+                      onChange={(e) => updateStepConfig(step.id, 'toolId', e.target.value)}
+                    />
+                  )}
+                  <p className="text-[10px] text-muted-foreground">Input: previous step output</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label className="text-[10px]">
+                    Transform Script{' '}
+                    <span className="text-muted-foreground font-normal">
+                      — use <code className="bg-muted px-1 rounded">data</code> /{' '}
+                      <code className="bg-muted px-1 rounded">$</code>, return new object
+                    </span>
+                  </Label>
+                  <div className="border border-border/50 rounded overflow-hidden">
+                    <Editor
+                      height="100px"
+                      language="javascript"
+                      theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                      value={(step.config.script as string) ?? 'return { ...data };'}
+                      onChange={(v) => updateStepConfig(step.id, 'script', v ?? '')}
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 11,
+                        lineNumbersMinChars: 2,
+                        padding: { top: 6 },
+                        scrollBeyondLastLine: false,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-[11px] gap-1.5 flex-1"
+          onClick={() => addStep('TOOL')}
+        >
+          <Wrench className="h-3 w-3 text-amber-500" /> + Tool Step
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-[11px] gap-1.5 flex-1"
+          onClick={() => addStep('TRANSFORM')}
+        >
+          <Layers className="h-3 w-3 text-violet-500" /> + Transform Step
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export interface NodeEditorProps {
   open: boolean;
   onClose: () => void;
@@ -49,8 +394,8 @@ export interface NodeEditorProps {
   };
   defaultPosition?: { x: number; y: number };
   isSaving?: boolean;
-  /** Existing agents for AGENT node dropdown */
-  agents?: { id: string; name: string }[];
+  /** Existing agents — includes their native tool IDs so we can show them as a preview */
+  agents?: { id: string; name: string; tools?: string[] }[];
   /** Existing tools for TOOL node dropdown  */
   tools?: { id: string; name: string }[];
   /** TS interfaces of previous node outputs passed in for Monaco autocomplete */
@@ -271,34 +616,371 @@ function NodeEditorForm({
             </div>
 
             {/* AGENT config */}
-            {type === 'AGENT' && (
-              <div className="space-y-2">
-                <Label>{t('workflows.node_editor.agent')}</Label>
-                {agents.length > 0 ? (
-                  <Select
-                    value={(config.agentId as string) ?? ''}
-                    onValueChange={(v) => handleConfigChange('agentId', v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('workflows.node_editor.selectAgent')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {agents.map((a) => (
-                        <SelectItem key={a.id} value={a.id}>
-                          {a.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    placeholder={t('workflows.node_editor.agentId')}
-                    value={(config.agentId as string) ?? ''}
-                    onChange={(e) => handleConfigChange('agentId', e.target.value)}
-                  />
-                )}
-              </div>
-            )}
+            {type === 'AGENT' &&
+              (() => {
+                /** Resolve the currently selected agent object */
+                const selectedAgent = agents.find((a) => a.id === (config.agentId as string));
+                /** Tool IDs that the agent natively carries */
+                const agentToolIds: string[] = selectedAgent?.tools ?? [];
+                /** Resolve names for display */
+                const agentToolNames = agentToolIds.map(
+                  (tid) => tools.find((t) => t.id === tid)?.name ?? tid,
+                );
+                return (
+                  <div className="space-y-4">
+                    {/* Primary agent selector */}
+                    <div className="space-y-1.5">
+                      <Label>{t('workflows.node_editor.agent')}</Label>
+                      {agents.length > 0 ? (
+                        <Select
+                          value={(config.agentId as string) ?? ''}
+                          onValueChange={(v) => handleConfigChange('agentId', v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={t('workflows.node_editor.selectAgent')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {agents.map((a) => (
+                              <SelectItem key={a.id} value={a.id}>
+                                {a.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          placeholder={t('workflows.node_editor.agentId')}
+                          value={(config.agentId as string) ?? ''}
+                          onChange={(e) => handleConfigChange('agentId', e.target.value)}
+                        />
+                      )}
+                    </div>
+
+                    {/* Agent's inherited tools — read-only preview */}
+                    {selectedAgent && (
+                      <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-2.5 space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-500/80 flex items-center gap-1.5">
+                          <Wrench className="h-3 w-3" />
+                          Agent&apos;s native tools
+                          <span className="font-normal normal-case text-muted-foreground">
+                            — inherited automatically
+                          </span>
+                        </p>
+                        {agentToolNames.length === 0 ? (
+                          <p className="text-[11px] text-muted-foreground italic">
+                            No tools assigned to this agent.
+                          </p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {agentToolNames.map((name, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-medium"
+                              >
+                                <Wrench className="h-2.5 w-2.5" />
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Extra Tools — node-level overrides */}
+                    <div className="space-y-2">
+                      <Label className="text-xs flex items-center gap-1.5">
+                        <Wrench className="h-3.5 w-3.5 text-amber-500" />
+                        Extra Tools
+                        <span className="text-muted-foreground font-normal">
+                          {"overrides agent's tool list in this node"}
+                        </span>
+                      </Label>
+                      <div className="space-y-1.5">
+                        {((config.toolIds as string[]) ?? []).map((tid, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            {tools.length > 0 ? (
+                              <Select
+                                value={tid}
+                                onValueChange={(v) => {
+                                  const next = [...((config.toolIds as string[]) ?? [])];
+                                  next[idx] = v;
+                                  handleConfigChange('toolIds', next);
+                                }}
+                              >
+                                <SelectTrigger className="h-8 text-xs flex-1">
+                                  <SelectValue placeholder="Select tool…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {tools.map((tl) => (
+                                    <SelectItem key={tl.id} value={tl.id}>
+                                      {tl.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input
+                                className="h-8 text-xs flex-1 font-mono"
+                                placeholder="tool-id"
+                                value={tid}
+                                onChange={(e) => {
+                                  const next = [...((config.toolIds as string[]) ?? [])];
+                                  next[idx] = e.target.value;
+                                  handleConfigChange('toolIds', next);
+                                }}
+                              />
+                            )}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-destructive shrink-0"
+                              onClick={() => {
+                                const next = ((config.toolIds as string[]) ?? []).filter(
+                                  (_, i) => i !== idx,
+                                );
+                                handleConfigChange('toolIds', next);
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1.5 w-full"
+                          onClick={() =>
+                            handleConfigChange('toolIds', [
+                              ...((config.toolIds as string[]) ?? []),
+                              '',
+                            ])
+                          }
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add Tool
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Sub-agents */}
+                    <div className="space-y-2">
+                      <Label className="text-xs flex items-center gap-1.5">
+                        <Bot className="h-3.5 w-3.5 text-violet-500" />
+                        Sub-Agents
+                        <span className="text-muted-foreground font-normal">
+                          (called by this agent during execution)
+                        </span>
+                      </Label>
+                      <div className="space-y-2">
+                        {((config.subAgents as SubAgentConfig[]) ?? []).map((sa, idx) => (
+                          <div
+                            key={idx}
+                            className="rounded-md border border-border/50 p-2 space-y-1.5 bg-muted/20"
+                          >
+                            <div className="flex items-center gap-2">
+                              {agents.length > 0 ? (
+                                <Select
+                                  value={sa.agentId}
+                                  onValueChange={(v) => {
+                                    const next = [
+                                      ...((config.subAgents as SubAgentConfig[]) ?? []),
+                                    ];
+                                    next[idx] = { ...sa, agentId: v };
+                                    handleConfigChange('subAgents', next);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-xs flex-1">
+                                    <SelectValue placeholder="Select sub-agent…" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {agents
+                                      .filter((a) => a.id !== (config.agentId as string))
+                                      .map((a) => (
+                                        <SelectItem key={a.id} value={a.id}>
+                                          {a.name}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Input
+                                  className="h-8 text-xs flex-1 font-mono"
+                                  placeholder="agent-id"
+                                  value={sa.agentId}
+                                  onChange={(e) => {
+                                    const next = [
+                                      ...((config.subAgents as SubAgentConfig[]) ?? []),
+                                    ];
+                                    next[idx] = { ...sa, agentId: e.target.value };
+                                    handleConfigChange('subAgents', next);
+                                  }}
+                                />
+                              )}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-destructive shrink-0"
+                                onClick={() => {
+                                  const next = (
+                                    (config.subAgents as SubAgentConfig[]) ?? []
+                                  ).filter((_, i) => i !== idx);
+                                  handleConfigChange('subAgents', next);
+                                }}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            {/* Role / task hint */}
+                            <Input
+                              className="h-7 text-xs"
+                              placeholder="Role / task description (helps with handoff)"
+                              value={sa.role ?? ''}
+                              onChange={(e) => {
+                                const next = [...((config.subAgents as SubAgentConfig[]) ?? [])];
+                                next[idx] = { ...sa, role: e.target.value };
+                                handleConfigChange('subAgents', next);
+                              }}
+                            />
+                            {/* Compact handoff toggle */}
+                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                              <input
+                                type="checkbox"
+                                id={`compact-${idx}`}
+                                checked={sa.compactHandoff ?? true}
+                                onChange={(e) => {
+                                  const next = [...((config.subAgents as SubAgentConfig[]) ?? [])];
+                                  next[idx] = { ...sa, compactHandoff: e.target.checked };
+                                  handleConfigChange('subAgents', next);
+                                }}
+                                className="accent-primary"
+                              />
+                              <label htmlFor={`compact-${idx}`}>
+                                Compact handoff — summarize context before passing to sub-agent
+                                (saves tokens)
+                              </label>
+                            </div>
+                          </div>
+                        ))}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1.5 w-full"
+                          onClick={() =>
+                            handleConfigChange('subAgents', [
+                              ...((config.subAgents as SubAgentConfig[]) ?? []),
+                              { agentId: '', role: '', compactHandoff: true },
+                            ])
+                          }
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add Sub-Agent
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Sub-agents preview rows (resolved names) */}
+                    {((config.subAgents as { agentId: string; role?: string }[]) ?? []).length >
+                      0 && (
+                      <div className="rounded-md border border-violet-500/20 bg-violet-500/5 p-2.5 space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-500/80 flex items-center gap-1.5">
+                          <Bot className="h-3 w-3" />
+                          Sub-agents configured
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {((config.subAgents as { agentId: string; role?: string }[]) ?? []).map(
+                            (sa, i) => {
+                              const name =
+                                agents.find((a) => a.id === sa.agentId)?.name ?? sa.agentId;
+                              return (
+                                <span
+                                  key={i}
+                                  className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-600 dark:text-violet-400 font-medium"
+                                  title={sa.role ?? ''}
+                                >
+                                  <Bot className="h-2.5 w-2.5" />
+                                  {name}
+                                </span>
+                              );
+                            },
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Token budget override */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        Max Tokens{' '}
+                        <span className="text-muted-foreground font-normal">
+                          (0 = use agent default)
+                        </span>
+                      </Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        className="h-8 text-xs w-36"
+                        value={(config.maxTokens as number) ?? 0}
+                        onChange={(e) =>
+                          handleConfigChange('maxTokens', parseInt(e.target.value) || 0)
+                        }
+                      />
+                    </div>
+
+                    {/* Output shape hint */}
+                    <div className="rounded-md bg-muted/30 border border-border/40 p-3 text-[11px] text-muted-foreground font-mono space-y-0.5">
+                      <p className="font-semibold text-foreground/70 mb-1">Output shape:</p>
+                      <p>{'{'}</p>
+                      <p className="pl-4">
+                        output: string <span className="font-sans">{'// agent final answer'}</span>
+                      </p>
+                      <p className="pl-4">
+                        tokens: number <span className="font-sans">{'// total tokens used'}</span>
+                      </p>
+                      <p className="pl-4">
+                        toolCalls?: any[] <span className="font-sans">{'// tool invocations'}</span>
+                      </p>
+                      <p className="pl-4">
+                        subAgentResults?: any[]{' '}
+                        <span className="font-sans">{'// sub-agent outputs'}</span>
+                      </p>
+                      <p>{'}'}</p>
+                    </div>
+
+                    {/* Pipeline Steps */}
+                    <div className="pt-2 border-t border-border/40">
+                      <Collapsible>
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-between items-center text-xs h-8 px-2 font-medium bg-muted/30 hover:bg-muted/70"
+                          >
+                            <span className="flex items-center gap-2">
+                              <Layers className="h-3.5 w-3.5 text-violet-500" />
+                              Post-Processing Pipeline
+                            </span>
+                            <span className="text-muted-foreground font-normal">
+                              {((config.pipelineSteps as PipelineStep[]) ?? []).length} step(s)
+                            </span>
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pt-3 animate-in slide-in-from-top-1">
+                          <p className="text-[10px] text-muted-foreground mb-2">
+                            Steps run sequentially after the agent responds. Each step receives the
+                            previous step’s output as{' '}
+                            <code className="bg-muted px-1 rounded">data</code>.
+                          </p>
+                          <PipelineStepEditor
+                            steps={(config.pipelineSteps as PipelineStep[]) ?? []}
+                            tools={tools}
+                            theme={resolvedTheme ?? 'dark'}
+                            onChange={(steps) => handleConfigChange('pipelineSteps', steps)}
+                          />
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
+                  </div>
+                );
+              })()}
 
             {/* TOOL config */}
             {type === 'TOOL' && (
@@ -757,6 +1439,158 @@ function NodeEditorForm({
                 </div>
               </div>
             )}
+            {/* GITHUB config */}
+            {type === 'GITHUB' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">GitHub Token</Label>
+                  <Input
+                    type="password"
+                    placeholder="ghp_xxx..."
+                    value={(config.token as string) ?? ''}
+                    onChange={(e) => handleConfigChange('token', e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-1/3 space-y-1.5">
+                    <Label className="text-xs">Method</Label>
+                    <Select
+                      value={(config.method as string) ?? 'GET'}
+                      onValueChange={(v) => handleConfigChange('method', v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="GET">GET</SelectItem>
+                        <SelectItem value="POST">POST</SelectItem>
+                        <SelectItem value="PATCH">PATCH</SelectItem>
+                        <SelectItem value="DELETE">DELETE</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <Label className="text-xs">Endpoint</Label>
+                    <Input
+                      placeholder="/user or /repos/owner/repo"
+                      value={(config.endpoint as string) ?? ''}
+                      onChange={(e) => handleConfigChange('endpoint', e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Request Body (JSON)</Label>
+                  <Textarea
+                    placeholder='{"key": "value"}'
+                    rows={3}
+                    className="font-mono text-xs"
+                    value={(config.body as string) ?? ''}
+                    onChange={(e) => handleConfigChange('body', e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* SLACK config */}
+            {type === 'SLACK' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Bot Token</Label>
+                  <Input
+                    type="password"
+                    placeholder="xoxb-xxx..."
+                    value={(config.token as string) ?? ''}
+                    onChange={(e) => handleConfigChange('token', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Channel</Label>
+                  <Input
+                    placeholder="#general or C12345678"
+                    value={(config.channel as string) ?? ''}
+                    onChange={(e) => handleConfigChange('channel', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Message</Label>
+                  <Textarea
+                    placeholder="Hello from workflow..."
+                    rows={4}
+                    value={(config.message as string) ?? ''}
+                    onChange={(e) => handleConfigChange('message', e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* WHATSAPP config */}
+            {type === 'WHATSAPP' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Graph API Token</Label>
+                  <Input
+                    type="password"
+                    placeholder="EAA..."
+                    value={(config.token as string) ?? ''}
+                    onChange={(e) => handleConfigChange('token', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Phone Number ID</Label>
+                  <Input
+                    placeholder="123456789"
+                    value={(config.phoneNumberId as string) ?? ''}
+                    onChange={(e) => handleConfigChange('phoneNumberId', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">To (Recipient)</Label>
+                  <Input
+                    placeholder="1234567890"
+                    value={(config.to as string) ?? ''}
+                    onChange={(e) => handleConfigChange('to', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Message</Label>
+                  <Textarea
+                    placeholder="Hello WhatsApp..."
+                    rows={3}
+                    value={(config.message as string) ?? ''}
+                    onChange={(e) => handleConfigChange('message', e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* SHELL config */}
+            {type === 'SHELL' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Command</Label>
+                  <div className="border border-border/50 rounded-md overflow-hidden min-h-0 bg-background">
+                    <Editor
+                      height="120px"
+                      language="shell"
+                      theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
+                      value={(config.command as string) ?? ''}
+                      onChange={(val) => handleConfigChange('command', val || '')}
+                      options={{ minimap: { enabled: false }, fontSize: 13, wordWrap: 'on' }}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Timeout (ms)</Label>
+                  <Input
+                    type="number"
+                    value={(config.timeout as number) ?? 30000}
+                    onChange={(e) =>
+                      handleConfigChange('timeout', parseInt(e.target.value) || 30000)
+                    }
+                  />
+                </div>
+              </div>
+            )}
 
             {/* START / END — no extra config */}
             {(type === 'START' || type === 'END') && (
@@ -818,9 +1652,26 @@ function NodeEditorForm({
                       </div>
                     )}
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
+                    <p className="text-[10px] text-muted-foreground">
+                      Define fields visually — the TypeScript interface below is generated
+                      automatically.
+                    </p>
+                    <SchemaFieldEditor
+                      label="Input fields"
+                      accent="blue"
+                      fields={(config.inputFields as SchemaField[]) ?? []}
+                      onChange={(fields) => {
+                        handleConfigChange('inputFields', fields);
+                        const ts = schemaToTypeScript(fields);
+                        if (ts) handleConfigChange('inputType', ts);
+                      }}
+                    />
                     <Label className="text-xs text-muted-foreground">
-                      Input Data Interface <span className="opacity-50">(TypeScript)</span>
+                      Input Data Interface{' '}
+                      <span className="opacity-50">
+                        (TypeScript — edit directly or use fields above)
+                      </span>
                     </Label>
                     <p className="text-xs text-muted-foreground/70">
                       Describes what data this node expects to receive.
@@ -846,9 +1697,22 @@ function NodeEditorForm({
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
+                    <SchemaFieldEditor
+                      label="Output fields"
+                      accent="green"
+                      fields={(config.outputFields as SchemaField[]) ?? []}
+                      onChange={(fields) => {
+                        handleConfigChange('outputFields', fields);
+                        const ts = schemaToTypeScript(fields);
+                        if (ts) handleConfigChange('outputType', ts);
+                      }}
+                    />
                     <Label className="text-xs text-muted-foreground">
-                      Return Output Interface <span className="opacity-50">(TypeScript)</span>
+                      Return Output Interface{' '}
+                      <span className="opacity-50">
+                        (TypeScript — edit directly or use fields above)
+                      </span>
                     </Label>
                     <p className="text-xs text-muted-foreground/70">
                       Describes the shape of this node&apos;s output. Next nodes can autocomplete

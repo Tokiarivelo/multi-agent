@@ -18,6 +18,7 @@ import { ModelClientService } from './infrastructure/external/model-client.servi
 import { ToolClientService } from './infrastructure/external/tool-client.service';
 import { AgentController } from './presentation/controllers/agent.controller';
 import { HealthController } from './presentation/controllers/health.controller';
+import { McpController } from './presentation/controllers/mcp.controller';
 import { AgentExecutionGateway } from './presentation/gateways/agent-execution.gateway';
 
 @Module({
@@ -28,7 +29,7 @@ import { AgentExecutionGateway } from './presentation/gateways/agent-execution.g
       maxRedirects: 5,
     }),
   ],
-  controllers: [AgentController, HealthController],
+  controllers: [AgentController, HealthController, McpController],
   providers: [
     PrismaService,
     {

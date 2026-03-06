@@ -16,6 +16,10 @@ export enum NodeType {
   TEXT = 'TEXT',
   FILE = 'FILE',
   LOOP = 'LOOP',
+  GITHUB = 'GITHUB',
+  SLACK = 'SLACK',
+  WHATSAPP = 'WHATSAPP',
+  SHELL = 'SHELL',
 }
 
 export interface WorkflowNode {

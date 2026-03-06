@@ -47,11 +47,19 @@ import {
   PanelRightOpen,
   X,
   FileJson,
+  Wrench,
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  MessageSquare,
+  ArrowDownToLine,
+  ArrowUpFromLine,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ExecutionLogsPanel } from './ExecutionLogsPanel';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 
 interface WorkflowEditorProps {
   workflow?: Workflow;
@@ -68,6 +76,296 @@ const STATUS_VARIANT: Record<
   ARCHIVED: 'secondary',
 };
 
+// ─── Collapsible section helper ─────────────────────────────────────────────
+function Section({
+  title,
+  icon,
+  accent = 'neutral',
+  count,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  accent?: 'amber' | 'violet' | 'sky' | 'emerald' | 'neutral';
+  count?: number;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const accentMap = {
+    amber: 'text-amber-500 border-amber-500/20 bg-amber-500/5',
+    violet: 'text-violet-500 border-violet-500/20 bg-violet-500/5',
+    sky: 'text-sky-500 border-sky-500/20 bg-sky-500/5',
+    emerald: 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5',
+    neutral: 'text-muted-foreground border-border/40 bg-muted/20',
+  };
+  return (
+    <div className={`rounded-lg border ${accentMap[accent]} overflow-hidden`}>
+      <button
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {icon}
+        <span className="text-xs font-semibold flex-1">{title}</span>
+        {count !== undefined && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-current/10 opacity-70 font-mono">
+            {count}
+          </span>
+        )}
+        {open ? (
+          <ChevronDown className="h-3 w-3 opacity-60" />
+        ) : (
+          <ChevronRight className="h-3 w-3 opacity-60" />
+        )}
+      </button>
+      {open && <div className="px-3 pb-3 pt-1 border-t border-current/10">{children}</div>}
+    </div>
+  );
+}
+
+// ─── Rich node execution data panel ─────────────────────────────────────────
+function NodeExecutionDataPanel({
+  selectedNodeId,
+  selectedNodeName,
+  nodeStatuses,
+  nodeData,
+}: {
+  selectedNodeId: string | null;
+  selectedNodeName: string | null;
+  nodeStatuses: Record<string, string>;
+  nodeData: Record<string, unknown>;
+}) {
+  const { t } = useTranslation();
+
+  if (!selectedNodeId) {
+    return (
+      <div className="flex h-full items-center justify-center min-h-[120px] text-sm text-muted-foreground italic p-4">
+        {t(
+          'workflows.editor.selectNodeMsg',
+          'Select a node on the canvas to view its execution data.',
+        )}
+      </div>
+    );
+  }
+
+  if (!nodeStatuses[selectedNodeId]) {
+    return (
+      <div className="flex h-full items-center justify-center min-h-[120px] text-sm text-muted-foreground p-4">
+        {selectedNodeName ? `Node '${selectedNodeName}'` : 'Node'} [{selectedNodeId}] has not
+        executed yet.
+      </div>
+    );
+  }
+
+  const raw = nodeData[selectedNodeId] as Record<string, unknown> | undefined;
+  const input = raw?.input as Record<string, unknown> | string | undefined;
+  const output = raw?.output as Record<string, unknown> | string | undefined;
+  const consoleLogs = raw?.logs as string[] | undefined;
+
+  // Detect structured agent output
+  const agentText =
+    typeof output === 'object' && output !== null
+      ? (((output as Record<string, unknown>).output as string | undefined) ??
+        ((output as Record<string, unknown>).text as string | undefined))
+      : typeof output === 'string'
+        ? output
+        : undefined;
+
+  const toolCalls =
+    typeof output === 'object' && output !== null
+      ? ((output as Record<string, unknown>).toolCalls as
+          | Array<{ name: string; arguments?: unknown; result?: unknown }>
+          | undefined)
+      : undefined;
+
+  const subAgentResults =
+    typeof output === 'object' && output !== null
+      ? ((output as Record<string, unknown>).subAgentResults as
+          | Array<{ agentId: string; output?: unknown; error?: string }>
+          | undefined)
+      : undefined;
+
+  const tokens =
+    typeof output === 'object' && output !== null
+      ? ((output as Record<string, unknown>).tokens as number | undefined)
+      : undefined;
+
+  const nodeStatus = nodeStatuses[selectedNodeId];
+
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <span className="font-semibold text-sm">
+          Node:{' '}
+          <code className="text-xs bg-muted px-1.5 py-0.5 rounded mr-1">
+            {selectedNodeName || 'Unknown'}
+          </code>
+          <span className="text-muted-foreground text-xs font-normal">[{selectedNodeId}]</span>
+        </span>
+        <div className="flex items-center gap-2">
+          {tokens !== undefined && (
+            <span className="text-[10px] text-muted-foreground font-mono">{tokens} tokens</span>
+          )}
+          <Badge
+            variant={
+              nodeStatus === 'COMPLETED'
+                ? 'success'
+                : nodeStatus === 'FAILED'
+                  ? 'destructive'
+                  : 'secondary'
+            }
+          >
+            {nodeStatus}
+          </Badge>
+        </div>
+      </div>
+
+      {/* Input */}
+      <Section
+        title="Input"
+        icon={<ArrowDownToLine className="h-3.5 w-3.5" />}
+        accent="sky"
+        defaultOpen={false}
+      >
+        <pre className="text-[11px] font-mono overflow-auto max-h-40 text-foreground/80 mt-1 whitespace-pre-wrap break-all">
+          {input !== undefined ? JSON.stringify(input, null, 2) : 'No input recorded.'}
+        </pre>
+      </Section>
+
+      {/* Agent text output */}
+      {agentText && (
+        <Section
+          title="Agent Response"
+          icon={<MessageSquare className="h-3.5 w-3.5" />}
+          accent="emerald"
+        >
+          <p className="text-xs leading-relaxed text-foreground/80 mt-1 whitespace-pre-wrap">
+            {agentText}
+          </p>
+        </Section>
+      )}
+
+      {/* Tool Calls */}
+      {toolCalls && toolCalls.length > 0 && (
+        <Section
+          title="Tool Calls"
+          icon={<Wrench className="h-3.5 w-3.5" />}
+          accent="amber"
+          count={toolCalls.length}
+        >
+          <div className="space-y-2 mt-1">
+            {toolCalls.map((tc, i) => (
+              <div
+                key={i}
+                className="rounded-md border border-amber-500/20 bg-background/60 p-2 space-y-1"
+              >
+                <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                  <Wrench className="h-3 w-3" /> {tc.name}
+                </p>
+                {tc.arguments !== undefined && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-0.5">Arguments</p>
+                    <pre className="text-[10px] font-mono bg-muted/40 rounded px-2 py-1 overflow-auto max-h-24 whitespace-pre-wrap break-all">
+                      {typeof tc.arguments === 'string'
+                        ? tc.arguments
+                        : JSON.stringify(tc.arguments, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {tc.result !== undefined && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-0.5">Result</p>
+                    <pre className="text-[10px] font-mono bg-emerald-500/5 border border-emerald-500/20 rounded px-2 py-1 overflow-auto max-h-24 whitespace-pre-wrap break-all text-emerald-700 dark:text-emerald-400">
+                      {typeof tc.result === 'string'
+                        ? tc.result
+                        : JSON.stringify(tc.result, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* Sub-agent results */}
+      {subAgentResults && subAgentResults.length > 0 && (
+        <Section
+          title="Sub-Agent Results"
+          icon={<Bot className="h-3.5 w-3.5" />}
+          accent="violet"
+          count={subAgentResults.length}
+        >
+          <div className="space-y-2 mt-1">
+            {subAgentResults.map((sa, i) => (
+              <div
+                key={i}
+                className="rounded-md border border-violet-500/20 bg-background/60 p-2 space-y-1"
+              >
+                <p className="text-[11px] font-semibold text-violet-600 dark:text-violet-400 flex items-center gap-1.5">
+                  <Bot className="h-3 w-3" /> {sa.agentId}
+                </p>
+                {sa.error ? (
+                  <p className="text-[10px] text-destructive">{sa.error}</p>
+                ) : (
+                  <pre className="text-[10px] font-mono bg-muted/40 rounded px-2 py-1 overflow-auto max-h-24 whitespace-pre-wrap break-all">
+                    {typeof sa.output === 'string' ? sa.output : JSON.stringify(sa.output, null, 2)}
+                  </pre>
+                )}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* Console logs */}
+      {consoleLogs && consoleLogs.length > 0 && (
+        <Section
+          title="Console Logs"
+          icon={<Terminal className="h-3.5 w-3.5" />}
+          accent="neutral"
+          count={consoleLogs.length}
+          defaultOpen={false}
+        >
+          <div className="mt-1 space-y-0.5 font-mono text-[10px]">
+            {consoleLogs.map((line, i) => {
+              const isError = line.startsWith('[ERROR]');
+              const isWarn = line.startsWith('[WARN]');
+              return (
+                <p
+                  key={i}
+                  className={cn(
+                    'leading-relaxed',
+                    isError ? 'text-red-500' : isWarn ? 'text-yellow-500' : 'text-muted-foreground',
+                  )}
+                >
+                  {line}
+                </p>
+              );
+            })}
+          </div>
+        </Section>
+      )}
+
+      {/* Raw output fallback (no structured data) */}
+      {!agentText && !toolCalls && !subAgentResults && (
+        <Section
+          title="Raw Output"
+          icon={<ArrowUpFromLine className="h-3.5 w-3.5" />}
+          accent="neutral"
+          defaultOpen
+        >
+          <pre className="text-[11px] font-mono overflow-auto max-h-48 text-foreground/80 mt-1 whitespace-pre-wrap break-all">
+            {output !== undefined ? JSON.stringify(output, null, 2) : 'No output recorded.'}
+          </pre>
+        </Section>
+      )}
+    </div>
+  );
+}
+
 export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -75,7 +373,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const [description, setDescription] = useState(workflow?.description ?? '');
   const [status, setStatus] = useState(workflow?.status?.toUpperCase() ?? 'DRAFT');
   const [logsOpen, setLogsOpen] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const setActiveExecutionId = useWorkflowExecutionStore((s) => s.setActiveExecutionId);
   const selectedNodeId = useWorkflowExecutionStore((s) => s.selectedNodeId);
@@ -413,53 +711,12 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
               className="flex-1 min-h-0 m-0 border-0 overflow-hidden outline-none flex flex-col"
             >
               <ScrollArea className="h-full">
-                <div className="p-4 flex flex-col gap-4">
-                  {!selectedNodeId ? (
-                    <div className="text-sm text-muted-foreground italic flex h-full items-center justify-center min-h-[100px]">
-                      {t(
-                        'workflows.editor.selectNodeMsg',
-                        'Select a node on the canvas to view its execution data.',
-                      )}
-                    </div>
-                  ) : !nodeStatuses[selectedNodeId] ? (
-                    <div className="text-sm text-muted-foreground flex h-full items-center justify-center min-h-[100px]">
-                      {selectedNodeName ? `Node '${selectedNodeName}'` : `Node`} [{selectedNodeId}]
-                      has not executed yet.
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-sm">
-                          Node:{' '}
-                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded mr-1">
-                            {selectedNodeName || 'Unknown'}
-                          </code>
-                          <span className="text-muted-foreground text-xs font-normal">
-                            [{selectedNodeId}]
-                          </span>
-                        </span>
-                        <Badge
-                          variant={
-                            nodeStatuses[selectedNodeId] === 'COMPLETED'
-                              ? 'success'
-                              : nodeStatuses[selectedNodeId] === 'FAILED'
-                                ? 'destructive'
-                                : 'secondary'
-                          }
-                        >
-                          {nodeStatuses[selectedNodeId]}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 bg-muted/30 rounded-lg border border-border/50 p-4">
-                        <pre className="text-xs font-mono overflow-auto max-w-full text-foreground/80">
-                          {nodeData[selectedNodeId] !== undefined
-                            ? JSON.stringify(nodeData[selectedNodeId], null, 2)
-                            : 'No output/input recorded.'}
-                        </pre>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <NodeExecutionDataPanel
+                  selectedNodeId={selectedNodeId}
+                  selectedNodeName={selectedNodeName}
+                  nodeStatuses={nodeStatuses}
+                  nodeData={nodeData}
+                />
               </ScrollArea>
             </TabsContent>
           </Tabs>

@@ -237,18 +237,54 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       case NodeType.START:
         return input;
 
-      case NodeType.AGENT:
+      case NodeType.AGENT: {
         const agentResult = await this.agentClient.executeAgent({
-          agentId: node.config.agentId,
+          agentId: node.config.agentId as string,
           input,
           config: node.config,
+          toolIds: (node.config.toolIds as string[] | undefined) ?? [],
+          subAgents: (node.config.subAgents as any[] | undefined) ?? [],
+          maxTokens: node.config.maxTokens as number | undefined,
         });
         if (!agentResult.success) {
           throw new Error(agentResult.error || 'Agent execution failed');
         }
-        return agentResult.output;
 
-      case NodeType.TOOL:
+        // ── Execute post-processing pipeline steps ──────────────────────────
+        const pipelineSteps: Array<{
+          id: string;
+          type: 'TOOL' | 'TRANSFORM';
+          label: string;
+          config: Record<string, any>;
+        }> = Array.isArray(node.config.pipelineSteps) ? (node.config.pipelineSteps as any[]) : [];
+
+        let pipelineData: any = agentResult.output;
+
+        for (const step of pipelineSteps) {
+          if (step.type === 'TOOL') {
+            const toolRes = await this.toolClient.executeTool({
+              toolId: step.config.toolId,
+              input: pipelineData,
+              config: step.config,
+            });
+            if (!toolRes.success) {
+              throw new Error(`Pipeline TOOL step "${step.label}" failed: ${toolRes.error}`);
+            }
+            pipelineData = toolRes.output;
+          } else if (step.type === 'TRANSFORM') {
+            const transformLogs: string[] = logSink ?? [];
+            pipelineData = await this.workflowExecutionService.transformData(
+              pipelineData,
+              step.config,
+              transformLogs,
+            );
+          }
+        }
+
+        return pipelineData;
+      }
+
+      case NodeType.TOOL: {
         const toolResult = await this.toolClient.executeTool({
           toolId: node.config.toolId,
           input,
@@ -258,6 +294,58 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           throw new Error(toolResult.error || 'Tool execution failed');
         }
         return toolResult.output;
+      }
+
+      case NodeType.GITHUB: {
+        const res = await this.toolClient.executeTool({
+          toolName: 'github_api',
+          input: {
+            token: node.config.token,
+            method: node.config.method,
+            endpoint: node.config.endpoint,
+            body: node.config.body ? JSON.stringify(node.config.body) : undefined,
+          },
+        });
+        if (!res.success) throw new Error(res.error || 'GitHub execution failed');
+        return res.output;
+      }
+
+      case NodeType.SLACK: {
+        const res = await this.toolClient.executeTool({
+          toolName: 'slack_post_message',
+          input: {
+            token: node.config.token,
+            channel: node.config.channel,
+            message: node.config.message,
+          },
+        });
+        if (!res.success) throw new Error(res.error || 'Slack execution failed');
+        return res.output;
+      }
+
+      case NodeType.WHATSAPP: {
+        const res = await this.toolClient.executeTool({
+          toolName: 'whatsapp_send_message',
+          input: {
+            token: node.config.token,
+            phoneNumberId: node.config.phoneNumberId,
+            to: node.config.to,
+            message: node.config.message,
+          },
+        });
+        if (!res.success) throw new Error(res.error || 'WhatsApp execution failed');
+        return res.output;
+      }
+
+      case NodeType.SHELL: {
+        const res = await this.toolClient.executeTool({
+          toolName: 'shell_execute',
+          input: { command: node.config.command },
+          config: { timeout: node.config.timeout },
+        });
+        if (!res.success) throw new Error(res.error || 'Shell execution failed');
+        return res.output;
+      }
 
       case NodeType.TRANSFORM: {
         const transformLogs: string[] = logSink ?? [];

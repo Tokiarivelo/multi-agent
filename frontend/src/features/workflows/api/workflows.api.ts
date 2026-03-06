@@ -40,7 +40,11 @@ export interface AddNodePayload {
     | 'PROMPT'
     | 'TEXT'
     | 'FILE'
-    | 'LOOP';
+    | 'LOOP'
+    | 'GITHUB'
+    | 'SLACK'
+    | 'WHATSAPP'
+    | 'SHELL';
   customName?: string;
   config?: Record<string, unknown>;
   position?: { x: number; y: number };

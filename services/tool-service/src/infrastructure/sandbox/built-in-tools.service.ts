@@ -5,6 +5,10 @@ import { firstValueFrom } from 'rxjs';
 import * as cheerio from 'cheerio';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 @Injectable()
 export class BuiltInToolsService {
@@ -33,12 +37,25 @@ export class BuiltInToolsService {
         return this.fileRead(parameters as any);
       case 'file_write':
         return this.fileWrite(parameters as any);
+      case 'github_api':
+        return this.githubApi(parameters as any);
+      case 'slack_post_message':
+        return this.slackPostMessage(parameters as any);
+      case 'whatsapp_send_message':
+        return this.whatsappSendMessage(parameters as any);
+      case 'shell_execute':
+        return this.shellExecute(parameters as any);
       default:
         throw new Error(`Unknown built-in tool: ${toolName}`);
     }
   }
 
-  private async httpRequest(params: { url: string; method?: string; headers?: any; body?: any }): Promise<any> {
+  private async httpRequest(params: {
+    url: string;
+    method?: string;
+    headers?: any;
+    body?: any;
+  }): Promise<any> {
     const { url, method = 'GET', headers = {}, body } = params;
 
     if (!this.isAllowedDomain(url)) {
@@ -74,9 +91,7 @@ export class BuiltInToolsService {
     }
 
     try {
-      const response = await firstValueFrom(
-        this.httpService.get(url, { timeout: 10000 }),
-      );
+      const response = await firstValueFrom(this.httpService.get(url, { timeout: 10000 }));
 
       const $ = cheerio.load(response.data);
 
@@ -147,6 +162,107 @@ export class BuiltInToolsService {
       return this.allowedDomains.some((domain) => urlObj.hostname.endsWith(domain));
     } catch {
       return false;
+    }
+  }
+
+  // --- Integrations & Shell ---
+
+  private async githubApi(params: {
+    token: string;
+    endpoint: string;
+    method?: string;
+    body?: any;
+  }): Promise<any> {
+    const { token, endpoint, method = 'GET', body } = params;
+    const url = endpoint.startsWith('http')
+      ? endpoint
+      : `https://api.github.com${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.request({
+          url,
+          method,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github.v3+json',
+            'User-Agent': 'MultiAgent-System',
+          },
+          data: body,
+          timeout: 15000,
+        }),
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new Error(`GitHub API failed: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  private async slackPostMessage(params: {
+    token: string;
+    channel: string;
+    text: string;
+  }): Promise<any> {
+    const { token, channel, text } = params;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(
+          'https://slack.com/api/chat.postMessage',
+          { channel, text },
+          { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 },
+        ),
+      );
+      if (!response.data.ok) throw new Error(response.data.error);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(`Slack post failed: ${error.response?.data?.error || error.message}`);
+    }
+  }
+
+  private async whatsappSendMessage(params: {
+    token: string;
+    phoneNumberId: string;
+    to: string;
+    text: string;
+  }): Promise<any> {
+    const { token, phoneNumberId, to, text } = params;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `https://graph.facebook.com/v17.0/${phoneNumberId}/messages`,
+          {
+            messaging_product: 'whatsapp',
+            to,
+            type: 'text',
+            text: { body: text },
+          },
+          { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 },
+        ),
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new Error(
+        `WhatsApp send failed: ${error.response?.data?.error?.message || error.message}`,
+      );
+    }
+  }
+
+  private async shellExecute(params: { command: string; timeout?: number }): Promise<any> {
+    if (!this.enableFileOps) {
+      throw new Error('Shell operations are disabled by policy (ENABLE_FILE_OPERATIONS=false).');
+    }
+    try {
+      const { stdout, stderr } = await execAsync(params.command, {
+        timeout: params.timeout || 30000,
+      });
+      return { stdout, stderr, code: 0 };
+    } catch (error: any) {
+      return {
+        stdout: error.stdout,
+        stderr: error.stderr,
+        code: error.code || 1,
+        error: error.message,
+      };
     }
   }
 }

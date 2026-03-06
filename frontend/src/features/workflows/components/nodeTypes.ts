@@ -9,6 +9,10 @@ import {
   Type,
   File,
   Repeat2,
+  Github,
+  MessageCircle,
+  Phone,
+  Terminal,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -22,7 +26,11 @@ export type NodeTypeId =
   | 'PROMPT'
   | 'TEXT'
   | 'FILE'
-  | 'LOOP';
+  | 'LOOP'
+  | 'GITHUB'
+  | 'SLACK'
+  | 'WHATSAPP'
+  | 'SHELL';
 
 export interface NodeTypeMeta {
   id: NodeTypeId;
@@ -162,6 +170,54 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
       filterScript: '',
       maxIterations: 100,
     },
+  },
+  {
+    id: 'GITHUB',
+    label: 'GitHub API',
+    labelFr: 'API GitHub',
+    description: 'Execute requests against the GitHub REST API',
+    descriptionFr: "Exécuter des requêtes vers l'API GitHub",
+    icon: Github,
+    color: 'text-neutral-500 dark:text-neutral-300',
+    bgColor: 'bg-neutral-500/10 dark:bg-neutral-300/10',
+    borderColor: 'border-neutral-500/40 dark:border-neutral-300/40',
+    defaultConfig: { token: '', endpoint: '/user', method: 'GET', body: '' },
+  },
+  {
+    id: 'SLACK',
+    label: 'Slack Message',
+    labelFr: 'Message Slack',
+    description: 'Post a message to a Slack channel',
+    descriptionFr: 'Publier un message sur un canal Slack',
+    icon: MessageCircle,
+    color: 'text-rose-600',
+    bgColor: 'bg-rose-500/10',
+    borderColor: 'border-rose-500/40',
+    defaultConfig: { token: '', channel: '', message: '' },
+  },
+  {
+    id: 'WHATSAPP',
+    label: 'WhatsApp',
+    labelFr: 'WhatsApp',
+    description: 'Send a WhatsApp message via Cloud API',
+    descriptionFr: 'Envoyer un message WhatsApp via Cloud API',
+    icon: Phone,
+    color: 'text-green-500',
+    bgColor: 'bg-green-500/10',
+    borderColor: 'border-green-500/40',
+    defaultConfig: { token: '', phoneNumberId: '', to: '', message: '' },
+  },
+  {
+    id: 'SHELL',
+    label: 'Shell Execute',
+    labelFr: 'Script Shell',
+    description: 'Execute a shell command locally',
+    descriptionFr: 'Exécuter une commande shell localement',
+    icon: Terminal,
+    color: 'text-zinc-500',
+    bgColor: 'bg-zinc-500/10',
+    borderColor: 'border-zinc-500/40',
+    defaultConfig: { command: 'echo "Hello World"', timeout: 30000 },
   },
 ];
 

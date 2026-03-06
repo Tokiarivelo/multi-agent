@@ -19,15 +19,18 @@ export class ToolClientService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.toolServiceUrl = this.configService.get<string>('TOOL_SERVICE_URL', 'http://localhost:3003');
+    this.toolServiceUrl = this.configService.get<string>(
+      'TOOL_SERVICE_URL',
+      'http://localhost:3003',
+    );
   }
 
   async getTools(toolIds: string[]): Promise<any[]> {
     try {
-      const toolPromises = toolIds.map(id => this.getTool(id));
+      const toolPromises = toolIds.map((id) => this.getTool(id));
       const tools = await Promise.all(toolPromises);
-      
-      return tools.map(tool => this.convertToLangChainTool(tool));
+
+      return tools.map((tool) => this.convertToLangChainTool(tool));
     } catch (error) {
       throw new HttpException(
         `Failed to fetch tools: ${error.message}`,
@@ -41,16 +44,13 @@ export class ToolClientService {
       const response = await firstValueFrom(
         this.httpService.get(`${this.toolServiceUrl}/api/tools/${toolId}`),
       );
-      
+
       return response.data;
     } catch (error) {
       if (error.response?.status === 404) {
-        throw new HttpException(
-          `Tool with ID ${toolId} not found`,
-          HttpStatus.NOT_FOUND,
-        );
+        throw new HttpException(`Tool with ID ${toolId} not found`, HttpStatus.NOT_FOUND);
       }
-      
+
       throw new HttpException(
         `Failed to fetch tool: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -65,7 +65,7 @@ export class ToolClientService {
           parameters,
         }),
       );
-      
+
       return response.data;
     } catch (error) {
       throw new HttpException(
