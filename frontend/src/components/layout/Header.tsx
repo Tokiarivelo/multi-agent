@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useSession, signOut } from 'next-auth/react';
 import { LogOut, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { WorkspaceHeaderMenu } from '@/features/workspace/components/WorkspaceHeaderMenu';
 
 export function Header() {
   const { data: session } = useSession();
@@ -17,18 +18,18 @@ export function Header() {
           {t('Welcome back!')}
         </h2>
       </div>
-      {/* 
-        We also added the user profile and logout to Sidebar as requested by the user.
-        But having it in Header might also be relevant, or we can just keep it translated. 
-      */}
-      <div className="flex items-center gap-4">
+
+      <div className="flex items-center gap-3">
+        {/* Workspace picker — always visible */}
+        <WorkspaceHeaderMenu />
+
         {user && (
           <>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mr-4">
+            <div className="h-5 w-px bg-border/60" />
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <User className="h-4 w-4" />
               <span className="font-medium text-foreground/80">{user.name || user.email}</span>
             </div>
-            {/* Keeping logout button mostly for translation/UI completion, though Sidebar has it */}
             <Button
               variant="outline"
               size="sm"

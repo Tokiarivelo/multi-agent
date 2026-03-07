@@ -44,7 +44,9 @@ export interface AddNodePayload {
     | 'GITHUB'
     | 'SLACK'
     | 'WHATSAPP'
-    | 'SHELL';
+    | 'SHELL'
+    | 'WORKSPACE_READ'
+    | 'WORKSPACE_WRITE';
   customName?: string;
   config?: Record<string, unknown>;
   position?: { x: number; y: number };

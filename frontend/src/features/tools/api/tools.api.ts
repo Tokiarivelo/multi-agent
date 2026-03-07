@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-import { Tool, ApiResponse, PaginatedResponse } from '@/types';
+import { Tool, PaginatedResponse } from '@/types';
 
 export const toolsApi = {
   getAll: async (page = 1, pageSize = 20): Promise<PaginatedResponse<Tool>> => {

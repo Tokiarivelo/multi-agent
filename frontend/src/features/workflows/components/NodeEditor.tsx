@@ -43,6 +43,7 @@ import { useTheme } from 'next-themes';
 import Editor from '@monaco-editor/react';
 import { Resizable } from 're-resizable';
 import { FileConfigEditor } from './FileConfigEditor';
+import { useWorkspaceStore, type FileNode } from '@/features/workspace/store/workspaceStore';
 
 /** Sub-agent configuration inside an AGENT node */
 export interface SubAgentConfig {
@@ -375,6 +376,162 @@ function PipelineStepEditor({
         >
           <Layers className="h-3 w-3 text-violet-500" /> + Transform Step
         </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── WorkspaceReadConfig ─────────────────────────────────────────────────────
+function WorkspaceReadConfig({
+  config,
+  onConfigChange,
+}: {
+  config: Record<string, unknown>;
+  onConfigChange: (key: string, value: unknown) => void;
+}) {
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const selectedId = (config.workspaceId as string) ?? workspaces[0]?.id ?? '';
+  const selectedWs = workspaces.find((w) => w.id === selectedId);
+
+  // Build flat file list for the datalist
+  const allFilePaths: string[] = [];
+  const collectPaths = (nodes: FileNode[] | undefined) => {
+    if (!nodes) return;
+    for (const node of nodes) {
+      if (node.kind === 'file') allFilePaths.push(node.path.replace(/^\/[^/]+\//, ''));
+      if (node.children) collectPaths(node.children);
+    }
+  };
+  if (selectedWs?.fileTree?.children) collectPaths(selectedWs.fileTree.children);
+
+  return (
+    <div className="space-y-4">
+      {workspaces.length === 0 ? (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-600 dark:text-amber-400">
+          ⚠️ No workspace open. Open a folder from the <strong>header menu</strong> or{' '}
+          <strong>Workspace</strong> tab first.
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label className="text-xs">
+            Workspace{' '}
+            <span className="text-muted-foreground font-normal">(folder to read from)</span>
+          </Label>
+          <Select value={selectedId} onValueChange={(v) => onConfigChange('workspaceId', v)}>
+            <SelectTrigger className="h-9 text-sm font-mono">
+              <SelectValue placeholder="Select workspace…" />
+            </SelectTrigger>
+            <SelectContent>
+              {workspaces.map((ws) => (
+                <SelectItem key={ws.id} value={ws.id} className="font-mono text-sm">
+                  📁 {ws.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <Label className="text-xs">
+          File Path{' '}
+          <span className="text-muted-foreground font-normal">(relative to workspace root)</span>
+        </Label>
+        <input
+          list="ws-read-files"
+          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+          placeholder="src/index.ts"
+          value={(config.filePath as string) ?? ''}
+          onChange={(e) => onConfigChange('filePath', e.target.value)}
+        />
+        <datalist id="ws-read-files">
+          {allFilePaths.map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
+        <p className="text-[10px] text-muted-foreground">
+          Output:{' '}
+          <code className="bg-muted px-1 rounded">
+            {'{ content: string, path: string, workspaceName: string }'}
+          </code>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── WorkspaceWriteConfig ─────────────────────────────────────────────────────
+function WorkspaceWriteConfig({
+  config,
+  onConfigChange,
+}: {
+  config: Record<string, unknown>;
+  onConfigChange: (key: string, value: unknown) => void;
+}) {
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const selectedId = (config.workspaceId as string) ?? workspaces[0]?.id ?? '';
+
+  return (
+    <div className="space-y-4">
+      {workspaces.length === 0 ? (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-600 dark:text-amber-400">
+          ⚠️ No workspace open. Open a folder from the <strong>header menu</strong> or{' '}
+          <strong>Workspace</strong> tab first.
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label className="text-xs">
+            Workspace{' '}
+            <span className="text-muted-foreground font-normal">(folder to write into)</span>
+          </Label>
+          <Select value={selectedId} onValueChange={(v) => onConfigChange('workspaceId', v)}>
+            <SelectTrigger className="h-9 text-sm font-mono">
+              <SelectValue placeholder="Select workspace…" />
+            </SelectTrigger>
+            <SelectContent>
+              {workspaces.map((ws) => (
+                <SelectItem key={ws.id} value={ws.id} className="font-mono text-sm">
+                  📁 {ws.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground">
+            Only authorised (open) workspaces can be written to.
+          </p>
+        </div>
+      )}
+      <div className="space-y-1.5">
+        <Label className="text-xs">
+          Destination Path{' '}
+          <span className="text-muted-foreground font-normal">(relative to workspace root)</span>
+        </Label>
+        <input
+          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+          placeholder="output/result.txt"
+          value={(config.filePath as string) ?? ''}
+          onChange={(e) => onConfigChange('filePath', e.target.value)}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">
+          Content{' '}
+          <span className="text-muted-foreground font-normal">
+            — use <code className="bg-muted px-1 rounded">{'{{variable}}'}</code> or leave empty to
+            use previous node output
+          </span>
+        </Label>
+        <Textarea
+          rows={4}
+          className="font-mono text-xs"
+          placeholder={'{{output}}\n\nor leave empty to pipe previous node result'}
+          value={(config.content as string) ?? ''}
+          onChange={(e) => onConfigChange('content', e.target.value)}
+        />
+        <p className="text-[10px] text-muted-foreground">
+          Output:{' '}
+          <code className="bg-muted px-1 rounded">{'{ written: boolean, path: string }'}</code>
+        </p>
       </div>
     </div>
   );
@@ -1599,6 +1756,16 @@ function NodeEditorForm({
                   label: i18n.language.startsWith('fr') ? meta.labelFr : meta.label,
                 })}
               </p>
+            )}
+
+            {/* WORKSPACE_READ config */}
+            {type === 'WORKSPACE_READ' && (
+              <WorkspaceReadConfig config={config} onConfigChange={handleConfigChange} />
+            )}
+
+            {/* WORKSPACE_WRITE config */}
+            {type === 'WORKSPACE_WRITE' && (
+              <WorkspaceWriteConfig config={config} onConfigChange={handleConfigChange} />
             )}
 
             {/* In / Out Type Declarations (for Autocomplete) */}

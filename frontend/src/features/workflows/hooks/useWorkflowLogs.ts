@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useWorkflowExecutionStore, NodeStatus } from '../store/workflowExecution.store';
+import { useWorkspaceStore } from '@/features/workspace/store/workspaceStore';
+import { readFileAtPath, writeFileAtPath } from '@/features/workspace/hooks/useWorkspace';
 
 export type NodeUpdateEvent = {
   executionId: string;
@@ -49,6 +51,9 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
   const setNodeStatus = useWorkflowExecutionStore((s) => s.setNodeStatus);
   const setNodeData = useWorkflowExecutionStore((s) => s.setNodeData);
   const clearExecution = useWorkflowExecutionStore((s) => s.clearExecution);
+  const getWorkspaceById = useWorkspaceStore((s) => s.getWorkspaceById);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const addWorkspaceEntry = useWorkspaceStore((s) => s.addTerminalEntry);
 
   const addLog = useCallback((log: ExecutionLogLine) => {
     setLogs((prev) => [...prev, log]);
@@ -180,13 +185,98 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
       },
     );
 
+    // ── Workspace FS bridge (multi-workspace aware) ──────────────────────────
+    socket.on(
+      'workspace:request',
+      async (event: {
+        executionId: string;
+        requestId: string;
+        operation: 'read' | 'write';
+        payload: Record<string, unknown>;
+      }) => {
+        const { requestId, operation, payload } = event;
+        addLog({
+          type: 'node_update',
+          timestamp: new Date().toISOString(),
+          message: `📂 Workspace ${operation} → ${payload.filePath}${
+            payload.workspaceId ? ` (ws: ${payload.workspaceId})` : ''
+          }`,
+        });
+
+        // Resolve target workspace: prefer the one configured on the node
+        const targetWs = payload.workspaceId
+          ? getWorkspaceById(payload.workspaceId as string)
+          : (workspaces[0] ?? null);
+
+        if (!targetWs) {
+          socket.emit('workspace:response', {
+            executionId,
+            requestId,
+            error: 'No workspace open in browser. Open a folder from the header menu first.',
+          });
+          addWorkspaceEntry({
+            type: 'error',
+            text: `[Workflow] No workspace available for ${operation}: ${payload.filePath}`,
+          });
+          return;
+        }
+
+        try {
+          if (operation === 'read') {
+            const content = await readFileAtPath(targetWs.rootHandle, payload.filePath as string);
+            addWorkspaceEntry({
+              type: 'info',
+              text: `[Workflow] Read: ${payload.filePath} from "${targetWs.name}" (${content.length} chars)`,
+            });
+            socket.emit('workspace:response', {
+              executionId,
+              requestId,
+              result: { content, path: payload.filePath, workspaceName: targetWs.name },
+            });
+          } else if (operation === 'write') {
+            await writeFileAtPath(
+              targetWs.rootHandle,
+              payload.filePath as string,
+              (payload.content as string) ?? '',
+            );
+            addWorkspaceEntry({
+              type: 'info',
+              text: `[Workflow] Written: ${payload.filePath} → "${targetWs.name}"`,
+            });
+            socket.emit('workspace:response', {
+              executionId,
+              requestId,
+              result: { written: true, path: payload.filePath, workspaceName: targetWs.name },
+            });
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          addWorkspaceEntry({
+            type: 'error',
+            text: `[Workflow] FS error on "${targetWs.name}": ${msg}`,
+          });
+          socket.emit('workspace:response', { executionId, requestId, error: msg });
+        }
+      },
+    );
+
     return () => {
       socket.emit('leave', { executionId });
       socket.disconnect();
       socketRef.current = null;
       setConnected(false);
     };
-  }, [executionId, wsUrl, addLog, setNodeStatus, setExecutionStatus, setNodeData]);
+  }, [
+    executionId,
+    wsUrl,
+    addLog,
+    setNodeStatus,
+    setExecutionStatus,
+    setNodeData,
+    workspaces,
+    getWorkspaceById,
+    addWorkspaceEntry,
+  ]);
 
   return { logs, connected, executionStatus, clearLogs };
 }

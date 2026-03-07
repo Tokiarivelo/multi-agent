@@ -13,6 +13,8 @@ import {
   MessageCircle,
   Phone,
   Terminal,
+  HardDriveDownload,
+  HardDriveUpload,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -30,7 +32,9 @@ export type NodeTypeId =
   | 'GITHUB'
   | 'SLACK'
   | 'WHATSAPP'
-  | 'SHELL';
+  | 'SHELL'
+  | 'WORKSPACE_READ'
+  | 'WORKSPACE_WRITE';
 
 export interface NodeTypeMeta {
   id: NodeTypeId;
@@ -218,6 +222,30 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     bgColor: 'bg-zinc-500/10',
     borderColor: 'border-zinc-500/40',
     defaultConfig: { command: 'echo "Hello World"', timeout: 30000 },
+  },
+  {
+    id: 'WORKSPACE_READ',
+    label: 'Workspace Read',
+    labelFr: 'Lire Espace de Travail',
+    description: 'Read a file from the currently open local workspace',
+    descriptionFr: "Lire un fichier depuis l'espace de travail local ouvert",
+    icon: HardDriveDownload,
+    color: 'text-lime-500',
+    bgColor: 'bg-lime-500/10',
+    borderColor: 'border-lime-500/40',
+    defaultConfig: { workspaceId: '', filePath: '' },
+  },
+  {
+    id: 'WORKSPACE_WRITE',
+    label: 'Workspace Write',
+    labelFr: 'Écrire Espace de Travail',
+    description: 'Write content to a file in the currently open local workspace',
+    descriptionFr: "Écrire du contenu dans un fichier de l'espace de travail local",
+    icon: HardDriveUpload,
+    color: 'text-fuchsia-500',
+    bgColor: 'bg-fuchsia-500/10',
+    borderColor: 'border-fuchsia-500/40',
+    defaultConfig: { workspaceId: '', filePath: '', content: '' },
   },
 ];
 

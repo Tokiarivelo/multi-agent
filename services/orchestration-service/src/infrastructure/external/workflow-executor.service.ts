@@ -520,6 +520,90 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         return { results, count: results.length, collection: collectionPath };
       }
 
+      case NodeType.WORKSPACE_READ: {
+        const filePath = node.config?.filePath as string | undefined;
+        if (!filePath) {
+          throw new Error('WORKSPACE_READ node requires a filePath in config');
+        }
+        if (!execution) {
+          throw new Error('WORKSPACE_READ requires an active execution context');
+        }
+
+        const requestId = `${execution.id}_${node.id}_${Date.now()}`;
+        const workspaceId = node.config?.workspaceId as string | undefined;
+        this.workflowGateway.sendWorkspaceRequest(execution.id, requestId, 'read', {
+          filePath,
+          ...(workspaceId ? { workspaceId } : {}),
+        });
+
+        const response = await new Promise<{ result?: unknown; error?: string }>((resolve) => {
+          const emitter = this.workflowGateway.getWorkspaceEmitter();
+          const timeoutMs = 30_000;
+          const timer = setTimeout(() => {
+            emitter.removeAllListeners(`ws_response_${requestId}`);
+            resolve({ error: 'workspace:response timeout after 30s' });
+          }, timeoutMs);
+
+          emitter.once(`ws_response_${requestId}`, (data: { result?: unknown; error?: string }) => {
+            clearTimeout(timer);
+            resolve(data);
+          });
+        });
+
+        if (response.error) throw new Error(response.error);
+        return response.result ?? { content: '', path: filePath };
+      }
+
+      case NodeType.WORKSPACE_WRITE: {
+        const filePath = node.config?.filePath as string | undefined;
+        if (!filePath) {
+          throw new Error('WORKSPACE_WRITE node requires a filePath in config');
+        }
+        if (!execution) {
+          throw new Error('WORKSPACE_WRITE requires an active execution context');
+        }
+
+        // Resolve template variables from input: {{variable}}
+        const rawContent = (node.config?.content as string) ?? '';
+        const resolvedContent = rawContent
+          ? rawContent.replace(/\{\{([^}]+)\}\}/g, (_match: string, key: string) => {
+              const val = key
+                .trim()
+                .split('.')
+                .reduce((acc: unknown, k: string) => {
+                  if (acc && typeof acc === 'object') return (acc as Record<string, unknown>)[k];
+                  return undefined;
+                }, input as unknown);
+              return val !== undefined ? String(val) : '';
+            })
+          : JSON.stringify(typeof input === 'object' ? input : { value: input }, null, 2);
+
+        const requestId = `${execution.id}_${node.id}_${Date.now()}`;
+        const workspaceIdWrite = node.config?.workspaceId as string | undefined;
+        this.workflowGateway.sendWorkspaceRequest(execution.id, requestId, 'write', {
+          filePath,
+          content: resolvedContent,
+          ...(workspaceIdWrite ? { workspaceId: workspaceIdWrite } : {}),
+        });
+
+        const response = await new Promise<{ result?: unknown; error?: string }>((resolve) => {
+          const emitter = this.workflowGateway.getWorkspaceEmitter();
+          const timeoutMs = 30_000;
+          const timer = setTimeout(() => {
+            emitter.removeAllListeners(`ws_response_${requestId}`);
+            resolve({ error: 'workspace:response timeout after 30s' });
+          }, timeoutMs);
+
+          emitter.once(`ws_response_${requestId}`, (data: { result?: unknown; error?: string }) => {
+            clearTimeout(timer);
+            resolve(data);
+          });
+        });
+
+        if (response.error) throw new Error(response.error);
+        return response.result ?? { written: true, path: filePath };
+      }
+
       default:
         throw new Error(`Unknown node type: ${node.type}`);
     }

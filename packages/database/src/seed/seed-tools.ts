@@ -112,6 +112,58 @@ const tools = [
     ],
     code: null,
   },
+  {
+    name: 'workspace_read',
+    description:
+      "Read a file from the user's currently open local workspace (browser File System Access API)",
+    category: ToolCategory.FILE,
+    isBuiltIn: true,
+    parameters: [
+      {
+        name: 'filePath',
+        type: 'string',
+        description: 'Path to the file relative to the workspace root',
+        required: true,
+      },
+      {
+        name: 'workspaceId',
+        type: 'string',
+        description:
+          'Optional ID of the workspace to read from. If missing, the active/default workspace is used.',
+        required: false,
+      },
+    ],
+    code: null,
+  },
+  {
+    name: 'workspace_write',
+    description:
+      "Write content to a file in the user's currently open local workspace (browser File System Access API)",
+    category: ToolCategory.FILE,
+    isBuiltIn: true,
+    parameters: [
+      {
+        name: 'filePath',
+        type: 'string',
+        description: 'Destination path relative to the workspace root',
+        required: true,
+      },
+      {
+        name: 'content',
+        type: 'string',
+        description: 'Content to write to the file',
+        required: true,
+      },
+      {
+        name: 'workspaceId',
+        type: 'string',
+        description:
+          'Optional ID of the workspace to write to. If missing, the active/default workspace is used.',
+        required: false,
+      },
+    ],
+    code: null,
+  },
 ];
 
 async function main() {

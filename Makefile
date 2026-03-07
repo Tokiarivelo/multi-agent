@@ -1,6 +1,6 @@
 # Makefile for Multi-Agent Platform Kubernetes Deployment
 
-.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp
+.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-workspace-tools
 
 # Default target
 .DEFAULT_GOAL := help
@@ -153,6 +153,11 @@ test-mcp: ## Smoke-test the MCP endpoint (requires agent-service running on :300
 	curl -s -X POST http://localhost:3002/mcp \
 	  -H 'Content-Type: application/json' \
 	  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | jq .
+
+seed-workspace-tools: ## Seed workspace_read and workspace_write tools into the database
+	@echo "$(GREEN)Seeding workspace tools…$(NC)"
+	cd packages/database && pnpm ts-node src/seed/seed-tools.ts
+	@echo "$(GREEN)Workspace tools seeded!$(NC)"
 
 # Database commands (via packages/database)
 prisma-generate: ## Generate Prisma client

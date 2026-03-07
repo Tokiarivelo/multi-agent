@@ -10,6 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { EventEmitter } from 'events';
 import { WorkflowExecution } from '../../domain/entities/workflow-execution.entity';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 
@@ -193,5 +194,52 @@ export class WorkflowGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     client.leave(room);
     this.logger.log(`Client ${client.id} left room ${room}`);
     client.emit('left', { executionId: data.executionId });
+  }
+
+  /**
+   * Emit a workspace FS operation request to the browser clients subscribed to this execution.
+   * The frontend must handle `workspace:request` and reply with `workspace:response`.
+   */
+  sendWorkspaceRequest(
+    executionId: string,
+    requestId: string,
+    operation: 'read' | 'write',
+    payload: Record<string, unknown>,
+  ) {
+    const room = `execution:${executionId}`;
+    this.server.to(room).emit('workspace:request', {
+      executionId,
+      requestId,
+      operation,
+      payload,
+    });
+    this.logger.log(
+      `workspace:request [${operation}] sent for execution ${executionId}, requestId ${requestId}`,
+    );
+  }
+
+  /** Called by the browser when it has completed a workspace FS operation */
+  @SubscribeMessage('workspace:response')
+  handleWorkspaceResponse(
+    @MessageBody()
+    data: {
+      executionId: string;
+      requestId: string;
+      result?: unknown;
+      error?: string;
+    },
+  ) {
+    this.logger.log(
+      `workspace:response received for requestId ${data.requestId} (exec: ${data.executionId})`,
+    );
+    // Forward to the pending promise via EventEmitter (handled in WorkflowExecutorService)
+    this.workspaceEmitter.emit(`ws_response_${data.requestId}`, data);
+  }
+
+  // Internal emitter shared with WorkflowExecutorService via a getter
+  private readonly workspaceEmitter = new EventEmitter();
+
+  getWorkspaceEmitter() {
+    return this.workspaceEmitter;
   }
 }

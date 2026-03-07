@@ -80,4 +80,10 @@ export const workflows = {
   'workflows.node_editor.text': 'Bloc de Texte Brut',
   'workflows.node_editor.file': 'URL / Chemin du Fichier',
   'workflows.node_editor.fileType': 'Type de Fichier Cible',
+  'workflows.node_editor.workspaceFilePath':
+    "Chemin du fichier (relatif à la racine de l'espace de travail)",
+  'workflows.node_editor.workspaceContent':
+    'Contenu (laisser vide pour utiliser la sortie du nœud)',
+  'workflows.node_editor.workspaceNoRoot':
+    "Aucun espace de travail ouvert. Ouvrez un dossier dans l'onglet Espace de travail d'abord.",
 };

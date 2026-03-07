@@ -1,0 +1,219 @@
+'use client';
+
+import React, { useEffect, useRef } from 'react';
+import {
+  FolderOpen,
+  FolderPlus,
+  ChevronDown,
+  X,
+  Check,
+  HardDrive,
+  FolderGit2,
+  AlertTriangle,
+} from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { useWorkspace } from '@/features/workspace/hooks/useWorkspace';
+import { useWorkspaceStore } from '@/features/workspace/store/workspaceStore';
+import { workspaceStorageService, SavedWorkspace } from '@/features/workspace/services/workspaceStorage';
+import { useTranslation } from 'react-i18next';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+
+export function WorkspaceHeaderMenu() {
+  const { t } = useTranslation('common');
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const isLoading = useWorkspaceStore((s) => s.isLoading);
+  const {
+    openWorkspace,
+    closeWorkspace,
+    switchWorkspace,
+    loadPersistedWorkspaces,
+    requestWorkspacePermission,
+    openRecentWorkspace,
+  } = useWorkspace();
+
+  const hasLoaded = useRef(false);
+  const [recentWorkspaces, setRecentWorkspaces] = React.useState<SavedWorkspace[]>([]);
+
+  useEffect(() => {
+    if (!hasLoaded.current) {
+      hasLoaded.current = true;
+      loadPersistedWorkspaces();
+      workspaceStorageService.loadRecentWorkspaces().then(setRecentWorkspaces);
+    }
+  }, [loadPersistedWorkspaces]);
+
+  const count = workspaces.length;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            'gap-2 h-8 px-3 text-sm font-medium rounded-lg border border-transparent',
+            'hover:bg-muted/60 hover:border-border/50 transition-all',
+            count > 0 && 'text-lime-600 dark:text-lime-400 border-lime-500/20 bg-lime-500/5',
+          )}
+        >
+          <FolderGit2 className="h-4 w-4" />
+          <span className="hidden sm:inline">
+            {count === 0
+              ? t('workspace.menu.noWorkspace', 'No Workspace')
+              : count === 1
+                ? workspaces[0].name
+                : t('workspace.menu.count', `${count} Workspaces`, { count })}
+          </span>
+          {count > 0 && (
+            <Badge
+              variant="secondary"
+              className="h-4 min-w-4 px-1 text-[10px] font-bold bg-lime-500/20 text-lime-600 dark:text-lime-400 border-0"
+            >
+              {count}
+            </Badge>
+          )}
+          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="end" className="w-72 p-1">
+        <DropdownMenuLabel className="flex items-center justify-between px-2 py-1.5">
+          <span className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <HardDrive className="h-3.5 w-3.5" />
+            {t('workspace.menu.title', 'Workspaces')}
+          </span>
+          <Badge variant="outline" className="h-4 px-1 text-[10px]">
+            {count} open
+          </Badge>
+        </DropdownMenuLabel>
+
+        <DropdownMenuSeparator />
+
+        {/* Workspace list */}
+        {count === 0 ? (
+          <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+            <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            {t('workspace.menu.empty', 'No folder opened yet')}
+          </div>
+        ) : (
+          workspaces.map((ws) => {
+            const isActive = ws.id === activeWorkspaceId;
+            const needsPermission = ws.hasPermission === false;
+
+            return (
+              <div
+                key={ws.id}
+                className={cn(
+                  'group flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors',
+                  isActive
+                    ? 'bg-lime-500/10 text-lime-700 dark:text-lime-400'
+                    : 'hover:bg-muted/60',
+                  needsPermission && 'opacity-75',
+                )}
+                onClick={() => {
+                  if (needsPermission) {
+                    requestWorkspacePermission(ws.id);
+                  } else {
+                    switchWorkspace(ws.id);
+                  }
+                }}
+              >
+                {needsPermission ? (
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                ) : (
+                  <FolderOpen
+                    className={cn(
+                      'h-3.5 w-3.5 shrink-0',
+                      isActive ? 'text-lime-500' : 'text-muted-foreground',
+                    )}
+                  />
+                )}
+
+                <div className="flex-1 min-w-0">
+                  <p
+                    className={cn(
+                      'text-sm font-medium truncate',
+                      needsPermission && 'text-amber-600 dark:text-amber-500',
+                    )}
+                  >
+                    {ws.name}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    {needsPermission
+                      ? t('workspace.clickToRestore', 'Click to restore access')
+                      : `${ws.fileTree?.children?.length ?? 0} items at root`}
+                  </p>
+                </div>
+                {isActive && !needsPermission && (
+                  <Check className="h-3.5 w-3.5 text-lime-500 shrink-0" />
+                )}
+                <button
+                  className="ml-auto opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeWorkspace(ws.id);
+                    toast.info(t('workspace.closed', `"${ws.name}" closed`));
+                  }}
+                  title={t('workspace.close', 'Close workspace')}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })
+        )}
+
+        {/* Recent Workspaces section */}
+        {recentWorkspaces.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="px-2 py-1.5 text-xs text-muted-foreground font-semibold">
+              {t('workspace.menu.recent', 'Recent')}
+            </DropdownMenuLabel>
+            {recentWorkspaces.map((ws) => (
+              <DropdownMenuItem
+                key={`recent-${ws.id}`}
+                className="gap-2 cursor-pointer"
+                onSelect={(e: Event) => {
+                  e.preventDefault();
+                  openRecentWorkspace(ws);
+                }}
+              >
+                <FolderGit2 className="h-4 w-4 text-emerald-500/70" />
+                <span className="truncate flex-1">{ws.name}</span>
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
+
+        <DropdownMenuSeparator />
+
+        {/* Add new workspace */}
+        <DropdownMenuItem
+          disabled={isLoading}
+          onSelect={(e: Event) => {
+            e.preventDefault();
+            openWorkspace();
+          }}
+          className="gap-2 text-sm font-medium"
+        >
+          <FolderPlus className="h-4 w-4 text-lime-500" />
+          {isLoading
+            ? t('workspace.loading', 'Loading...')
+            : t('workspace.menu.addFolder', 'Open New Folder…')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

@@ -20,6 +20,8 @@ export enum NodeType {
   SLACK = 'SLACK',
   WHATSAPP = 'WHATSAPP',
   SHELL = 'SHELL',
+  WORKSPACE_READ = 'WORKSPACE_READ',
+  WORKSPACE_WRITE = 'WORKSPACE_WRITE',
 }
 
 export interface WorkflowNode {

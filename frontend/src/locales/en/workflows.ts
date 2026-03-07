@@ -79,4 +79,8 @@ export const workflows = {
   'workflows.node_editor.text': 'Raw Text Block',
   'workflows.node_editor.file': 'File URL / Path',
   'workflows.node_editor.fileType': 'Target File Type',
+  'workflows.node_editor.workspaceFilePath': 'File Path (relative to workspace root)',
+  'workflows.node_editor.workspaceContent': 'Content (leave empty to use node input)',
+  'workflows.node_editor.workspaceNoRoot':
+    'No workspace open. Open a folder in the Workspace tab first.',
 };
