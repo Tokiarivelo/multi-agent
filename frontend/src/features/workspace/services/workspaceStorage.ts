@@ -4,6 +4,7 @@ export interface SavedWorkspace {
   id: string;
   name: string;
   handle: FileSystemDirectoryHandle;
+  nativePath?: string;
 }
 
 const STORAGE_KEY = 'multi_agent_workspaces';

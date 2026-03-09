@@ -27,6 +27,7 @@ export class CreateToolUseCase {
       category: dto.category,
       parameters: dto.parameters,
       code: dto.code || null,
+      icon: dto.icon || null,
       isBuiltIn: dto.isBuiltIn || false,
     } as any);
 

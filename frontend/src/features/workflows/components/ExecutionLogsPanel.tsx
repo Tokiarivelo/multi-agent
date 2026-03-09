@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, Wifi, WifiOff, XCircle } from 'lucide-react';
+import { Trash2, Wifi, WifiOff, XCircle, Copy, Check } from 'lucide-react';
 import { ExecutionLogLine } from '../hooks/useWorkflowLogs';
 import { cn } from '@/lib/utils';
 
@@ -50,6 +50,18 @@ export function ExecutionLogsPanel({
 }: ExecutionLogsPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleCopyAll = () => {
+    const allText = logs.map(l => `[${new Date(l.timestamp).toLocaleTimeString('en-US')}] [${l.type.toUpperCase()}] ${l.message} ${l.data ? JSON.stringify(l.data) : ''}`).join('\n');
+    handleCopy(allText, 'all');
+  };
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -93,6 +105,12 @@ export function ExecutionLogsPanel({
             </Button>
           )}
 
+          {/* Copy All button */}
+          <Button variant="ghost" size="sm" onClick={handleCopyAll} className="gap-1 h-7 text-xs" disabled={logs.length === 0}>
+            {copiedId === 'all' ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+            Copy All
+          </Button>
+
           {/* Clear button */}
           <Button variant="ghost" size="sm" onClick={onClear} className="gap-1 h-7 text-xs">
             <Trash2 className="h-3 w-3" />
@@ -124,14 +142,46 @@ export function ExecutionLogsPanel({
                       second: '2-digit',
                     })}
                   </span>
-                  <span>{log.message}</span>
-                  {log.data && (
-                    <span className="ml-auto text-muted-foreground/50 shrink-0">
-                      {typeof log.data === 'object'
-                        ? JSON.stringify(log.data).slice(0, 60)
-                        : String(log.data).slice(0, 60)}
-                    </span>
-                  )}
+                  <div className="flex-1 min-w-0 pr-6 relative group/log">
+                    <span>{log.message}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 absolute right-0 top-0 opacity-0 group-hover/log:opacity-100 transition-opacity"
+                      onClick={() => handleCopy(`${log.message} ${log.data ? JSON.stringify(log.data) : ''}`, `log-${i}`)}
+                      title="Copy log entry"
+                    >
+                      {copiedId === `log-${i}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
+                    </Button>
+                    {log.data && (
+                      <details className="mt-1 group">
+                        <summary className="cursor-pointer text-muted-foreground/60 text-[10px] uppercase font-semibold hover:text-muted-foreground select-none list-none flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
+                          <span className="group-open:hidden">▶ Show Data Payload</span>
+                          <span className="hidden group-open:inline">▼ Hide Data Payload</span>
+                        </summary>
+                        <div className="relative mt-1">
+                          <pre className="text-[10px] text-muted-foreground/90 overflow-x-auto whitespace-pre-wrap rounded bg-black/10 dark:bg-white/5 p-2 border border-border/30 max-h-[300px] overflow-y-auto">
+                            {typeof log.data === 'object'
+                              ? JSON.stringify(log.data, null, 2)
+                              : String(log.data)}
+                          </pre>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-background/50 hover:bg-background/80"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              const dataStr = typeof log.data === 'object' ? JSON.stringify(log.data, null, 2) : String(log.data);
+                              handleCopy(dataStr, `data-${i}`);
+                            }}
+                            title="Copy payload"
+                          >
+                            {copiedId === `data-${i}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
+                          </Button>
+                        </div>
+                      </details>
+                    )}
+                  </div>
                 </div>
               ))
             )}

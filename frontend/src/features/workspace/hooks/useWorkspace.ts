@@ -3,6 +3,7 @@ import { useWorkspaceStore, FileNode, WorkspaceEntry } from '../store/workspaceS
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { workspaceStorageService } from '../services/workspaceStorage';
+import { workflowsApi } from '../../workflows/api/workflows.api';
 
 // ─── FS utilities (exported for WS bridge) ───────────────────────────────────
 
@@ -162,6 +163,7 @@ export const useWorkspace = () => {
         id: entry.id,
         name: entry.name,
         handle: entry.rootHandle,
+        nativePath: entry.nativePath,
       });
       toast.success(t('workspace.opened', 'Workspace opened successfully'));
     } catch (error: unknown) {
@@ -211,6 +213,7 @@ export const useWorkspace = () => {
               }
             : null,
           hasPermission,
+          nativePath: saved.nativePath,
         };
 
         store.addWorkspace(entry);
@@ -268,6 +271,7 @@ export const useWorkspace = () => {
                 }
               : null,
             hasPermission,
+            nativePath: saved.nativePath,
           };
         }),
       );
@@ -538,9 +542,12 @@ export const useWorkspace = () => {
       try {
         if (cmd === 'pwd') {
           const currentPath = resolveTerminalPath('');
+          const browserPath = `/${root.name}${currentPath ? '/' + currentPath : ''}`;
+          const serverPath = ws?.nativePath ? `${ws.nativePath}${currentPath ? '/' + currentPath : ''}` : '(not mapped)';
+          
           store.addTerminalEntry({
             type: 'output',
-            text: `/${root.name}${currentPath ? '/' + currentPath : ''}`,
+            text: `Browser: ${browserPath}\nServer : ${serverPath}`,
           });
         } else if (cmd === 'cd') {
           const target = args[0] || '';
@@ -630,10 +637,35 @@ export const useWorkspace = () => {
             ].join('\n'),
           });
         } else {
-          store.addTerminalEntry({
-            type: 'error',
-            text: `Unknown command: "${cmd}". Type "help" for available commands.`,
-          });
+          // If unrecognized, try to run it on the server (shell_execute tool)
+          if (ws?.nativePath) {
+            try {
+              store.addTerminalEntry({ type: 'info', text: `Running on server in ${ws.nativePath}...` });
+              const result = await workflowsApi.testNode('temp-workflow-id', 'temp-node-id', {
+                type: 'SHELL',
+                config: { command: line, cwd: ws.nativePath },
+              });
+              
+              if (result.logs) {
+                result.logs.forEach(l => {
+                   if (l.includes('[STDOUT]') || l.includes('[STDERR]')) {
+                     store.addTerminalEntry({ type: 'output', text: l.replace(/\[(STDOUT|STDERR)\]\s*/, '') });
+                   }
+                });
+              }
+              
+              if (result.error) {
+                store.addTerminalEntry({ type: 'error', text: `Failed: ${result.error}` });
+              }
+            } catch (err: unknown) {
+              store.addTerminalEntry({ type: 'error', text: `Server shell error: ${err instanceof Error ? err.message : String(err)}` });
+            }
+          } else {
+            store.addTerminalEntry({
+              type: 'error',
+              text: `Unknown command: "${cmd}". No server path set for this workspace.`,
+            });
+          }
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);

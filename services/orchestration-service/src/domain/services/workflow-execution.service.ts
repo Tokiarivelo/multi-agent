@@ -227,8 +227,8 @@ if res is not None:
       return this.applyInputMapping(node.config.inputMapping, execution, context);
     }
 
-    const previousNodeExecution = execution.nodeExecutions[execution.nodeExecutions.length - 1];
-    return previousNodeExecution?.output || context.variables;
+    // Use full context variables for the branch instead of race-prone previous execution
+    return context.variables;
   }
 
   private applyInputMapping(

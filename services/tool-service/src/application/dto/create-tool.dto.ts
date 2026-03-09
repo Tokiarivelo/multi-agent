@@ -39,6 +39,10 @@ export class CreateToolDto {
   code?: string;
 
   @IsOptional()
+  @IsString()
+  icon?: string;
+
+  @IsOptional()
   @IsBoolean()
   isBuiltIn?: boolean;
 }

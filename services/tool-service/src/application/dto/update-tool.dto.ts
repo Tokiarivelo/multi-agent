@@ -25,4 +25,8 @@ export class UpdateToolDto {
   @IsOptional()
   @IsString()
   code?: string;
+
+  @IsOptional()
+  @IsString()
+  icon?: string;
 }

@@ -21,6 +21,7 @@ export interface Tool {
   category: ToolCategory;
   parameters: ToolParameter[];
   code?: string;
+  icon?: string;
   isBuiltIn: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -34,6 +35,7 @@ export class ToolEntity {
     public readonly category: ToolCategory,
     public readonly parameters: ToolParameter[],
     public readonly code: string | null,
+    public readonly icon: string | null,
     public readonly isBuiltIn: boolean,
     public readonly createdAt: Date,
     public readonly updatedAt: Date,
@@ -47,6 +49,7 @@ export class ToolEntity {
       data.category,
       data.parameters,
       data.code,
+      data.icon,
       data.isBuiltIn,
       data.createdAt,
       data.updatedAt,
@@ -61,6 +64,7 @@ export class ToolEntity {
       category: this.category,
       parameters: this.parameters,
       code: this.code,
+      icon: this.icon,
       isBuiltIn: this.isBuiltIn,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,

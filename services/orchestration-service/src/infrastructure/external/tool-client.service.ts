@@ -33,12 +33,12 @@ export class ToolClientService {
       this.logger.log(`Executing tool ${request.toolId || request.toolName}`);
 
       const response = await firstValueFrom(
-        this.httpService.post(`${this.baseUrl}/tools/execute`, {
+        this.httpService.post(`${this.baseUrl}/api/tools/execute`, {
           toolId: request.toolId,
           toolName: request.toolName,
           parameters:
             typeof request.input === 'object' ? request.input : { default: request.input },
-          config: request.config,
+          timeout: request.config?.timeout,
         }),
       );
 
@@ -64,7 +64,7 @@ export class ToolClientService {
   async getToolInfo(toolId: string): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/tools/${toolId}`),
+        this.httpService.get(`${this.baseUrl}/api/tools/${toolId}`),
       );
       return response.data;
     } catch (error) {

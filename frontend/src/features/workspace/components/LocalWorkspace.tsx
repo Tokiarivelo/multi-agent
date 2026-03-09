@@ -47,6 +47,7 @@ export function LocalWorkspace() {
   const terminalWorkspaceId = useWorkspaceStore((s) => s.terminalWorkspaceId);
   const setTerminalOpen = useWorkspaceStore((s) => s.setTerminalOpen);
   const setTerminalWorkspaceId = useWorkspaceStore((s) => s.setTerminalWorkspaceId);
+  const updateWorkspaceLocalPath = useWorkspaceStore((s) => s.updateWorkspaceLocalPath);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
   const fileTree = activeWorkspace?.fileTree ?? null;
@@ -305,7 +306,40 @@ export function LocalWorkspace() {
                 </Button>
               </div>
             </div>
-            <ScrollArea className="flex-1 p-2 bg-transparent">
+            <ScrollArea className="flex-1">
+              {/* Server Context Context mapping for Shell/Tools */}
+              <div className="mx-2 my-2 px-2 py-2 rounded-lg bg-muted/30 border border-border/40 group">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1">
+                    <Terminal className="h-2.5 w-2.5 text-lime-500" />
+                    {t('workspace.serverContext', 'Server Context (CWD)')}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const p = prompt(
+                        t(
+                          'workspace.setNativePath',
+                          'Enter the absolute path to this folder on your machine:',
+                        ),
+                        activeWorkspace?.nativePath || '',
+                      );
+                      if (p !== null && activeWorkspace) {
+                        updateWorkspaceLocalPath(activeWorkspace.id, p);
+                      }
+                    }}
+                    className="text-[10px] text-lime-500 opacity-0 group-hover:opacity-100 hover:underline transition-opacity"
+                  >
+                    {t('common.edit', 'Edit')}
+                  </button>
+                </div>
+                <div
+                  className="text-[10px] font-mono text-muted-foreground truncate"
+                  title={activeWorkspace?.nativePath || 'Not set'}
+                >
+                  {activeWorkspace?.nativePath || t('workspace.noNativePath', 'No native path set')}
+                </div>
+              </div>
+
               {fileTree ? (
                 <WorkspaceFileTree
                   nodes={fileTree.children || []}

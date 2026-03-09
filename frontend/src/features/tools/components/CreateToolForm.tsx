@@ -22,6 +22,7 @@ export function CreateToolForm() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('CUSTOM');
   const [code, setCode] = useState('');
+  const [icon, setIcon] = useState('');
   const [parameters, setParameters] = useState<
     Array<{ name: string; type: string; description: string; required: boolean }>
   >([]);
@@ -33,6 +34,7 @@ export function CreateToolForm() {
       name,
       description,
       category,
+      icon: icon || undefined,
       code: category === 'CUSTOM' ? code : undefined,
       parameters,
     };
@@ -113,8 +115,23 @@ export function CreateToolForm() {
                 <SelectItem value="API">API Integration</SelectItem>
                 <SelectItem value="DATABASE">Database</SelectItem>
                 <SelectItem value="FUNCTION">Function Node</SelectItem>
+                <SelectItem value="WEB">Web Browser</SelectItem>
+                <SelectItem value="FILE">File System</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="icon">Icon Name (Optional)</Label>
+            <p className="text-xs text-muted-foreground mb-1">
+              Enter a Lucide icon name (e.g. Wrench, Bot, Database).
+            </p>
+            <Input
+              id="icon"
+              value={icon}
+              onChange={(e) => setIcon(e.target.value)}
+              placeholder="Wrench"
+            />
           </div>
 
           {category === 'CUSTOM' && (

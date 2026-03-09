@@ -97,7 +97,11 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
       await this.executeNode(startNodeId, workflow, execution, context);
 
-      if (!execution.isFailed()) {
+      const hasFailedNodes = execution.nodeExecutions.some((n) => n.status === 'FAILED');
+
+      if (hasFailedNodes) {
+        execution.fail('One or more nodes failed during execution');
+      } else if (!execution.isFailed()) {
         execution.complete(context.variables);
       }
 
@@ -166,10 +170,16 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
     try {
       const nodeLogs: string[] = [];
-      const output = await this.executeNodeByType(node, input, execution, nodeLogs);
+      const output = await this.executeNodeByType(node, input, context, execution, nodeLogs);
 
       execution.completeNodeExecution(nodeId, output);
-      context.variables = { ...context.variables, ...output };
+
+      const outputObj =
+        typeof output === 'object' && output !== null && !Array.isArray(output)
+          ? output
+          : { [node.customName || node.type || nodeId]: output };
+
+      context.variables = { ...context.variables, ...outputObj };
 
       const nextNodes = this.workflowExecutionService.determineNextNodes(
         workflow,
@@ -190,9 +200,14 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       if (nextNodes.length === 0) {
         this.logger.log(`No next nodes found after ${nodeId}, assuming implicit END of branch`);
       } else {
-        for (const nextNodeId of nextNodes) {
-          await this.executeNode(nextNodeId, workflow, execution, context);
-        }
+        await Promise.allSettled(
+          nextNodes.map((nextNodeId) =>
+            this.executeNode(nextNodeId, workflow, execution, {
+              ...context,
+              variables: { ...context.variables },
+            }),
+          ),
+        );
       }
     } catch (error) {
       this.logger.error(
@@ -222,7 +237,6 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           'FAILED',
           { input, error: error instanceof Error ? error.message : 'Unknown error' },
         );
-        throw error;
       }
     }
   }
@@ -230,6 +244,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
   private async executeNodeByType(
     node: any,
     input: any,
+    context: any,
     execution?: WorkflowExecution,
     logSink?: string[],
   ): Promise<any> {
@@ -338,12 +353,43 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       }
 
       case NodeType.SHELL: {
+        const cwd =
+          node.config.cwd ||
+          (input?.cwd && typeof input.cwd === 'string' ? input.cwd : null) ||
+          (context?.variables?.cwd && typeof context.variables.cwd === 'string'
+            ? context.variables.cwd
+            : null);
         const res = await this.toolClient.executeTool({
           toolName: 'shell_execute',
-          input: { command: node.config.command },
+          input: {
+            command: node.config.command,
+            cwd,
+          },
           config: { timeout: node.config.timeout },
         });
         if (!res.success) throw new Error(res.error || 'Shell execution failed');
+
+        const shellOutput = res.output?.success && res.output?.data ? res.output.data : res.output;
+
+        if (logSink) {
+          logSink.push(`[SHELL] Executing command: ${node.config.command}`);
+          logSink.push(`[SHELL] Context CWD: ${context?.variables?.cwd || 'none'}`);
+          logSink.push(`[SHELL] Input CWD: ${input?.cwd || 'none'}`);
+          logSink.push(`[SHELL] Config CWD: ${node.config.cwd || 'none'}`);
+          logSink.push(`[SHELL] Resolved CWD: ${cwd || 'default'}`);
+
+          if (shellOutput?.stdout)
+            logSink.push(`[LOG] STDOUT: ${String(shellOutput.stdout).trim()}`);
+          if (shellOutput?.stderr)
+            logSink.push(`[ERROR] STDERR: ${String(shellOutput.stderr).trim()}`);
+        }
+
+        if (shellOutput?.code !== 0 && shellOutput?.code !== undefined) {
+          throw new Error(
+            shellOutput.error || shellOutput.stderr || 'Shell command returned non-zero exit code',
+          );
+        }
+
         return res.output;
       }
 
@@ -698,7 +744,13 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     push(`Input: ${JSON.stringify(input, null, 2)}`);
 
     try {
-      const output = await this.executeNodeByType(node as any, input, undefined, logs);
+      const output = await this.executeNodeByType(
+        node as any,
+        input,
+        { variables: input },
+        undefined,
+        logs,
+      );
       push(`Output: ${JSON.stringify(output, null, 2)}`);
       push(`Status: SUCCESS`);
       return { input, output, logs };

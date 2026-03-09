@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { use } from 'react';
-import { getStatusColor } from '@/lib/utils';
 
 export default function ToolDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -29,39 +28,42 @@ export default function ToolDetailPage({ params }: { params: Promise<{ id: strin
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Type</label>
+              <label className="text-sm font-medium text-muted-foreground">Category</label>
               <div>
-                <Badge variant="outline">{tool.type}</Badge>
+                <Badge variant="outline">{tool.category || 'CUSTOM'}</Badge>
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Status</label>
+              <label className="text-sm font-medium text-muted-foreground">Origin</label>
               <div>
-                <Badge
-                  variant={
-                    getStatusColor(tool.status) as 'default' | 'success' | 'warning' | 'destructive'
-                  }
-                >
-                  {tool.status}
-                </Badge>
+                {tool.isBuiltIn ? (
+                  <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-transparent">Built-in</Badge>
+                ) : (
+                  <Badge variant="secondary" className="bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-transparent">Custom</Badge>
+                )}
               </div>
             </div>
           </div>
 
-          {tool.schema && (
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Icon</label>
+            <div>{tool.icon || 'None'}</div>
+          </div>
+
+          {tool.parameters && tool.parameters.length > 0 && (
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Schema</label>
-              <pre className="mt-2 p-4 bg-gray-50 rounded-md text-xs overflow-auto">
-                {JSON.stringify(tool.schema, null, 2)}
+              <label className="text-sm font-medium text-muted-foreground">Parameters</label>
+              <pre className="mt-2 p-4 bg-muted/50 rounded-md text-xs overflow-auto font-mono text-foreground">
+                {JSON.stringify(tool.parameters, null, 2)}
               </pre>
             </div>
           )}
 
-          {tool.config && (
+          {tool.code && (
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Configuration</label>
-              <pre className="mt-2 p-4 bg-gray-50 rounded-md text-xs overflow-auto">
-                {JSON.stringify(tool.config, null, 2)}
+              <label className="text-sm font-medium text-muted-foreground">Code</label>
+              <pre className="mt-2 p-4 bg-muted/50 rounded-md text-xs overflow-auto font-mono text-foreground">
+                {tool.code}
               </pre>
             </div>
           )}

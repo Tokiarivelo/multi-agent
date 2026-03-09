@@ -44,7 +44,7 @@ export class AgentClientService {
       this.logger.log(`Executing agent ${request.agentId}`);
 
       const response = await firstValueFrom(
-        this.httpService.post(`${this.baseUrl}/agents/${request.agentId}/execute`, {
+        this.httpService.post(`${this.baseUrl}/api/agents/${request.agentId}/execute`, {
           input: typeof request.input === 'string' ? request.input : JSON.stringify(request.input),
           metadata: {
             ...request.config,
@@ -74,10 +74,10 @@ export class AgentClientService {
     }
   }
 
-  async getAgentStatus(agentId: string): Promise<any> {
+  async getAgentInfo(agentId: string): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/agents/${agentId}`),
+        this.httpService.get(`${this.baseUrl}/api/agents/${agentId}`),
       );
       return response.data;
     } catch (error) {

@@ -16,6 +16,8 @@ export class BuiltInToolsService {
   private readonly allowedDomains: string[];
   private readonly enableFileOps: boolean;
 
+  private readonly workspaceRoot: string;
+
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
@@ -23,6 +25,13 @@ export class BuiltInToolsService {
     const domains = this.configService.get<string>('ALLOWED_DOMAINS', '*');
     this.allowedDomains = domains === '*' ? ['*'] : domains.split(',');
     this.enableFileOps = this.configService.get<boolean>('ENABLE_FILE_OPERATIONS', true);
+    
+    // Default workspace root is two levels up if in dev (multi-agent/services/tool-service)
+    // or current directory if elsewhere. Can be overridden by WORKSPACE_ROOT env.
+    const defaultRoot = path.resolve(process.cwd(), process.env.NODE_ENV === 'development' ? '../..' : '.');
+    this.workspaceRoot = this.configService.get<string>('WORKSPACE_ROOT') || defaultRoot;
+    
+    this.logger.log(`Workspace root initialized to: ${this.workspaceRoot}`);
   }
 
   async execute(toolName: string, parameters: Record<string, any>, _timeout: number): Promise<any> {
@@ -247,13 +256,30 @@ export class BuiltInToolsService {
     }
   }
 
-  private async shellExecute(params: { command: string; timeout?: number }): Promise<any> {
+  private async shellExecute(params: {
+    command: string;
+    timeout?: number;
+    cwd?: string;
+  }): Promise<any> {
     if (!this.enableFileOps) {
       throw new Error('Shell operations are disabled by policy (ENABLE_FILE_OPERATIONS=false).');
     }
     try {
+      if (!params.cwd) {
+        this.logger.warn(`No 'cwd' provided for shell command, falling back to server default: ${this.workspaceRoot}`);
+      }
+      
+      const execCwd = params.cwd
+        ? path.isAbsolute(params.cwd)
+          ? params.cwd
+          : path.resolve(this.workspaceRoot, params.cwd)
+        : this.workspaceRoot;
+
+      this.logger.log(`Executing shell command in [${execCwd}]: ${params.command}`);
+
       const { stdout, stderr } = await execAsync(params.command, {
         timeout: params.timeout || 30000,
+        cwd: execCwd,
       });
       return { stdout, stderr, code: 0 };
     } catch (error: any) {

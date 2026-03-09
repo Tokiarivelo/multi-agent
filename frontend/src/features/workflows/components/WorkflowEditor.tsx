@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -18,6 +18,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { useWorkspaceStore } from '@/features/workspace/store/workspaceStore';
+import { writeFileAtPath, useWorkspace } from '@/features/workspace/hooks/useWorkspace';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   AlertDialog,
@@ -369,6 +372,44 @@ function NodeExecutionDataPanel({
 export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const json = event.target?.result as string;
+        const data = JSON.parse(json);
+
+        if (data.name) setName(data.name);
+        if (data.description) setDescription(data.description);
+
+        const payload = {
+          name: data.name || name,
+          description: data.description || description,
+          definition: data.definition || { nodes: [], edges: [], version: 1 },
+          status: data.status || status,
+        };
+
+        if (workflow?.id) {
+          updateWorkflow.mutate({ id: workflow.id, workflow: payload });
+        } else {
+          createWorkflow.mutate(payload);
+        }
+
+        toast.success(t('workflows.editor.importSuccess', 'Workflow imported successfully!'));
+      } catch (err) {
+        toast.error(`Invalid JSON file: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
   const [name, setName] = useState(workflow?.name ?? '');
   const [description, setDescription] = useState(workflow?.description ?? '');
   const [status, setStatus] = useState(workflow?.status?.toUpperCase() ?? 'DRAFT');
@@ -418,9 +459,10 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const { logs, connected, executionStatus, clearLogs } = useWorkflowLogs({
     executionId: activeExecution?.id ?? null,
   });
+  const { refreshTree } = useWorkspace();
 
   // ─── Save ─────────────────────────────────────────────────────────
-  const handleSave = () => {
+  const handleSave = async () => {
     const workflowData = {
       name,
       description,
@@ -450,6 +492,19 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
       status: status.toUpperCase() as Workflow['status'],
     };
 
+    const activeWs = useWorkspaceStore.getState().getActiveWorkspace?.() ?? null;
+    if (activeWs?.rootHandle) {
+      try {
+        const rawName = name || workflow?.id || 'untitled_workflow';
+        const fileName = `${rawName.replace(/\s+/g, '_').toLowerCase()}.json`;
+        await writeFileAtPath(activeWs.rootHandle, fileName, JSON.stringify(workflowData, null, 2));
+        await refreshTree(activeWs.id);
+        toast.success(`Saved to workspace locally: ${fileName}`);
+      } catch (err) {
+        toast.error(`Failed to save locally: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
     if (workflow?.id) {
       updateWorkflow.mutate({ id: workflow.id, workflow: workflowData });
     } else {
@@ -463,8 +518,12 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
     clearLogs();
     setLogsOpen(true);
 
+    // Automatically inject active workspace local path as CWD for shell commands
+    const activeWs = useWorkspaceStore.getState().getActiveWorkspace?.() ?? null;
+    const input = activeWs?.nativePath ? { cwd: activeWs.nativePath } : {};
+
     executeWorkflow.mutate(
-      { id: workflow.id },
+      { id: workflow.id, input },
       {
         onSuccess: (execution) => {
           setActiveExecution(execution);
@@ -542,6 +601,20 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
               <Terminal className="h-4 w-4" />
             </Button>
           )}
+
+          {/* Import JSON */}
+          <input
+            type="file"
+            accept=".json"
+            ref={fileInputRef}
+            aria-hidden="true"
+            className="hidden"
+            onChange={handleImport}
+          />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2">
+            <ArrowDownToLine className="h-4 w-4" />
+            {t('workflows.editor.import', 'Import JSON')}
+          </Button>
 
           {/* Save */}
           <Button onClick={handleSave} disabled={isSaving} className="gap-2">

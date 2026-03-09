@@ -21,6 +21,8 @@ import {
   GripVertical,
   ChevronDown,
   ChevronRight,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -601,6 +603,13 @@ function NodeEditorForm({
   } | null>(null);
   // Auto-expand Test Node panel if we have pre-filled input from last run
   const [testPanelOpen, setTestPanelOpen] = useState(!!initialTestInput);
+  const [copiedLogId, setCopiedLogId] = useState<string | null>(null);
+
+  const handleCopyTestLog = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedLogId(id);
+    setTimeout(() => setCopiedLogId(null), 2000);
+  };
 
   const runTest = async () => {
     if (!workflowId || !initialNode?.id) return;
@@ -613,6 +622,13 @@ function NodeEditorForm({
       } catch {
         parsedInput = {};
       }
+
+      // Automatically inject cwd for testing if not manually provided
+      const activeWs = useWorkspaceStore.getState().getActiveWorkspace?.() ?? null;
+      if (activeWs?.nativePath && !parsedInput.cwd) {
+        parsedInput.cwd = activeWs.nativePath;
+      }
+
       const result = await workflowsApi.testNode(workflowId, initialNode.id, parsedInput);
 
       // Forward captured sandbox console.* calls to the real browser DevTools console
@@ -654,6 +670,15 @@ function NodeEditorForm({
   const handleConfigChange = (key: string, value: unknown) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
+
+  const activeWs = useWorkspaceStore((s) => s.getActiveWorkspace?.() ?? null);
+
+  useEffect(() => {
+    if (type === 'SHELL' && config.cwd === undefined && activeWs?.nativePath) {
+      // Auto-populate with active workspace path if empty
+      handleConfigChange('cwd', activeWs.nativePath);
+    }
+  }, [type, config.cwd, activeWs?.nativePath]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
@@ -1737,6 +1762,21 @@ function NodeEditorForm({
                   </div>
                 </div>
                 <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    Working Directory (CWD){' '}
+                    <span className="text-muted-foreground font-normal">(Optional)</span>
+                  </Label>
+                  <Input
+                    placeholder="e.g. /absolute/path/to/folder"
+                    value={(config.cwd as string) ?? ''}
+                    onChange={(e) => handleConfigChange('cwd', e.target.value)}
+                    className="font-mono text-xs h-8"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    If empty, uses the active workspace&apos;s Server Path, or falls back to project root.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
                   <Label className="text-xs">Timeout (ms)</Label>
                   <Input
                     type="number"
@@ -2000,10 +2040,21 @@ function NodeEditorForm({
 
                       {/* Logs */}
                       {testResult.logs.length > 0 && (
-                        <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs font-mono overflow-auto max-h-48 space-y-0.5">
-                          <p className="font-semibold mb-2 text-muted-foreground tracking-wide uppercase text-[10px]">
-                            Execution Logs
-                          </p>
+                        <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs font-mono overflow-auto max-h-48 space-y-0.5 relative group/logs">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="font-semibold text-muted-foreground tracking-wide uppercase text-[10px]">
+                              Execution Logs
+                            </p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-[10px] gap-1 opacity-0 group-hover/logs:opacity-100 transition-opacity"
+                              onClick={() => handleCopyTestLog(testResult.logs.join('\n'), 'all')}
+                            >
+                              {copiedLogId === 'all' ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                              Copy All
+                            </Button>
+                          </div>
                           {testResult.logs.map((log, i) => {
                             const isConsoleError = log.startsWith('[ERROR]');
                             const isConsoleWarn = log.startsWith('[WARN]');
@@ -2016,7 +2067,7 @@ function NodeEditorForm({
                             return (
                               <div
                                 key={i}
-                                className={`flex items-start gap-1.5 py-0.5 ${
+                                className={`flex items-start gap-1.5 py-0.5 relative group/item ${
                                   isConsoleError
                                     ? 'text-red-400'
                                     : isConsoleWarn
@@ -2035,7 +2086,16 @@ function NodeEditorForm({
                                         ? '🔵'
                                         : '·'}
                                 </span>
-                                <span className="break-all">{log}</span>
+                                <span className="break-all flex-1 pr-6">{log}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 absolute right-0 top-0 opacity-0 group-hover/item:opacity-100 transition-opacity"
+                                  onClick={() => handleCopyTestLog(log, `log-${i}`)}
+                                  title="Copy log entry"
+                                >
+                                  {copiedLogId === `log-${i}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
+                                </Button>
                               </div>
                             );
                           })}

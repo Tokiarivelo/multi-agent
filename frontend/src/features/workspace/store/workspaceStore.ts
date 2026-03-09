@@ -25,6 +25,7 @@ export interface WorkspaceEntry {
   rootHandle: FileSystemDirectoryHandle;
   fileTree: FileNode | null;
   hasPermission: boolean;
+  nativePath?: string; // native absolute path for server-side tools
 }
 
 // ─── Store interface ──────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ interface WorkspaceState {
   updateWorkspacePermission: (id: string, hasPermission: boolean) => void;
   setActiveWorkspaceId: (id: string | null) => void;
   setTerminalWorkspaceId: (id: string | null) => void;
+  updateWorkspaceLocalPath: (id: string, path: string) => void;
 
   // ── Editor ──
   setActiveFileHandle: (handle: FileSystemFileHandle | null, path: string | null) => void;
@@ -165,7 +167,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setIsLoading: (loading) => set({ isLoading: loading }),
 
   // ── Terminal ─────────────────────────────────────────────────────────────────
-
+  updateWorkspaceLocalPath: (id, path) =>
+    set((state) => {
+      const workspaces = state.workspaces.map((ws) =>
+        ws.id === id ? { ...ws, nativePath: path } : ws,
+      );
+      // Persist to indexedDB
+      const saved = workspaces.map((ws) => ({
+        id: ws.id,
+        name: ws.name,
+        handle: ws.rootHandle,
+        nativePath: ws.nativePath,
+      }));
+      workspaceStorageService.saveWorkspaces(saved);
+      return { workspaces };
+    }),
   addTerminalEntry: (entry) =>
     set((state) => ({
       terminalHistory: [

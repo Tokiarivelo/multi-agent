@@ -104,24 +104,25 @@ export interface Tool {
   id: string;
   name: string;
   description: string;
-  type: 'function' | 'api' | 'database';
-  schema: ToolSchema;
-  config?: Record<string, unknown>;
-  status: 'available' | 'unavailable';
+  category: 'WEB' | 'API' | 'DATABASE' | 'FILE' | 'CUSTOM' | string;
+  parameters: ToolParameter[];
+  code?: string;
+  icon?: string;
+  isBuiltIn: boolean;
+  status?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ToolSchema {
-  parameters: Record<string, ToolParameter>;
-  required?: string[];
-}
-
 export interface ToolParameter {
+  name: string;
   type: string;
   description: string;
-  enum?: string[];
+  required: boolean;
+  default?: unknown;
 }
+
+// End Tool Types
 
 export enum ModelProvider {
   OPENAI = 'OPENAI',
