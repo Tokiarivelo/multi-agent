@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -12,8 +12,8 @@ import {
 } from '../hooks/useWorkflows';
 import { useWorkflowLogs } from '../hooks/useWorkflowLogs';
 import { Workflow, WorkflowNode } from '@/types';
-import { WorkflowExecution } from '../api/workflows.api';
-import { useWorkflowExecutionStore } from '../store/workflowExecution.store';
+import { WorkflowExecution, NodeExecution } from '../api/workflows.api';
+import { useWorkflowExecutionStore, NodeStatus } from '../store/workflowExecution.store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -57,11 +57,16 @@ import {
   MessageSquare,
   ArrowDownToLine,
   ArrowUpFromLine,
+  Workflow as WorkflowIcon,
+  ExternalLink,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ExecutionLogsPanel } from './ExecutionLogsPanel';
-import { useRouter } from 'next/navigation';
+import { SubWorkflowExecutionPanel } from './SubWorkflowExecutionPanel';
+import { WorkflowIOPanel, WorkflowIOField } from './WorkflowIOPanel';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useExecution } from '../hooks/useWorkflows';
 import { cn } from '@/lib/utils';
 
 interface WorkflowEditorProps {
@@ -352,6 +357,41 @@ function NodeExecutionDataPanel({
         </Section>
       )}
 
+      {/* Sub-workflow execution info (only for SUBWORKFLOW node type) */}
+      {(() => {
+        const rawData = nodeData[selectedNodeId] as Record<string, unknown> | undefined;
+        const output = rawData?.output as Record<string, unknown> | undefined;
+        const subExecId = output?._subExecutionId as string | undefined;
+        const subWfName = output?._subWorkflowName as string | undefined;
+        const subWfId = output?._subWorkflowId as string | undefined;
+        if (!subExecId) return null;
+        return (
+          <Section
+            title={`Sub-Workflow: ${subWfName ?? subWfId}`}
+            icon={<WorkflowIcon className="h-3.5 w-3.5 text-blue-500" />}
+            accent="sky"
+          >
+            <div className="mt-1 space-y-2">
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
+                <span className="text-muted-foreground">Child Execution ID</span>
+                <code className="font-mono text-[10px] text-foreground/80 truncate">{subExecId}</code>
+                <span className="text-muted-foreground">Workflow ID</span>
+                <code className="font-mono text-[10px] text-foreground/80 truncate">{subWfId}</code>
+              </div>
+              <a
+                href={`/workflows?executionId=${subExecId}&workflowId=${subWfId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[11px] text-blue-500 hover:text-blue-400 underline underline-offset-2 transition-colors"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Open child execution
+              </a>
+            </div>
+          </Section>
+        );
+      })()}
+
       {/* Raw output fallback (no structured data) */}
       {!agentText && !toolCalls && !subAgentResults && (
         <Section
@@ -370,7 +410,7 @@ function NodeExecutionDataPanel({
 }
 
 export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -410,19 +450,71 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
     reader.readAsText(file);
   };
 
+  const SEARCH_PARAMS = useSearchParams();
+  const deepExecutionId = SEARCH_PARAMS.get('executionId');
+
   const [name, setName] = useState(workflow?.name ?? '');
   const [description, setDescription] = useState(workflow?.description ?? '');
   const [status, setStatus] = useState(workflow?.status?.toUpperCase() ?? 'DRAFT');
-  const [logsOpen, setLogsOpen] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(!!deepExecutionId);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [outputLogsToFile, setOutputLogsToFile] = useState(false);
+
+  // ─── Workflow I/O Contract ─────────────────────────────────────────
+  const [inputSchema, setInputSchema] = useState<WorkflowIOField[]>(
+    (workflow?.definition?.inputSchema as WorkflowIOField[] | undefined) ?? [],
+  );
+  const [outputSchema, setOutputSchema] = useState<WorkflowIOField[]>(
+    (workflow?.definition?.outputSchema as WorkflowIOField[] | undefined) ?? [],
+  );
 
   const setActiveExecutionId = useWorkflowExecutionStore((s) => s.setActiveExecutionId);
   const selectedNodeId = useWorkflowExecutionStore((s) => s.selectedNodeId);
   const selectedNodeName = useWorkflowExecutionStore((s) => s.selectedNodeName);
   const nodeData = useWorkflowExecutionStore((s) => s.nodeData);
   const nodeStatuses = useWorkflowExecutionStore((s) => s.nodeStatuses);
+  const subExecutions = useWorkflowExecutionStore((s) => s.subExecutions);
 
   const [activeExecution, setActiveExecution] = useState<WorkflowExecution | null>(null);
+
+  // ─── Initial Deep Link Sync ──────────────────────────────────────────
+  useEffect(() => {
+    if (deepExecutionId) {
+      setActiveExecutionId(deepExecutionId);
+    }
+  }, [deepExecutionId, setActiveExecutionId]);
+
+  // If we have a deep-linked execution, fetch its latest state
+  const { data: executionData } = useExecution(deepExecutionId);
+
+  // Sync execution data to store
+  useEffect(() => {
+    if (executionData) {
+      const store = useWorkflowExecutionStore.getState();
+      
+      // Set overall status
+      store.setExecutionStatus(executionData.status);
+      
+      // Populate nodes
+      if (executionData.nodeExecutions) {
+        executionData.nodeExecutions.forEach((ne: NodeExecution) => {
+          store.setNodeStatus(ne.nodeId, ne.status as NodeStatus);
+          if (ne.output !== undefined || ne.error !== undefined) {
+             store.setNodeData(ne.nodeId, {
+               input: ne.input,
+               output: ne.output,
+               error: ne.error
+             });
+          }
+        });
+      }
+      
+      // Sync local activeExecution so we can cancel it etc. Defer to avoid cascading render warning.
+      queueMicrotask(() => {
+        setActiveExecution(executionData as WorkflowExecution);
+      });
+    }
+  }, [executionData]);
 
   const [bottomPanelHeight, setBottomPanelHeight] = useState(350);
 
@@ -488,6 +580,8 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
               ] as WorkflowNode[]),
         edges: workflow?.definition?.edges ?? [],
         version: workflow?.definition?.version ?? 1,
+        inputSchema,
+        outputSchema,
       },
       status: status.toUpperCase() as Workflow['status'],
     };
@@ -520,7 +614,12 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
 
     // Automatically inject active workspace local path as CWD for shell commands
     const activeWs = useWorkspaceStore.getState().getActiveWorkspace?.() ?? null;
-    const input = activeWs?.nativePath ? { cwd: activeWs.nativePath } : {};
+
+    const input = {
+      ...(activeWs?.nativePath ? { cwd: activeWs.nativePath } : {}),
+      ...(activeWs?.id ? { workspaceId: activeWs.id } : {}),
+      ...(outputLogsToFile ? { outputLogsToFile: true } : {}),
+    };
 
     executeWorkflow.mutate(
       { id: workflow.id, input },
@@ -600,6 +699,26 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
             >
               <Terminal className="h-4 w-4" />
             </Button>
+          )}
+
+          {/* Output logs to file toggle */}
+          {workflow?.id && (
+            <div className="flex items-center gap-2 border-l border-border/50 pl-3 ml-1">
+              <input
+                type="checkbox"
+                id="outputLogsToFile"
+                checked={outputLogsToFile}
+                onChange={(e) => setOutputLogsToFile(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 pointer-events-auto"
+                title="Output logs into workspace logs/ folder"
+              />
+              <label
+                htmlFor="outputLogsToFile"
+                className="text-sm cursor-pointer whitespace-nowrap"
+              >
+                Output Logs
+              </label>
+            </div>
           )}
 
           {/* Import JSON */}
@@ -727,6 +846,30 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
                 </div>
               </CardContent>
             </Card>
+
+            {/* ─── I/O Contract ─── */}
+            <Card className="backdrop-blur-xl bg-white/40 dark:bg-black/40 border-border/50 shadow-xl shrink-0 pointer-events-auto">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <span>
+                    {i18n.language.startsWith('fr')
+                      ? 'Contrat I/O'
+                      : 'I/O Contract'}
+                  </span>
+                  <Badge variant="secondary" className="text-[10px] font-normal">
+                    {inputSchema.length + outputSchema.length} fields
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <WorkflowIOPanel
+                  inputSchema={inputSchema}
+                  outputSchema={outputSchema}
+                  onInputChange={setInputSchema}
+                  onOutputChange={setOutputSchema}
+                />
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>
@@ -752,6 +895,15 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
                 <TabsTrigger value="node-data" className="gap-2 text-xs">
                   <FileJson className="h-3.5 w-3.5" />
                   Node Execution Data
+                </TabsTrigger>
+                <TabsTrigger value="sub-workflows" className="gap-2 text-xs">
+                  <WorkflowIcon className="h-3.5 w-3.5 text-blue-500" />
+                  Sub-Workflows
+                  {subExecutions.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 text-[10px] font-mono">
+                      {subExecutions.length}
+                    </span>
+                  )}
                 </TabsTrigger>
               </TabsList>
               <Button
@@ -791,6 +943,13 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
                   nodeData={nodeData}
                 />
               </ScrollArea>
+            </TabsContent>
+
+            <TabsContent
+              value="sub-workflows"
+              className="flex-1 min-h-0 m-0 border-0 overflow-hidden outline-none flex flex-col"
+            >
+              <SubWorkflowExecutionPanel />
             </TabsContent>
           </Tabs>
         </div>

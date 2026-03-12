@@ -78,6 +78,8 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
   }
 
   private async executeAsync(execution: WorkflowExecution, workflow: any): Promise<void> {
+    let context: any;
+
     try {
       execution.start();
       await this.updateExecution(execution);
@@ -88,7 +90,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         throw new Error('No START node found in workflow');
       }
 
-      const context = {
+      context = {
         variables: { ...execution.input },
         executionId: execution.id,
         workflowId: workflow.id,
@@ -107,6 +109,8 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
       await this.updateExecution(execution);
       this.workflowGateway.sendExecutionUpdate(execution);
+
+      this.saveExecutionLogs(execution, workflow.id, context);
     } catch (error) {
       this.logger.error(
         `Execution ${execution.id} failed`,
@@ -115,6 +119,43 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       execution.fail(error instanceof Error ? error.message : 'Unknown error');
       await this.updateExecution(execution);
       this.workflowGateway.sendExecutionUpdate(execution);
+
+      this.saveExecutionLogs(
+        execution,
+        workflow.id,
+        context || { variables: { ...execution.input } },
+      );
+    }
+  }
+
+  private saveExecutionLogs(execution: WorkflowExecution, workflowId: string, context: any) {
+    if (context?.variables?.outputLogsToFile && context?.variables?.workspaceId) {
+      let logText = `Execution ID: ${execution.id}\nWorkflow ID: ${workflowId}\nStatus: ${execution.status}\n\n`;
+      for (const ne of execution.nodeExecutions as any[]) {
+        logText += `--- Node: ${ne.nodeName} (${ne.nodeId}) [${ne.status}] ---\n`;
+        if (ne.input) logText += `Input: ${JSON.stringify(ne.input, null, 2)}\n`;
+        if (ne.output) logText += `Output: ${JSON.stringify(ne.output, null, 2)}\n`;
+        if (ne.error) logText += `Error: ${ne.error}\n`;
+        if (ne.logs && Array.isArray(ne.logs) && ne.logs.length > 0) {
+          logText += `Logs:\n${ne.logs.join('\n')}\n`;
+        }
+        logText += `\n`;
+      }
+
+      try {
+        const requestId = `log_${execution.id}_${Date.now()}`;
+        this.workflowGateway.sendWorkspaceRequest(execution.id, requestId, 'write', {
+          filePath: `logs/execution_${execution.id}.log`,
+          content: logText,
+          workspaceId: context.variables.workspaceId,
+        });
+        this.logger.log(`Requested saving logs to workspace for execution ${execution.id}`);
+      } catch (logErr) {
+        this.logger.error(
+          `Failed to save logs to workspace`,
+          logErr instanceof Error ? logErr.stack : String(logErr),
+        );
+      }
     }
   }
 
@@ -179,7 +220,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           ? output
           : { [node.customName || node.type || nodeId]: output };
 
-      context.variables = { ...context.variables, ...outputObj };
+      Object.assign(context.variables, outputObj);
 
       const nextNodes = this.workflowExecutionService.determineNextNodes(
         workflow,
@@ -201,12 +242,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         this.logger.log(`No next nodes found after ${nodeId}, assuming implicit END of branch`);
       } else {
         await Promise.allSettled(
-          nextNodes.map((nextNodeId) =>
-            this.executeNode(nextNodeId, workflow, execution, {
-              ...context,
-              variables: { ...context.variables },
-            }),
-          ),
+          nextNodes.map((nextNodeId) => this.executeNode(nextNodeId, workflow, execution, context)),
         );
       }
     } catch (error) {
@@ -353,12 +389,38 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       }
 
       case NodeType.SHELL: {
-        const cwd =
+        const rawCwd =
           node.config.cwd ||
           (input?.cwd && typeof input.cwd === 'string' ? input.cwd : null) ||
           (context?.variables?.cwd && typeof context.variables.cwd === 'string'
             ? context.variables.cwd
             : null);
+
+        // Guard: cwd must be set and must be an absolute server-side path.
+        // Reject relative paths (./, ../, plain names) to prevent accidental writes
+        // outside the configured workspace.
+        if (!rawCwd) {
+          throw new Error(
+            '[WORKSPACE_SETUP_REQUIRED] SHELL node requires a working directory (cwd). ' +
+              'Set a valid absolute Path in your workspace (e.g. /home/user/project).',
+          );
+        }
+
+        // eslint-disable-next-line no-useless-escape
+        const isAbsoluteCwd = rawCwd.startsWith('/') || /^[A-Za-z]:[/\\]/.test(rawCwd);
+        // prettier-ignore
+        const isRelativeCwd = rawCwd === '.' || rawCwd === '..' || rawCwd.startsWith('./') || rawCwd.startsWith('../') || rawCwd.startsWith('.\\') || rawCwd.startsWith('..\\');
+
+        if (isRelativeCwd || !isAbsoluteCwd) {
+          throw new Error(
+            `SHELL node: invalid cwd "${rawCwd}". ` +
+              'cwd must be an absolute path (e.g. /home/user/project or C:\\Users\\user\\project). ' +
+              'Relative paths like ./ or ../ are not permitted.',
+          );
+        }
+
+        const cwd = rawCwd;
+
         const res = await this.toolClient.executeTool({
           toolName: 'shell_execute',
           input: {
@@ -376,7 +438,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           logSink.push(`[SHELL] Context CWD: ${context?.variables?.cwd || 'none'}`);
           logSink.push(`[SHELL] Input CWD: ${input?.cwd || 'none'}`);
           logSink.push(`[SHELL] Config CWD: ${node.config.cwd || 'none'}`);
-          logSink.push(`[SHELL] Resolved CWD: ${cwd || 'default'}`);
+          logSink.push(`[SHELL] Resolved CWD: ${cwd}`);
 
           if (shellOutput?.stdout)
             logSink.push(`[LOG] STDOUT: ${String(shellOutput.stdout).trim()}`);
@@ -576,7 +638,9 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         }
 
         const requestId = `${execution.id}_${node.id}_${Date.now()}`;
-        const workspaceId = node.config?.workspaceId as string | undefined;
+        const workspaceId =
+          (node.config?.workspaceId as string | undefined) ||
+          (context?.variables?.workspaceId as string | undefined);
         this.workflowGateway.sendWorkspaceRequest(execution.id, requestId, 'read', {
           filePath,
           ...(workspaceId ? { workspaceId } : {}),
@@ -625,7 +689,9 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           : JSON.stringify(typeof input === 'object' ? input : { value: input }, null, 2);
 
         const requestId = `${execution.id}_${node.id}_${Date.now()}`;
-        const workspaceIdWrite = node.config?.workspaceId as string | undefined;
+        const workspaceIdWrite =
+          (node.config?.workspaceId as string | undefined) ||
+          (context?.variables?.workspaceId as string | undefined);
         this.workflowGateway.sendWorkspaceRequest(execution.id, requestId, 'write', {
           filePath,
           content: resolvedContent,
@@ -648,6 +714,182 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
         if (response.error) throw new Error(response.error);
         return response.result ?? { written: true, path: filePath };
+      }
+
+      case NodeType.SUBWORKFLOW: {
+        const subWorkflowId = node.config?.workflowId as string | undefined;
+        if (!subWorkflowId) {
+          throw new Error('SUBWORKFLOW node requires a workflowId in config');
+        }
+
+        // Guard against infinite recursion: a sub-workflow cannot call itself
+        if (subWorkflowId === context?.workflowId) {
+          throw new Error(
+            `SUBWORKFLOW node references the current workflow (${subWorkflowId}). Circular sub-workflow calls are not allowed.`,
+          );
+        }
+
+        const subWorkflow = await this.workflowRepository.findById(subWorkflowId);
+        if (!subWorkflow) {
+          throw new Error(`SUBWORKFLOW: referenced workflow "${subWorkflowId}" not found`);
+        }
+
+        // Map input overrides from node config
+        const inputOverrides = (node.config?.inputMapping as Record<string, string>) ?? {};
+        const subInput: Record<string, unknown> = { ...context.variables };
+        for (const [subKey, parentKey] of Object.entries(inputOverrides)) {
+          const val = context.variables?.[parentKey];
+          if (val !== undefined) subInput[subKey] = val;
+        }
+
+        // Apply inputSchema: inject defaults for missing keys, validate required fields
+        const inputSchema = (subWorkflow.definition?.inputSchema ?? []) as Array<{
+          key: string;
+          required?: boolean;
+          defaultValue?: unknown;
+        }>;
+        const inputErrors: string[] = [];
+        for (const field of inputSchema) {
+          if (subInput[field.key] === undefined) {
+            if (field.defaultValue !== undefined) {
+              subInput[field.key] = field.defaultValue;
+            } else if (field.required) {
+              inputErrors.push(
+                `SUBWORKFLOW "${subWorkflow.name}": required input "${field.key}" is missing and has no default`,
+              );
+            }
+          }
+        }
+        if (inputErrors.length > 0) {
+          throw new Error(inputErrors.join('; '));
+        }
+
+        if (logSink) {
+          logSink.push(
+            `[SUBWORKFLOW] Starting referenced workflow "${subWorkflow.name}" (${subWorkflowId})`,
+          );
+        }
+
+        // Create a child execution record
+        const childExecution = new WorkflowExecution({
+          workflowId: subWorkflowId,
+          status: ExecutionStatus.PENDING,
+          input: subInput,
+          userId: context.userId,
+          nodeExecutions: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+
+        const savedChild = await this.prisma.workflowExecution.create({
+          data: {
+            workflowId: childExecution.workflowId,
+            status: childExecution.status as unknown as PrismaExecutionStatus,
+            input: childExecution.input,
+            userId: childExecution.userId,
+            nodeExecutions: childExecution.nodeExecutions as any,
+          },
+        });
+        childExecution.id = savedChild.id;
+
+        // Build child context (inherit parent userId + workspace info, but fresh variables)
+        const childContext = {
+          variables: { ...subInput },
+          executionId: childExecution.id,
+          workflowId: subWorkflowId,
+          userId: context.userId,
+        };
+
+        // Run the child workflow inline (awaited, so the parent blocks until it completes)
+        childExecution.start();
+        await this.prisma.workflowExecution.update({
+          where: { id: childExecution.id },
+          data: {
+            status: childExecution.status as unknown as PrismaExecutionStatus,
+            startedAt: childExecution.startedAt,
+            updatedAt: new Date(),
+          },
+        });
+        this.workflowGateway.sendExecutionUpdate(childExecution);
+
+        const startNodeId = this.workflowExecutionService.findStartNode(subWorkflow);
+        if (!startNodeId) {
+          throw new Error(`SUBWORKFLOW: referenced workflow "${subWorkflowId}" has no START node`);
+        }
+
+        await this.executeNode(startNodeId, subWorkflow, childExecution, childContext);
+
+        const hasFailedSubNodes = childExecution.nodeExecutions.some(
+          (n: any) => n.status === 'FAILED',
+        );
+        if (hasFailedSubNodes) {
+          childExecution.fail('One or more sub-workflow nodes failed');
+        } else if (!childExecution.isFailed()) {
+          childExecution.complete(childContext.variables);
+        }
+
+        await this.prisma.workflowExecution.update({
+          where: { id: childExecution.id },
+          data: {
+            status: childExecution.status as unknown as PrismaExecutionStatus,
+            output: childExecution.output,
+            error: childExecution.error,
+            nodeExecutions: childExecution.nodeExecutions as any,
+            completedAt: childExecution.completedAt,
+            updatedAt: new Date(),
+          },
+        });
+        this.workflowGateway.sendExecutionUpdate(childExecution);
+
+        if (childExecution.isFailed()) {
+          throw new Error(`SUBWORKFLOW "${subWorkflow.name}" failed: ${childExecution.error}`);
+        }
+
+        if (logSink) {
+          logSink.push(
+            `[SUBWORKFLOW] "${subWorkflow.name}" completed. Child execution ID: ${childExecution.id}`,
+          );
+        }
+
+        // Map output back: apply outputMapping overrides, then filter by outputSchema
+        const outputMapping = (node.config?.outputMapping as Record<string, string>) ?? {};
+        const rawChildVars: Record<string, unknown> = { ...(childContext.variables ?? {}) };
+
+        // Apply explicit output key renaming from the node's outputMapping
+        for (const [parentKey, subKey] of Object.entries(outputMapping)) {
+          const val = rawChildVars[subKey];
+          if (val !== undefined) rawChildVars[parentKey] = val;
+        }
+
+        // If the child workflow declares an outputSchema, expose ONLY those keys
+        // (plus internal _meta keys). If no schema, pass everything through.
+        const outputSchema = (subWorkflow.definition?.outputSchema ?? []) as Array<{ key: string }>;
+        let exposedVars: Record<string, unknown>;
+        if (outputSchema.length > 0) {
+          exposedVars = {};
+          for (const field of outputSchema) {
+            if (rawChildVars[field.key] !== undefined) {
+              exposedVars[field.key] = rawChildVars[field.key];
+            }
+          }
+          // Also include any explicitly mapped output keys
+          for (const parentKey of Object.keys(outputMapping)) {
+            if (rawChildVars[parentKey] !== undefined) {
+              exposedVars[parentKey] = rawChildVars[parentKey];
+            }
+          }
+        } else {
+          exposedVars = rawChildVars;
+        }
+
+        const subOutput: Record<string, unknown> = {
+          ...exposedVars,
+          _subWorkflowId: subWorkflowId,
+          _subExecutionId: childExecution.id,
+          _subWorkflowName: subWorkflow.name,
+        };
+
+        return subOutput;
       }
 
       default:
@@ -729,26 +971,53 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     workflowId: string,
     nodeId: string,
     input: Record<string, unknown>,
-    _userId: string,
+    userId: string,
+    nodeType?: string,
+    nodeConfig?: Record<string, unknown>,
+    executionId?: string,
   ): Promise<{ input: unknown; output: unknown; error?: string; logs: string[] }> {
     const logs: string[] = [];
     const push = (msg: string) => logs.push(`[${new Date().toISOString()}] ${msg}`);
 
-    const workflow = await this.workflowRepository.findById(workflowId);
-    if (!workflow) throw new Error(`Workflow ${workflowId} not found`);
-
-    const node = workflow.definition.nodes.find((n) => n.id === nodeId);
-    if (!node) throw new Error(`Node ${nodeId} not found in workflow`);
-
-    push(`Testing node "${node.customName || node.type}" (${node.type})`);
+    push(
+      `Testing node "${nodeId}" - type: ${nodeType || 'original'}, config: ${
+        nodeConfig ? 'edited' : 'original'
+      }${executionId ? `, execution: ${executionId}` : ''}`,
+    );
     push(`Input: ${JSON.stringify(input, null, 2)}`);
+
+    let node: any;
+    let execution: WorkflowExecution | undefined;
+
+    if (executionId) {
+      execution = (await this.getExecutionStatus(executionId)) ?? undefined;
+    }
+
+    if (nodeType && nodeConfig) {
+      node = {
+        id: nodeId,
+        type: nodeType,
+        config: nodeConfig,
+      };
+    } else {
+      const workflow = await this.workflowRepository.findById(workflowId);
+      if (!workflow) throw new Error(`Workflow ${workflowId} not found`);
+
+      node = workflow.definition.nodes.find((n) => n.id === nodeId);
+      if (!node) throw new Error(`Node ${nodeId} not found in workflow`);
+    }
 
     try {
       const output = await this.executeNodeByType(
-        node as any,
+        node,
         input,
-        { variables: input },
-        undefined,
+        {
+          variables: { ...input, ...(executionId ? { executionId } : {}), workflowId, userId },
+          executionId,
+          workflowId,
+          userId,
+        },
+        execution,
         logs,
       );
       push(`Output: ${JSON.stringify(output, null, 2)}`);

@@ -6,9 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, Wifi, WifiOff, XCircle, Copy, Check } from 'lucide-react';
+import { Trash2, Wifi, WifiOff, XCircle, Copy, Check, ExternalLink } from 'lucide-react';
 import { ExecutionLogLine } from '../hooks/useWorkflowLogs';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
+
+const WORKSPACE_SETUP_SENTINEL = '[WORKSPACE_SETUP_REQUIRED]';
 
 interface ExecutionLogsPanelProps {
   logs: ExecutionLogLine[];
@@ -50,7 +53,28 @@ export function ExecutionLogsPanel({
 }: ExecutionLogsPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
+  const router = useRouter();
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  /** Renders a log message, replacing workspace-setup errors with an actionable link */
+  const renderMessage = (message: string) => {
+    if (message.includes(WORKSPACE_SETUP_SENTINEL)) {
+      const clean = message.replace(WORKSPACE_SETUP_SENTINEL, '').trim();
+      return (
+        <span>
+          {clean}{' '}
+          <button
+            onClick={() => router.push('/workspace')}
+            className="inline-flex items-center gap-1 text-amber-500 hover:text-amber-400 underline underline-offset-2 font-medium transition-colors"
+          >
+            <ExternalLink className="h-3 w-3" />
+            {t('workspace.goToWorkspace', 'Go to Workspace →')}
+          </button>
+        </span>
+      );
+    }
+    return <span>{message}</span>;
+  };
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -143,7 +167,7 @@ export function ExecutionLogsPanel({
                     })}
                   </span>
                   <div className="flex-1 min-w-0 pr-6 relative group/log">
-                    <span>{log.message}</span>
+                    {renderMessage(log.message)}
                     <Button
                       variant="ghost"
                       size="icon"

@@ -14,6 +14,9 @@ export interface IWorkflowExecutor {
     nodeId: string,
     input: Record<string, unknown>,
     userId: string,
+    nodeType?: string,
+    nodeConfig?: Record<string, unknown>,
+    executionId?: string,
   ): Promise<{ input: unknown; output: unknown; error?: string; logs: string[] }>;
 }
 

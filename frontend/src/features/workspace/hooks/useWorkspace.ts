@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useWorkspaceStore, FileNode, WorkspaceEntry } from '../store/workspaceStore';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
-import { workspaceStorageService } from '../services/workspaceStorage';
+import { workspaceStorageService, SavedWorkspace } from '../services/workspaceStorage';
 import { workflowsApi } from '../../workflows/api/workflows.api';
 
 // ─── FS utilities (exported for WS bridge) ───────────────────────────────────
@@ -135,17 +135,55 @@ export const useWorkspace = () => {
       // @ts-expect-error File System Access API types might not be fully available
       const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
 
-      // Check if already registered (same name heuristic — FS handles aren't comparable)
+      // Check if already registered
       const existing = store.workspaces.find((w) => w.name === dirHandle.name);
       if (existing) {
+        // If the existing entry has no nativePath, try to restore it from recent
+        if (!existing.nativePath) {
+          const recent = await workspaceStorageService.loadRecentWorkspaces();
+          let matchedRecent: SavedWorkspace | undefined;
+          for (const r of recent) {
+            try {
+              if (await r.handle.isSameEntry(dirHandle)) {
+                matchedRecent = r;
+                break;
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+          if (!matchedRecent) matchedRecent = recent.find((r) => r.name === dirHandle.name);
+          if (matchedRecent?.nativePath) {
+            store.updateWorkspaceLocalPath(existing.id, matchedRecent.nativePath);
+          }
+        }
         toast.info(t('workspace.alreadyOpen', `"${dirHandle.name}" is already open`));
         store.setActiveWorkspaceId(existing.id);
         return;
       }
 
       const children = await buildFileTree(dirHandle);
+      const recent = await workspaceStorageService.loadRecentWorkspaces();
+
+      // Robust matching: identity check (handle.isSameEntry) or name heuristic
+      let matchedRecent: SavedWorkspace | undefined;
+      for (const r of recent) {
+        try {
+          if (await r.handle.isSameEntry(dirHandle)) {
+            matchedRecent = r;
+            break;
+          }
+        } catch {
+          // Fallback if handle is no longer valid or isSameEntry not supported
+        }
+      }
+
+      if (!matchedRecent) {
+        matchedRecent = recent.find((r) => r.name === dirHandle.name);
+      }
+
       const entry: WorkspaceEntry = {
-        id: crypto.randomUUID(),
+        id: matchedRecent?.id ?? crypto.randomUUID(),
         name: dirHandle.name,
         rootHandle: dirHandle,
         fileTree: {
@@ -156,7 +194,9 @@ export const useWorkspace = () => {
           children,
         },
         hasPermission: true,
+        nativePath: matchedRecent?.nativePath,
       };
+
       store.addWorkspace(entry);
       store.addTerminalEntry({ type: 'info', text: `Workspace added: ${dirHandle.name}` });
       await workspaceStorageService.recordRecentWorkspace({
@@ -217,8 +257,11 @@ export const useWorkspace = () => {
         };
 
         store.addWorkspace(entry);
-        store.addTerminalEntry({ type: 'info', text: `Workspace added from recent: ${saved.name}` });
-        
+        store.addTerminalEntry({
+          type: 'info',
+          text: `Workspace added from recent: ${saved.name}`,
+        });
+
         if (!hasPermission) {
           toast.info(t('workspace.needsPermission', 'Workspace opened, but needs permission'));
         } else {
@@ -458,7 +501,7 @@ export const useWorkspace = () => {
         if (activePath && activePath !== `/${ws.rootHandle.name}`) {
           const subPath = activePath.startsWith('/') ? activePath.slice(1) : activePath;
           const parts = subPath.split('/').filter(Boolean);
-          
+
           if (!isDir && parts.length > 0) {
             parts.pop();
           }
@@ -543,8 +586,10 @@ export const useWorkspace = () => {
         if (cmd === 'pwd') {
           const currentPath = resolveTerminalPath('');
           const browserPath = `/${root.name}${currentPath ? '/' + currentPath : ''}`;
-          const serverPath = ws?.nativePath ? `${ws.nativePath}${currentPath ? '/' + currentPath : ''}` : '(not mapped)';
-          
+          const serverPath = ws?.nativePath
+            ? `${ws.nativePath}${currentPath ? '/' + currentPath : ''}`
+            : '(not mapped)';
+
           store.addTerminalEntry({
             type: 'output',
             text: `Browser: ${browserPath}\nServer : ${serverPath}`,
@@ -640,25 +685,34 @@ export const useWorkspace = () => {
           // If unrecognized, try to run it on the server (shell_execute tool)
           if (ws?.nativePath) {
             try {
-              store.addTerminalEntry({ type: 'info', text: `Running on server in ${ws.nativePath}...` });
+              store.addTerminalEntry({
+                type: 'info',
+                text: `Running on server in ${ws.nativePath}...`,
+              });
               const result = await workflowsApi.testNode('temp-workflow-id', 'temp-node-id', {
                 type: 'SHELL',
                 config: { command: line, cwd: ws.nativePath },
               });
-              
+
               if (result.logs) {
-                result.logs.forEach(l => {
-                   if (l.includes('[STDOUT]') || l.includes('[STDERR]')) {
-                     store.addTerminalEntry({ type: 'output', text: l.replace(/\[(STDOUT|STDERR)\]\s*/, '') });
-                   }
+                result.logs.forEach((l) => {
+                  if (l.includes('[STDOUT]') || l.includes('[STDERR]')) {
+                    store.addTerminalEntry({
+                      type: 'output',
+                      text: l.replace(/\[(STDOUT|STDERR)\]\s*/, ''),
+                    });
+                  }
                 });
               }
-              
+
               if (result.error) {
                 store.addTerminalEntry({ type: 'error', text: `Failed: ${result.error}` });
               }
             } catch (err: unknown) {
-              store.addTerminalEntry({ type: 'error', text: `Server shell error: ${err instanceof Error ? err.message : String(err)}` });
+              store.addTerminalEntry({
+                type: 'error',
+                text: `Server shell error: ${err instanceof Error ? err.message : String(err)}`,
+              });
             }
           } else {
             store.addTerminalEntry({

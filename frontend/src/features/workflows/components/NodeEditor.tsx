@@ -20,9 +20,11 @@ import {
   Layers,
   GripVertical,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   Copy,
   Check,
+  XCircle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,10 +44,12 @@ import { NODE_TYPE_REGISTRY, NodeTypeMeta, NodeTypeId } from './nodeTypes';
 import { AddNodePayload, workflowsApi } from '../api/workflows.api';
 import { v4 as uuidv4 } from 'uuid';
 import { useTheme } from 'next-themes';
+import { cn } from '@/lib/utils';
 import Editor from '@monaco-editor/react';
 import { Resizable } from 're-resizable';
 import { FileConfigEditor } from './FileConfigEditor';
 import { useWorkspaceStore, type FileNode } from '@/features/workspace/store/workspaceStore';
+import { SubWorkflowConfig } from './SubWorkflowConfig';
 
 /** Sub-agent configuration inside an AGENT node */
 export interface SubAgentConfig {
@@ -561,6 +565,8 @@ export interface NodeEditorProps {
   availableTypings?: string;
   /** Workflow ID — required for node test feature */
   workflowId?: string;
+  /** Active execution ID for context awareness in tests (e.g. for Workspace bridge) */
+  executionId?: string | null;
   /** Pre-fill the Test Node input with this data (from last execution) */
   initialTestInput?: Record<string, unknown>;
 }
@@ -577,6 +583,7 @@ function NodeEditorForm({
   tools = [],
   availableTypings,
   workflowId,
+  executionId,
   initialTestInput,
 }: NodeEditorProps) {
   const { t, i18n } = useTranslation();
@@ -604,6 +611,7 @@ function NodeEditorForm({
   // Auto-expand Test Node panel if we have pre-filled input from last run
   const [testPanelOpen, setTestPanelOpen] = useState(!!initialTestInput);
   const [copiedLogId, setCopiedLogId] = useState<string | null>(null);
+  const [outputExpanded, setOutputExpanded] = useState(false);
 
   const handleCopyTestLog = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -612,7 +620,10 @@ function NodeEditorForm({
   };
 
   const runTest = async () => {
-    if (!workflowId || !initialNode?.id) return;
+    if (!workflowId) return;
+    // For new (unsaved) nodes we still need an ID to route the API call.
+    // The backend accepts any nodeId + type + config combination for testing.
+    const testNodeId = initialNode?.id ?? uuidv4();
     setTestRunning(true);
     setTestResult(null);
     try {
@@ -625,14 +636,22 @@ function NodeEditorForm({
 
       // Automatically inject cwd for testing if not manually provided
       const activeWs = useWorkspaceStore.getState().getActiveWorkspace?.() ?? null;
+
       if (activeWs?.nativePath && !parsedInput.cwd) {
         parsedInput.cwd = activeWs.nativePath;
       }
 
-      const result = await workflowsApi.testNode(workflowId, initialNode.id, parsedInput);
+      const result = await workflowsApi.testNode(
+        workflowId,
+        testNodeId,
+        parsedInput,
+        type,
+        config,
+        executionId ?? undefined,
+      );
 
       // Forward captured sandbox console.* calls to the real browser DevTools console
-      const nodeLabel = `[Node: ${initialNode.customName ?? initialNode.type ?? initialNode.id}]`;
+      const nodeLabel = `[Node: ${initialNode?.customName ?? initialNode?.type ?? testNodeId}]`;
       result.logs.forEach((line) => {
         if (line.startsWith('[ERROR]')) {
           console.error(nodeLabel, line.replace(/^\[ERROR\]\s*/, ''));
@@ -1773,7 +1792,8 @@ function NodeEditorForm({
                     className="font-mono text-xs h-8"
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    If empty, uses the active workspace&apos;s Server Path, or falls back to project root.
+                    If empty, uses the active workspace&apos;s Server Path, or falls back to project
+                    root.
                   </p>
                 </div>
                 <div className="space-y-1.5">
@@ -1806,6 +1826,15 @@ function NodeEditorForm({
             {/* WORKSPACE_WRITE config */}
             {type === 'WORKSPACE_WRITE' && (
               <WorkspaceWriteConfig config={config} onConfigChange={handleConfigChange} />
+            )}
+
+            {/* SUBWORKFLOW config */}
+            {type === 'SUBWORKFLOW' && (
+              <SubWorkflowConfig
+                config={config}
+                currentWorkflowId={workflowId}
+                onConfigChange={handleConfigChange}
+              />
             )}
 
             {/* In / Out Type Declarations (for Autocomplete) */}
@@ -1950,8 +1979,8 @@ function NodeEditorForm({
             </div>
           </CardContent>
 
-          {/* ─── Test Node Panel ─────────────────────────────────────── */}
-          {isEdit && workflowId && (
+          {/* ─── Test Node Panel — available for both new and existing nodes ─── */}
+          {workflowId && (
             <div className="border-t border-border/50 bg-muted/10">
               <Collapsible open={testPanelOpen} onOpenChange={setTestPanelOpen}>
                 <CollapsibleTrigger asChild>
@@ -2026,12 +2055,50 @@ function NodeEditorForm({
                     <div className="space-y-2">
                       {/* Output or Error */}
                       <div
-                        className={`rounded-md border p-3 text-xs font-mono overflow-auto max-h-40 ${testResult.error ? 'border-destructive/40 bg-destructive/5 text-destructive' : 'border-emerald-500/30 bg-emerald-500/5'}`}
+                        className={cn(
+                          'rounded-md border p-3 text-xs font-mono relative group/output transition-all duration-200',
+                          testResult.error
+                            ? 'border-destructive/40 bg-destructive/5 text-destructive'
+                            : 'border-emerald-500/30 bg-emerald-500/5',
+                          !outputExpanded && 'max-h-40 overflow-auto',
+                        )}
                       >
-                        <p className="font-semibold mb-1 text-muted-foreground">
-                          {testResult.error ? '❌ Error' : '✅ Output'}
-                        </p>
-                        <pre className="whitespace-pre-wrap break-all">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="font-semibold text-muted-foreground flex items-center gap-2">
+                            {testResult.error ? (
+                              <>
+                                <XCircle className="h-3.5 w-3.5" />
+                                <span>Error</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                <span>Output</span>
+                              </>
+                            )}
+                          </p>
+                          {!testResult.error && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-[10px] gap-1 opacity-60 hover:opacity-100 transition-opacity"
+                              onClick={() => setOutputExpanded(!outputExpanded)}
+                            >
+                              {outputExpanded ? (
+                                <>
+                                  <ChevronUp className="h-3 w-3" />
+                                  Collapse
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="h-3 w-3" />
+                                  Expand
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        <pre className="whitespace-pre-wrap break-all leading-relaxed">
                           {testResult.error
                             ? testResult.error
                             : JSON.stringify(testResult.output, null, 2)}
@@ -2051,50 +2118,59 @@ function NodeEditorForm({
                               className="h-6 px-2 text-[10px] gap-1 opacity-0 group-hover/logs:opacity-100 transition-opacity"
                               onClick={() => handleCopyTestLog(testResult.logs.join('\n'), 'all')}
                             >
-                              {copiedLogId === 'all' ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                              {copiedLogId === 'all' ? (
+                                <Check className="h-3 w-3 text-emerald-500" />
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
                               Copy All
                             </Button>
                           </div>
                           {testResult.logs.map((log, i) => {
                             const isConsoleError = log.startsWith('[ERROR]');
                             const isConsoleWarn = log.startsWith('[WARN]');
-                            const isConsoleLine =
-                              log.startsWith('[LOG]') ||
-                              log.startsWith('[INFO]') ||
-                              log.startsWith('[DEBUG]') ||
-                              isConsoleError ||
-                              isConsoleWarn;
+                            const isConsoleLog = log.startsWith('[LOG]');
+                            const isConsoleInfo = log.startsWith('[INFO]');
+                            const isConsoleDebug = log.startsWith('[DEBUG]');
+
                             return (
                               <div
                                 key={i}
-                                className={`flex items-start gap-1.5 py-0.5 relative group/item ${
+                                className={cn(
+                                  'flex items-start gap-2 py-1 px-2 rounded-sm border-l-2 relative group/item transition-colors',
                                   isConsoleError
-                                    ? 'text-red-400'
+                                    ? 'bg-red-500/5 border-red-500/50 text-red-500 dark:text-red-400'
                                     : isConsoleWarn
-                                      ? 'text-yellow-400'
-                                      : isConsoleLine
-                                        ? 'text-sky-400'
-                                        : 'text-muted-foreground/70'
-                                }`}
+                                      ? 'bg-amber-500/5 border-amber-500/50 text-amber-600 dark:text-amber-400'
+                                      : isConsoleLog || isConsoleInfo
+                                        ? 'bg-sky-500/5 border-sky-500/50 text-sky-600 dark:text-sky-400'
+                                        : isConsoleDebug
+                                          ? 'bg-violet-500/5 border-violet-500/50 text-violet-500 dark:text-violet-400'
+                                          : 'bg-muted/10 border-muted-foreground/30 text-muted-foreground'
+                                )}
                               >
-                                <span className="shrink-0 select-none">
-                                  {isConsoleError
-                                    ? '🔴'
-                                    : isConsoleWarn
-                                      ? '🟡'
-                                      : isConsoleLine
-                                        ? '🔵'
-                                        : '·'}
+                                <span className="font-mono text-[9px] uppercase font-bold shrink-0 w-8 opacity-70 mt-0.5">
+                                  {isConsoleError ? 'ERR' : 
+                                   isConsoleWarn ? 'WRN' : 
+                                   isConsoleLog ? 'LOG' : 
+                                   isConsoleInfo ? 'INF' : 
+                                   isConsoleDebug ? 'DBG' : 'SYS'}
                                 </span>
-                                <span className="break-all flex-1 pr-6">{log}</span>
+                                <span className="break-all flex-1 pr-6 leading-relaxed">
+                                  {log.replace(/^\[(ERROR|WARN|LOG|INFO|DEBUG)\]\s*/, '')}
+                                </span>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-5 w-5 absolute right-0 top-0 opacity-0 group-hover/item:opacity-100 transition-opacity"
+                                  className="h-5 w-5 absolute right-1 top-1 opacity-0 group-hover/item:opacity-100 transition-opacity bg-background/40 hover:bg-background/80"
                                   onClick={() => handleCopyTestLog(log, `log-${i}`)}
                                   title="Copy log entry"
                                 >
-                                  {copiedLogId === `log-${i}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
+                                  {copiedLogId === `log-${i}` ? (
+                                    <Check className="h-3 w-3 text-emerald-500" />
+                                  ) : (
+                                    <Copy className="h-3 w-3 text-muted-foreground" />
+                                  )}
                                 </Button>
                               </div>
                             );

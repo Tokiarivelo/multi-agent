@@ -28,7 +28,10 @@ import { useTranslation } from 'react-i18next';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Resizable } from 're-resizable';
 import { cn } from '@/lib/utils';
+import { nativePathValidationError } from '../utils/pathValidation';
+import { toast } from 'sonner';
 import {
+
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -69,6 +72,7 @@ export function LocalWorkspace() {
   const [selectedTreePath, setSelectedTreePath] = useState<string | null>(null);
   const [prevActivePath, setPrevActivePath] = useState<string | null>(null);
   const [recentWorkspaces, setRecentWorkspaces] = useState<SavedWorkspace[]>([]);
+  const [nativePathError, setNativePathError] = useState<string | null>(null);
 
   if (activeFilePath !== prevActivePath) {
     setPrevActivePath(activeFilePath);
@@ -323,8 +327,20 @@ export function LocalWorkspace() {
                         ),
                         activeWorkspace?.nativePath || '',
                       );
-                      if (p !== null && activeWorkspace) {
-                        updateWorkspaceLocalPath(activeWorkspace.id, p);
+                      if (p === null) return; // user cancelled
+                      const trimmed = p.trim();
+                      const err = nativePathValidationError(trimmed);
+                      if (err) {
+                        setNativePathError(err);
+                        toast.error(err);
+                        return;
+                      }
+                      setNativePathError(null);
+                      if (activeWorkspace) {
+                        updateWorkspaceLocalPath(activeWorkspace.id, trimmed);
+                        toast.success(
+                          t('workspace.nativePathSaved', 'Server path saved successfully'),
+                        );
                       }
                     }}
                     className="text-[10px] text-lime-500 opacity-0 group-hover:opacity-100 hover:underline transition-opacity"
@@ -336,8 +352,15 @@ export function LocalWorkspace() {
                   className="text-[10px] font-mono text-muted-foreground truncate"
                   title={activeWorkspace?.nativePath || 'Not set'}
                 >
-                  {activeWorkspace?.nativePath || t('workspace.noNativePath', 'No native path set')}
+                  {activeWorkspace?.nativePath ? (
+                    <span className="text-lime-400">{activeWorkspace.nativePath}</span>
+                  ) : (
+                    <span className="italic">{t('workspace.noNativePath', 'No native path set')}</span>
+                  )}
                 </div>
+                {nativePathError && (
+                  <p className="text-[9px] text-red-400 mt-0.5 wrap-break-word">{nativePathError}</p>
+                )}
               </div>
 
               {fileTree ? (

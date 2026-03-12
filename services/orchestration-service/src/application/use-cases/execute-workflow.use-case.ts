@@ -78,7 +78,18 @@ export class ExecuteWorkflowUseCase {
     nodeId: string,
     input: Record<string, unknown>,
     userId: string,
+    nodeType?: string,
+    nodeConfig?: Record<string, unknown>,
+    executionId?: string,
   ): Promise<{ input: unknown; output: unknown; error?: string; logs: string[] }> {
-    return this.workflowExecutor.testNode(workflowId, nodeId, input, userId);
+    return this.workflowExecutor.testNode(
+      workflowId,
+      nodeId,
+      input,
+      userId,
+      nodeType,
+      nodeConfig,
+      executionId,
+    );
   }
 }

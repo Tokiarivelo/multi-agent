@@ -16,6 +16,8 @@ export class CreateWorkflowDto {
     nodes: any[];
     edges: any[];
     version: number;
+    inputSchema?: any[];
+    outputSchema?: any[];
   };
 
   @IsEnum(WorkflowStatus)

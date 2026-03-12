@@ -1044,6 +1044,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
         tools={toolsData?.data ?? []}
         availableTypings={computeAvailableTypings(editingNodeId)}
         workflowId={workflow?.id}
+        executionId={activeExecutionId}
         initialTestInput={editingNodeLastInput}
       />
     </div>

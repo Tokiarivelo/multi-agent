@@ -22,6 +22,7 @@ export enum NodeType {
   SHELL = 'SHELL',
   WORKSPACE_READ = 'WORKSPACE_READ',
   WORKSPACE_WRITE = 'WORKSPACE_WRITE',
+  SUBWORKFLOW = 'SUBWORKFLOW',
 }
 
 export interface WorkflowNode {
@@ -39,10 +40,30 @@ export interface WorkflowEdge {
   condition?: string;
 }
 
+/** Describes a single input or output field for a workflow */
+export interface WorkflowIOField {
+  /** Variable name (must be a valid JS identifier) */
+  key: string;
+  /** Human-readable label */
+  label?: string;
+  /** Data type hint for tooling */
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'any';
+  /** Description shown in UI / documentation */
+  description?: string;
+  /** Whether this input is required (only meaningful for inputSchema) */
+  required?: boolean;
+  /** Default value if the key is absent in the incoming context (inputs only) */
+  defaultValue?: unknown;
+}
+
 export interface WorkflowDefinition {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   version: number;
+  /** Declared input contract — what variables this workflow expects to receive */
+  inputSchema?: WorkflowIOField[];
+  /** Declared output contract — what variables this workflow promises to expose */
+  outputSchema?: WorkflowIOField[];
 }
 
 export class Workflow {

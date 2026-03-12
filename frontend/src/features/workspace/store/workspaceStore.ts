@@ -103,14 +103,38 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   addWorkspace: (entry) =>
     set((state) => {
-      // Prevent duplicates (same folder name + same handle)
-      const exists = state.workspaces.some((w) => w.name === entry.name);
-      if (exists) return state;
+      // If already exists by name, merge nativePath if new entry has one
+      const existingIdx = state.workspaces.findIndex((w) => w.name === entry.name);
+      if (existingIdx !== -1) {
+        const existing = state.workspaces[existingIdx];
+        // Only merge if incoming entry has a nativePath that the existing one lacks
+        if (entry.nativePath && !existing.nativePath) {
+          const workspaces = state.workspaces.map((w, i) =>
+            i === existingIdx ? { ...w, nativePath: entry.nativePath } : w,
+          );
+          workspaceStorageService.saveWorkspaces(
+            workspaces.map((w) => ({
+              id: w.id,
+              name: w.name,
+              handle: w.rootHandle,
+              nativePath: w.nativePath,
+            })),
+          );
+          return { workspaces };
+        }
+        return state;
+      }
+
       const workspaces = [...state.workspaces, entry];
 
       // Persist async
       workspaceStorageService.saveWorkspaces(
-        workspaces.map((w) => ({ id: w.id, name: w.name, handle: w.rootHandle })),
+        workspaces.map((w) => ({
+          id: w.id,
+          name: w.name,
+          handle: w.rootHandle,
+          nativePath: w.nativePath,
+        })),
       );
 
       return {
@@ -126,7 +150,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
       // Persist async
       workspaceStorageService.saveWorkspaces(
-        workspaces.map((w) => ({ id: w.id, name: w.name, handle: w.rootHandle })),
+        workspaces.map((w) => ({
+          id: w.id,
+          name: w.name,
+          handle: w.rootHandle,
+          nativePath: w.nativePath,
+        })),
       );
 
       let activeWorkspaceId = state.activeWorkspaceId;
@@ -172,7 +201,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const workspaces = state.workspaces.map((ws) =>
         ws.id === id ? { ...ws, nativePath: path } : ws,
       );
-      // Persist to indexedDB
+
+      // Persist to main list
       const saved = workspaces.map((ws) => ({
         id: ws.id,
         name: ws.name,
@@ -180,6 +210,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         nativePath: ws.nativePath,
       }));
       workspaceStorageService.saveWorkspaces(saved);
+
+      // Also update its record in the recent list so it's recovered on re-open
+      const updated = workspaces.find((w) => w.id === id);
+      if (updated) {
+        workspaceStorageService.recordRecentWorkspace({
+          id: updated.id,
+          name: updated.name,
+          handle: updated.rootHandle,
+          nativePath: updated.nativePath,
+        });
+      }
+
       return { workspaces };
     }),
   addTerminalEntry: (entry) =>

@@ -15,6 +15,7 @@ import {
   Terminal,
   HardDriveDownload,
   HardDriveUpload,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -34,7 +35,8 @@ export type NodeTypeId =
   | 'WHATSAPP'
   | 'SHELL'
   | 'WORKSPACE_READ'
-  | 'WORKSPACE_WRITE';
+  | 'WORKSPACE_WRITE'
+  | 'SUBWORKFLOW';
 
 export interface NodeTypeMeta {
   id: NodeTypeId;
@@ -246,6 +248,18 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     bgColor: 'bg-fuchsia-500/10',
     borderColor: 'border-fuchsia-500/40',
     defaultConfig: { workspaceId: '', filePath: '', content: '' },
+  },
+  {
+    id: 'SUBWORKFLOW',
+    label: 'Sub-Workflow',
+    labelFr: 'Sous-Workflow',
+    description: 'Call another workflow as a reusable sub-process',
+    descriptionFr: 'Appeler un autre workflow comme sous-processus réutilisable',
+    icon: Workflow,
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-500/10',
+    borderColor: 'border-blue-500/40',
+    defaultConfig: { workflowId: '', inputMapping: {}, outputMapping: {} },
   },
 ];
 

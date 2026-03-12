@@ -21,6 +21,7 @@ import { CreateWorkflowDto } from '../../application/dto/create-workflow.dto';
 import { UpdateWorkflowDto } from '../../application/dto/update-workflow.dto';
 import { ExecuteWorkflowDto } from '../../application/dto/execute-workflow.dto';
 import { AddNodeDto, UpdateNodeDto, AddEdgeDto } from '../../application/dto/node-operation.dto';
+import { spawn } from 'child_process';
 
 @ApiTags('Workflows')
 @Controller('workflows')
@@ -224,9 +225,67 @@ export class WorkflowController {
     @Param('id') id: string,
     @Param('nodeId') nodeId: string,
     @Query('userId') userId: string,
-    @Body() body: { input?: Record<string, unknown> },
+    @Body()
+    body: {
+      input?: Record<string, unknown>;
+      type?: string;
+      config?: Record<string, unknown>;
+      executionId?: string;
+    },
   ) {
     this.logger.log(`Testing node ${nodeId} in workflow ${id} for user ${userId}`);
-    return this.executeWorkflowUseCase.testNode(id, nodeId, body.input ?? {}, userId);
+    return this.executeWorkflowUseCase.testNode(
+      id,
+      nodeId,
+      body.input ?? {},
+      userId,
+      body.type,
+      body.config,
+      body.executionId,
+    );
+  }
+
+  // ─── Workspace helpers ────────────────────────────────────────────────────
+
+  /**
+   * Opens the given absolute folder path in the native OS file manager.
+   * Works only when the server runs on the same machine as the user (local dev).
+   * Uses: xdg-open (Linux), open (macOS), explorer (Windows).
+   */
+  @Post('reveal-folder')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reveal a folder in the native OS file manager (local dev only)' })
+  @ApiResponse({ status: 200, description: 'Folder opened in file manager' })
+  @ApiResponse({ status: 400, description: 'Invalid or relative path' })
+  async revealFolder(@Body() body: { path: string }) {
+    const { path: folderPath } = body;
+
+    // Security: reject anything that isn't a clear absolute path
+    const isAbsolute =
+      typeof folderPath === 'string' &&
+      (folderPath.startsWith('/') || /^[A-Za-z]:[/\\]/.test(folderPath));
+    const isRelative =
+      !folderPath ||
+      folderPath === '.' ||
+      folderPath === '..' ||
+      folderPath.startsWith('./') ||
+      folderPath.startsWith('../') ||
+      folderPath.startsWith('.\\') ||
+      folderPath.startsWith('..\\');
+
+    if (!isAbsolute || isRelative) {
+      return {
+        success: false,
+        error: `Invalid path "${folderPath}". Must be an absolute path (e.g. /home/user/project).`,
+      };
+    }
+
+    const platform = process.platform;
+    const cmd = platform === 'darwin' ? 'open' : platform === 'win32' ? 'explorer' : 'xdg-open';
+
+    this.logger.log(`Revealing folder [${platform}]: ${cmd} "${folderPath}"`);
+    spawn(cmd, [folderPath], { detached: true, stdio: 'ignore' }).unref();
+
+    return { success: true, path: folderPath };
   }
 }

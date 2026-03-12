@@ -24,6 +24,15 @@ export interface RegisterData {
 }
 
 // Workflow Types
+export interface WorkflowIOField {
+  key: string;
+  label?: string;
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'any';
+  description?: string;
+  required?: boolean;
+  defaultValue?: string;
+}
+
 export interface Workflow {
   id: string;
   name: string;
@@ -32,6 +41,8 @@ export interface Workflow {
     nodes: WorkflowNode[];
     edges: WorkflowEdge[];
     version: number;
+    inputSchema?: WorkflowIOField[];
+    outputSchema?: WorkflowIOField[];
   };
   status: 'draft' | 'active' | 'archived' | 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
   createdAt: string;

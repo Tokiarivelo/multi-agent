@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useWorkflowExecutionStore, NodeStatus } from '../store/workflowExecution.store';
+import { useWorkflowExecutionStore, NodeStatus, SubExecutionRecord } from '../store/workflowExecution.store';
 import { useWorkspaceStore } from '@/features/workspace/store/workspaceStore';
 import { readFileAtPath, writeFileAtPath } from '@/features/workspace/hooks/useWorkspace';
 
@@ -54,6 +54,7 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
   const getWorkspaceById = useWorkspaceStore((s) => s.getWorkspaceById);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const addWorkspaceEntry = useWorkspaceStore((s) => s.addTerminalEntry);
+  const upsertSubExecution = useWorkflowExecutionStore((s) => s.upsertSubExecution);
 
   const addLog = useCallback((log: ExecutionLogLine) => {
     setLogs((prev) => [...prev, log]);
@@ -146,6 +147,35 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
             timestamp: event.timestamp,
             message: `${isError ? '🔴' : isWarn ? '🟡' : '⬜'} console › ${line}`,
           });
+        });
+      }
+
+      // ── Detect sub-workflow child executions from SUBWORKFLOW node output ────
+      // The backend returns { _subExecutionId, _subWorkflowId, _subWorkflowName }
+      // in the node output when a SUBWORKFLOW node completes.
+      const outputData = (event.data as Record<string, unknown> | undefined)?.output as
+        | Record<string, unknown>
+        | undefined;
+      const subExecId = outputData?._subExecutionId as string | undefined;
+      const subWfId = outputData?._subWorkflowId as string | undefined;
+      const subWfName = outputData?._subWorkflowName as string | undefined;
+
+      if (subExecId && subWfId) {
+        const rec: SubExecutionRecord = {
+          subExecutionId: subExecId,
+          subWorkflowId: subWfId,
+          subWorkflowName: subWfName ?? subWfId,
+          parentNodeId: event.nodeId,
+          parentNodeName: event.nodeName,
+          discoveredAt: event.timestamp,
+          status: 'COMPLETED',
+        };
+        upsertSubExecution(rec);
+        addLog({
+          type: 'node_update',
+          timestamp: event.timestamp,
+          message: `🔀 Sub-workflow "${rec.subWorkflowName}" completed → child exec: ${subExecId}`,
+          data: { subExecutionId: subExecId, subWorkflowId: subWfId },
         });
       }
     });
@@ -276,6 +306,7 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
     workspaces,
     getWorkspaceById,
     addWorkspaceEntry,
+    upsertSubExecution,
   ]);
 
   return { logs, connected, executionStatus, clearLogs };

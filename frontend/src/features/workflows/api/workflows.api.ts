@@ -46,7 +46,8 @@ export interface AddNodePayload {
     | 'WHATSAPP'
     | 'SHELL'
     | 'WORKSPACE_READ'
-    | 'WORKSPACE_WRITE';
+    | 'WORKSPACE_WRITE'
+    | 'SUBWORKFLOW';
   customName?: string;
   config?: Record<string, unknown>;
   position?: { x: number; y: number };
@@ -155,9 +156,15 @@ export const workflowsApi = {
     workflowId: string,
     nodeId: string,
     input: Record<string, unknown>,
+    type?: string,
+    config?: Record<string, unknown>,
+    executionId?: string,
   ): Promise<{ input: unknown; output: unknown; error?: string; logs: string[] }> => {
     const { data } = await apiClient.post(`/api/workflows/${workflowId}/nodes/${nodeId}/test`, {
       input,
+      type,
+      config,
+      executionId,
     });
     return data;
   },
@@ -210,3 +217,14 @@ export const workflowsApi = {
     return data;
   },
 };
+
+/** Opens the given absolute folder path in the host machine's native file manager. */
+export async function revealFolderInExplorer(
+  folderPath: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { data } = await apiClient.post<{ success: boolean; error?: string }>(
+    '/api/workflows/reveal-folder',
+    { path: folderPath },
+  );
+  return data;
+}
