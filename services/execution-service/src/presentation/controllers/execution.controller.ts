@@ -50,8 +50,12 @@ export class ExecutionController {
       completedAt: execution.completedAt,
       error: execution.error,
       metadata: execution.metadata,
+      input: execution.metadata?.input,
+      output: execution.metadata?.output,
+      nodeExecutions: execution.metadata?.nodeExecutions,
       createdAt: execution.createdAt,
       updatedAt: execution.updatedAt,
+      workflow: execution.metadata?.workflow,
     };
   }
 
@@ -109,9 +113,14 @@ export class ExecutionController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Executions list' })
-  async listExecutions(@Query('page') page: string = '1', @Query('limit') limit: string = '10') {
+  async listExecutions(
+    @Query('page') page: string = '1',
+    @Query('limit') limitArg?: string,
+    @Query('pageSize') pageSizeArg?: string,
+  ) {
     const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
+    const limitRaw = limitArg || pageSizeArg || '10';
+    const limitNum = parseInt(limitRaw, 10);
 
     if (isNaN(pageNum) || pageNum < 1) {
       throw new BadRequestException('Invalid page number');
@@ -138,8 +147,12 @@ export class ExecutionController {
         completedAt: execution.completedAt,
         error: execution.error,
         metadata: execution.metadata,
+        input: execution.metadata?.input,
+        output: execution.metadata?.output,
+        nodeExecutions: execution.metadata?.nodeExecutions,
         createdAt: execution.createdAt,
         updatedAt: execution.updatedAt,
+        workflow: execution.metadata?.workflow,
       })),
       pagination: {
         total: result.total,

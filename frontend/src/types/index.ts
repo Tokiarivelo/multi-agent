@@ -217,10 +217,17 @@ export interface Execution {
 export interface ExecutionLog {
   id: string;
   executionId: string;
-  level: 'debug' | 'info' | 'warn' | 'error';
-  message: string;
-  data?: Record<string, unknown>;
-  timestamp: string;
+  nodeId: string;
+  nodeName: string;
+  status: string;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  error?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  duration?: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ExecutionStep {

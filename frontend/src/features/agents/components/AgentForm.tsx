@@ -3,31 +3,36 @@
 import { useState } from 'react';
 import { useCreateAgent, useUpdateAgent, useDeleteAgent } from '../hooks/useAgents';
 import { useModels } from '@/features/models/hooks/useModels';
+import { useTools } from '@/features/tools/hooks/useTools';
 import { Agent } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Save, ChevronLeft, Trash2 } from 'lucide-react';
+import { Save, ChevronLeft, Trash2, Bot } from 'lucide-react';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
+import { AgentGeneralInfo } from './AgentGeneralInfo';
+import { AgentModelConfig } from './AgentModelConfig';
+import { AgentToolsConfig } from './AgentToolsConfig';
 
 interface AgentFormProps {
   agent?: Agent;
 }
 
 export function AgentForm({ agent }: AgentFormProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState(agent?.name || '');
   const [description, setDescription] = useState(agent?.description || '');
   const [modelId, setModelId] = useState(agent?.modelId || '');
   const [systemPrompt, setSystemPrompt] = useState(agent?.systemPrompt || '');
-  const [temperature, setTemperature] = useState(agent?.temperature?.toString() || '0.7');
-  const [maxTokens, setMaxTokens] = useState(agent?.maxTokens?.toString() || '2048');
+  const [temperature, setTemperature] = useState<number[]>(agent?.temperature !== undefined ? [agent.temperature] : [0.7]);
+  const [maxTokens, setMaxTokens] = useState<number[]>(agent?.maxTokens !== undefined ? [agent.maxTokens] : [2048]);
+  const [selectedTools, setSelectedTools] = useState<string[]>(agent?.tools || []);
 
   const createAgent = useCreateAgent();
   const updateAgent = useUpdateAgent();
   const deleteAgent = useDeleteAgent();
   const { data: modelsData, isLoading: modelsLoading } = useModels();
+  const { data: toolsData, isLoading: toolsLoading } = useTools();
 
   const handleSave = () => {
     const agentData = {
@@ -35,9 +40,9 @@ export function AgentForm({ agent }: AgentFormProps) {
       description,
       modelId,
       systemPrompt,
-      temperature: parseFloat(temperature),
-      maxTokens: parseInt(maxTokens),
-      tools: agent?.tools || [],
+      temperature: temperature[0],
+      maxTokens: maxTokens[0],
+      tools: selectedTools,
     };
 
     if (agent?.id) {
@@ -48,141 +53,97 @@ export function AgentForm({ agent }: AgentFormProps) {
   };
 
   const handleDelete = () => {
-    if (agent?.id && window.confirm('Are you sure you want to delete this agent?')) {
+    if (agent?.id && window.confirm(t('agents.form.delete_confirm'))) {
       deleteAgent.mutate(agent.id);
     }
   };
 
   const isLoading = createAgent.isPending || updateAgent.isPending || deleteAgent.isPending;
   const models = modelsData?.data || [];
+  const availableTools = toolsData?.data || [];
 
-  if (modelsLoading) return <LoadingSpinner />;
+  const toggleTool = (toolId: string) => {
+    setSelectedTools((prev) =>
+      prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId]
+    );
+  };
+
+  if (modelsLoading || toolsLoading) return (
+    <div className="flex flex-col items-center justify-center py-24 bg-muted/10 rounded-3xl border border-dashed border-border/60">
+      <LoadingSpinner className="h-10 w-10 text-blue-500" />
+      <p className="mt-4 text-sm font-medium text-muted-foreground animate-pulse">
+        Loading...
+      </p>
+    </div>
+  );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto pb-12">
+      <div className="flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-xl z-20 py-4 border-b border-border/40 -mx-4 px-4 sm:-mx-8 sm:px-8 mb-6">
         <div className="flex items-center gap-4">
           <Link href="/agents">
-            <Button variant="ghost" size="icon">
-              <ChevronLeft className="h-5 w-5" />
+            <Button variant="outline" size="icon" className="h-9 w-9 border-border/50 hover:bg-muted/50 rounded-full">
+              <ChevronLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <h2 className="text-2xl font-bold">{agent ? 'Edit Agent' : 'New Agent'}</h2>
+          <div>
+            <h2 className="text-2xl font-extrabold tracking-tight flex items-center gap-2">
+              <Bot className="h-6 w-6 text-blue-500" />
+              {agent ? t('agents.form.edit_title') : t('agents.form.new_title')}
+            </h2>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {agent && (
             <Button
               variant="destructive"
               onClick={handleDelete}
               disabled={isLoading}
-              className="gap-2"
+              className="gap-2 shadow-sm rounded-xl"
             >
               <Trash2 className="h-4 w-4" />
-              Delete
+              <span className="hidden sm:inline">{t('agents.actions.delete')}</span>
             </Button>
           )}
-          <Button onClick={handleSave} disabled={isLoading} className="gap-2">
+          <Button onClick={handleSave} disabled={isLoading} className="gap-2 shadow-md rounded-xl bg-blue-600 hover:bg-blue-700 text-white">
             <Save className="h-4 w-4" />
-            {isLoading ? 'Saving...' : 'Save'}
+            {isLoading ? t('agents.actions.saving') : t('agents.actions.save')}
           </Button>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Agent Configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="name" className="text-sm font-medium">
-              Name
-            </label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="My Agent"
-              required
-            />
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: General Info & Prompt */}
+        <div className="lg:col-span-2 space-y-6">
+          <AgentGeneralInfo
+            name={name}
+            setName={setName}
+            description={description}
+            setDescription={setDescription}
+            systemPrompt={systemPrompt}
+            setSystemPrompt={setSystemPrompt}
+          />
+        </div>
 
-          <div className="space-y-2">
-            <label htmlFor="description" className="text-sm font-medium">
-              Description
-            </label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this agent do?"
-              rows={3}
-            />
-          </div>
+        {/* Right Column: Model Settings & Capabilities */}
+        <div className="space-y-6">
+          <AgentModelConfig
+            modelId={modelId}
+            setModelId={setModelId}
+            temperature={temperature}
+            setTemperature={setTemperature}
+            maxTokens={maxTokens}
+            setMaxTokens={setMaxTokens}
+            models={models}
+          />
 
-          <div className="space-y-2">
-            <label htmlFor="model" className="text-sm font-medium">
-              Model
-            </label>
-            <select
-              id="model"
-              value={modelId}
-              onChange={(e) => setModelId(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              required
-            >
-              <option value="">Select a model</option>
-              {models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.name} ({model.provider})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="systemPrompt" className="text-sm font-medium">
-              System Prompt
-            </label>
-            <Textarea
-              id="systemPrompt"
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
-              placeholder="You are a helpful assistant..."
-              rows={5}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="temperature" className="text-sm font-medium">
-                Temperature
-              </label>
-              <Input
-                id="temperature"
-                type="number"
-                min="0"
-                max="2"
-                step="0.1"
-                value={temperature}
-                onChange={(e) => setTemperature(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="maxTokens" className="text-sm font-medium">
-                Max Tokens
-              </label>
-              <Input
-                id="maxTokens"
-                type="number"
-                min="1"
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(e.target.value)}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          <AgentToolsConfig
+            selectedTools={selectedTools}
+            toggleTool={toggleTool}
+            availableTools={availableTools}
+          />
+        </div>
+      </div>
     </div>
   );
 }

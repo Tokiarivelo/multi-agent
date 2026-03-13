@@ -11,16 +11,8 @@ import { ExecutionLogEntity, ExecutionLogStatus } from '../../domain/entities/ex
 export class ExecutionLogRepository implements IExecutionLogRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findById(id: string): Promise<ExecutionLogEntity | null> {
-    const log = await this.prisma.executionLog.findUnique({
-      where: { id },
-    });
-
-    if (!log) {
-      return null;
-    }
-
-    return this.toDomain(log);
+  async findById(_id: string): Promise<ExecutionLogEntity | null> {
+    return null; // Not supported directly since logs are inside workflowExecution
   }
 
   async findByExecutionId(
@@ -31,18 +23,54 @@ export class ExecutionLogRepository implements IExecutionLogRepository {
     const limit = options?.limit || 20;
     const skip = (page - 1) * limit;
 
-    const [logs, total] = await Promise.all([
-      this.prisma.executionLog.findMany({
-        where: { executionId },
-        take: limit,
-        skip,
-        orderBy: { startedAt: 'asc' },
-      }),
-      this.prisma.executionLog.count({ where: { executionId } }),
-    ]);
+    const workflowExecution = await this.prisma.workflowExecution.findUnique({
+      where: { id: executionId },
+    });
+
+    if (!workflowExecution) {
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
+      };
+    }
+
+    const nodeExecutions: any[] = Array.isArray(workflowExecution.nodeExecutions)
+      ? workflowExecution.nodeExecutions
+      : [];
+
+    const total = nodeExecutions.length;
+    const logs = nodeExecutions.map((log: any, index: number) => {
+      let duration = null;
+      if (log.startedAt && log.completedAt) {
+        duration = new Date(log.completedAt).getTime() - new Date(log.startedAt).getTime();
+      }
+      return new ExecutionLogEntity(
+        `${workflowExecution.id}_${index}`,
+        workflowExecution.id,
+        log.nodeId,
+        log.nodeName || log.nodeId,
+        log.status as ExecutionLogStatus,
+        log.input || null,
+        log.output || null,
+        log.error || null,
+        log.startedAt
+          ? new Date(log.startedAt)
+          : new Date(workflowExecution.startedAt || Date.now()),
+        log.completedAt ? new Date(log.completedAt) : null,
+        duration,
+        workflowExecution.createdAt,
+        workflowExecution.updatedAt,
+      );
+    });
+
+    logs.sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+    const paginatedLogs = logs.slice(skip, skip + limit);
 
     return {
-      data: logs.map((log) => this.toDomain(log)),
+      data: paginatedLogs,
       total,
       page,
       limit,
@@ -50,80 +78,19 @@ export class ExecutionLogRepository implements IExecutionLogRepository {
     };
   }
 
-  async findByNodeId(executionId: string, nodeId: string): Promise<ExecutionLogEntity | null> {
-    const log = await this.prisma.executionLog.findFirst({
-      where: {
-        executionId,
-        nodeId,
-      },
-    });
-
-    if (!log) {
-      return null;
-    }
-
-    return this.toDomain(log);
+  async findByNodeId(_executionId: string, _nodeId: string): Promise<ExecutionLogEntity | null> {
+    return null;
   }
 
   async create(log: ExecutionLogEntity): Promise<ExecutionLogEntity> {
-    const created = await this.prisma.executionLog.create({
-      data: {
-        id: log.id,
-        executionId: log.executionId,
-        nodeId: log.nodeId,
-        nodeName: log.nodeName,
-        status: log.status,
-        input: log.input as any,
-        output: log.output as any,
-        error: log.error,
-        startedAt: log.startedAt,
-        completedAt: log.completedAt,
-        duration: log.duration,
-      },
-    });
-
-    return this.toDomain(created);
+    return log;
   }
 
   async update(log: ExecutionLogEntity): Promise<ExecutionLogEntity> {
-    const updated = await this.prisma.executionLog.update({
-      where: { id: log.id },
-      data: {
-        status: log.status,
-        input: log.input as any,
-        output: log.output as any,
-        error: log.error,
-        startedAt: log.startedAt,
-        completedAt: log.completedAt,
-        duration: log.duration,
-        updatedAt: log.updatedAt,
-      },
-    });
-
-    return this.toDomain(updated);
+    return log;
   }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.executionLog.delete({
-      where: { id },
-    });
-  }
-
-  private toDomain(data: any): ExecutionLogEntity {
-    return new ExecutionLogEntity(
-      data.id,
-      data.executionId,
-      data.nodeId,
-      data.nodeName,
-      data.status as ExecutionLogStatus,
-      data.input || null,
-      data.output || null,
-      data.error,
-      data.startedAt,
-      data.completedAt,
-      data.duration,
-      data.createdAt,
-      data.updatedAt,
-    );
+  async delete(_id: string): Promise<void> {
+    // No-op
   }
 }

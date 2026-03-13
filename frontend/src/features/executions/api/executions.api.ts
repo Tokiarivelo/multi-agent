@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-import { Execution, ExecutionLog, ApiResponse, PaginatedResponse } from '@/types';
+import { Execution, ExecutionLog, PaginatedResponse } from '@/types';
 
 export const executionsApi = {
   getAll: async (page = 1, pageSize = 20): Promise<PaginatedResponse<Execution>> => {
@@ -10,8 +10,8 @@ export const executionsApi = {
   },
 
   getById: async (id: string): Promise<Execution> => {
-    const { data } = await apiClient.get<ApiResponse<Execution>>(`/api/executions/${id}`);
-    return data.data;
+    const { data } = await apiClient.get<Execution>(`/api/executions/${id}`);
+    return data;
   },
 
   getLogs: async (
@@ -26,10 +26,8 @@ export const executionsApi = {
   },
 
   retry: async (id: string): Promise<{ executionId: string }> => {
-    const { data } = await apiClient.post<ApiResponse<{ executionId: string }>>(
-      `/api/executions/${id}/retry`,
-    );
-    return data.data;
+    const { data } = await apiClient.post<{ executionId: string }>(`/api/executions/${id}/retry`);
+    return data;
   },
 
   cancel: async (id: string): Promise<void> => {
