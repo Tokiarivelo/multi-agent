@@ -27,6 +27,30 @@ export function useCreateModel() {
   });
 }
 
+export function useUpdateModel() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof modelsApi.update>[1] }) =>
+      modelsApi.update(id, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['models'] });
+      queryClient.invalidateQueries({ queryKey: ['model', variables.id] });
+    },
+  });
+}
+
+export function useDeleteModel() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => modelsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['models'] });
+    },
+  });
+}
+
 export function useProviderModels(provider: string | null) {
   return useQuery({
     queryKey: ['providerModels', provider],

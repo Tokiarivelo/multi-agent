@@ -17,6 +17,7 @@ import { getStatusColor } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { CreateModelModal } from './CreateModelModal';
+import { ModelActionMenu } from './ModelActionMenu';
 
 export function ModelList() {
   const { data, isLoading, error } = useModels();
@@ -58,6 +59,7 @@ export function ModelList() {
                   <TableHead>Model ID</TableHead>
                   <TableHead>Max Tokens</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -85,6 +87,9 @@ export function ModelList() {
                       >
                         {model.status || 'available'}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <ModelActionMenu model={model} />
                     </TableCell>
                   </TableRow>
                 ))}

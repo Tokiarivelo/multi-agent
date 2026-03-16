@@ -169,6 +169,7 @@ export interface CreateModelInput {
   supportsStreaming?: boolean;
   defaultTemperature?: number;
   isActive?: boolean;
+  providerSettings?: Record<string, unknown>;
 }
 
 export interface ProviderModel {
@@ -185,6 +186,7 @@ export interface ApiKey {
   provider: ModelProvider | string;
   keyName: string;
   apiKeyHash: string;
+  keyPrefix?: string;
   isActive: boolean;
   isValid: boolean;
   lastUsedAt?: string;

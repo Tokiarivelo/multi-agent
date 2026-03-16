@@ -111,13 +111,16 @@ const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
 );
 SelectTrigger.displayName = 'SelectTrigger';
 
-// ─── Value ───────────────────────────────────────────────
+interface SelectValueProps {
+  placeholder?: string;
+  children?: React.ReactNode;
+}
 
-function SelectValue({ placeholder }: { placeholder?: string }) {
+function SelectValue({ placeholder, children }: SelectValueProps) {
   const { value } = useSelectCtx();
   return (
     <span className={cn('truncate', !value && 'text-muted-foreground')}>
-      {value || placeholder || 'Select…'}
+      {children || value || placeholder || 'Select…'}
     </span>
   );
 }

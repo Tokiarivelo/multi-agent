@@ -3,8 +3,10 @@ import { ApiKey, ApiResponse, CreateApiKeyInput } from '@/types';
 
 export const apiKeysApi = {
   getAll: async (userId: string): Promise<ApiKey[]> => {
-    const { data } = await apiClient.get<ApiKey[]>(`/api/api-keys?userId=${userId}`);
-    return data;
+    const { data } = await apiClient.get<ApiKey[] | { data: ApiKey[] }>(
+      `/api/api-keys?userId=${userId}`,
+    );
+    return Array.isArray(data) ? data : data?.data || [];
   },
 
   getById: async (id: string): Promise<ApiKey> => {
@@ -13,10 +15,13 @@ export const apiKeysApi = {
   },
 
   getByProvider: async (userId: string, provider: string): Promise<ApiKey[]> => {
-    const { data } = await apiClient.get<ApiKey[]>(
+    const { data } = await apiClient.get<ApiKey[] | { data: ApiKey[] }>(
       `/api/api-keys/provider/${provider}?userId=${userId}`,
     );
-    return data;
+
+    console.log('data :>>>>>>>>>>>>>>><> ', data);
+
+    return Array.isArray(data) ? data : data?.data || [];
   },
 
   create: async (input: CreateApiKeyInput): Promise<ApiKey> => {

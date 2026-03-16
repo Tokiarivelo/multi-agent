@@ -114,6 +114,6 @@ export class OpenAIProvider {
   }
 
   isSupported(provider: string): boolean {
-    return provider === 'openai';
+    return provider?.toLowerCase() === 'openai';
   }
 }

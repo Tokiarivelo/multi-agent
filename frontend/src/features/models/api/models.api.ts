@@ -26,6 +26,15 @@ export const modelsApi = {
     return data;
   },
 
+  update: async (id: string, modelData: Partial<CreateModelInput>): Promise<Model> => {
+    const { data } = await apiClient.put<Model>(`/api/models/${id}`, modelData);
+    return data;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/api/models/${id}`);
+  },
+
   // Provider Models
   fetchProviderModels: async (provider: string): Promise<ProviderModel[]> => {
     const { data } = await apiClient.get<ProviderModel[]>(

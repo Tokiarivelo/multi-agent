@@ -2,30 +2,33 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useCreateModel, useProviderModels } from '../hooks/useModels';
+import { useUpdateModel, useProviderModels } from '../hooks/useModels';
 import { useApiKeysByProvider } from '@/features/api-keys/hooks/useApiKeys';
 import { useAuthStore } from '@/store/auth.store';
-import { ModelProvider, ProviderModel, ApiKey } from '@/types';
+import { ModelProvider, ProviderModel, ApiKey, Model } from '@/types';
 
-interface CreateModelModalProps {
+interface EditModelModalProps {
+  model: Model;
   onClose: () => void;
 }
 
-export function CreateModelModal({ onClose }: CreateModelModalProps) {
+export function EditModelModal({ model, onClose }: EditModelModalProps) {
   const { t } = useTranslation();
 
-  const [name, setName] = useState('');
-  const [provider, setProvider] = useState<string>(ModelProvider.OPENAI);
-  const [modelId, setModelId] = useState('');
-  const [maxTokens, setMaxTokens] = useState<number>(4000);
-  const [useCustomModelId, setUseCustomModelId] = useState(false);
-  const [apiBaseUrl, setApiBaseUrl] = useState('');
-  const [apiKeyId, setApiKeyId] = useState<string>('');
+  const [name, setName] = useState(model.name);
+  const [provider, setProvider] = useState<string>(model.provider);
+  const [modelId, setModelId] = useState(model.modelId);
+  const [maxTokens, setMaxTokens] = useState<number>(model.maxTokens || 4000);
+  const [useCustomModelId, setUseCustomModelId] = useState(true);
+  const providerSettings = (model as unknown as { providerSettings?: Record<string, string> })
+    .providerSettings;
+  const [apiBaseUrl, setApiBaseUrl] = useState(providerSettings?.baseUrl || '');
+  const [apiKeyId, setApiKeyId] = useState<string>(providerSettings?.apiKeyId || '');
 
   const { user } = useAuthStore();
   const isCustomProvider = provider === ModelProvider.CUSTOM;
 
-  const createModelMutation = useCreateModel();
+  const updateModelMutation = useUpdateModel();
   const { data: apiKeys } = useApiKeysByProvider(user?.id, provider);
   const {
     data: providerModels,
@@ -41,8 +44,6 @@ export function CreateModelModal({ onClose }: CreateModelModalProps) {
     setApiBaseUrl('');
     setApiKeyId('');
   };
-
-  console.log('apiKeys :>>>>>>>>>>>>><<> ', apiKeys);
 
   // Auto-fill maxTokens when a provider model is selected
   const handleModelSelect = (selectedModelId: string) => {
@@ -62,15 +63,17 @@ export function CreateModelModal({ onClose }: CreateModelModalProps) {
     if (apiKeyId) providerSettings.apiKeyId = apiKeyId;
     if (apiBaseUrl) providerSettings.baseUrl = apiBaseUrl;
 
-    createModelMutation.mutate(
+    updateModelMutation.mutate(
       {
-        name,
-        provider: provider as ModelProvider,
-        modelId,
-        maxTokens,
-        supportsStreaming: true,
-        isActive: true,
-        providerSettings: Object.keys(providerSettings).length > 0 ? providerSettings : undefined,
+        id: model.id,
+        data: {
+          name,
+          provider: provider as ModelProvider,
+          modelId,
+          maxTokens,
+          supportsStreaming: true,
+          providerSettings: Object.keys(providerSettings).length > 0 ? providerSettings : undefined,
+        },
       },
       { onSuccess: () => onClose() },
     );
@@ -78,12 +81,14 @@ export function CreateModelModal({ onClose }: CreateModelModalProps) {
 
   const hasModels = providerModels && providerModels.length > 0;
 
+  console.log('user :>>>>>>>>>>>>>>>><> ', user);
+
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card text-card-foreground shadow-lg border rounded-xl w-full max-w-md p-6 space-y-6">
         <div>
-          <h3 className="text-xl font-semibold">{t('models.create.title')}</h3>
-          <p className="text-sm text-muted-foreground">{t('models.create.subtitle')}</p>
+          <h3 className="text-xl font-semibold">Edit Model</h3>
+          <p className="text-sm text-muted-foreground">Modify the model configuration</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -263,10 +268,10 @@ export function CreateModelModal({ onClose }: CreateModelModalProps) {
 
           <div className="flex items-center justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
-              {t('models.create.cancel')}
+              {t('models.create.cancel', 'Cancel')}
             </Button>
-            <Button type="submit" disabled={createModelMutation.isPending}>
-              {createModelMutation.isPending ? t('models.create.saving') : t('models.create.save')}
+            <Button type="submit" disabled={updateModelMutation.isPending}>
+              {updateModelMutation.isPending ? 'Updating...' : 'Update Model'}
             </Button>
           </div>
         </form>

@@ -31,6 +31,7 @@ export interface Model {
   isActive: boolean;
   isDefault: boolean;
   metadata?: Record<string, any>;
+  apiKey?: string;
 
   createdAt: Date;
   updatedAt: Date;

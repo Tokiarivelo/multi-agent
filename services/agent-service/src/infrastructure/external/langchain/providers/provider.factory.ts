@@ -11,7 +11,7 @@ export class ProviderFactory {
   ) {}
 
   getProvider(config: LLMConfig): OpenAIProvider | AnthropicProvider {
-    switch (config.provider) {
+    switch (config.provider?.toLowerCase()) {
       case 'openai':
         return this.openaiProvider;
       case 'anthropic':
@@ -26,6 +26,6 @@ export class ProviderFactory {
   }
 
   isSupported(provider: string): boolean {
-    return ['openai', 'anthropic'].includes(provider);
+    return ['openai', 'anthropic'].includes(provider?.toLowerCase());
   }
 }
