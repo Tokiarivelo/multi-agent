@@ -25,9 +25,16 @@ export class ExecuteToolUseCase {
     const startTime = Date.now();
 
     try {
-      const tool = await this.toolRepository.findById(dto.toolId);
+      if (!dto.toolId && !dto.toolName) {
+        throw new BadRequestException('Either toolId or toolName must be provided');
+      }
+
+      const tool = dto.toolId
+        ? await this.toolRepository.findById(dto.toolId)
+        : await this.toolRepository.findByName(dto.toolName!);
+
       if (!tool) {
-        throw new NotFoundException(`Tool with ID "${dto.toolId}" not found`);
+        throw new NotFoundException(`Tool not found`);
       }
 
       const validation = tool.validateParameters(dto.parameters);

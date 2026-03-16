@@ -116,6 +116,7 @@ model Tool {
   category    ToolCategory
   parameters  Json         // ToolParameter[]
   code        String?      @db.Text
+  icon        String?
   isBuiltIn   Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt

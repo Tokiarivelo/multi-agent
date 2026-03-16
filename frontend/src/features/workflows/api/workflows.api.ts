@@ -39,7 +39,15 @@ export interface AddNodePayload {
     | 'END'
     | 'PROMPT'
     | 'TEXT'
-    | 'FILE';
+    | 'FILE'
+    | 'LOOP'
+    | 'GITHUB'
+    | 'SLACK'
+    | 'WHATSAPP'
+    | 'SHELL'
+    | 'WORKSPACE_READ'
+    | 'WORKSPACE_WRITE'
+    | 'SUBWORKFLOW';
   customName?: string;
   config?: Record<string, unknown>;
   position?: { x: number; y: number };
@@ -138,6 +146,29 @@ export const workflowsApi = {
     await apiClient.post(`/api/workflows/executions/${executionId}/cancel`);
   },
 
+  resumeNode: async (executionId: string, nodeId: string, input: string): Promise<void> => {
+    await apiClient.post(`/api/workflows/executions/${executionId}/nodes/${nodeId}/resume`, {
+      input,
+    });
+  },
+
+  testNode: async (
+    workflowId: string,
+    nodeId: string,
+    input: Record<string, unknown>,
+    type?: string,
+    config?: Record<string, unknown>,
+    executionId?: string,
+  ): Promise<{ input: unknown; output: unknown; error?: string; logs: string[] }> => {
+    const { data } = await apiClient.post(`/api/workflows/${workflowId}/nodes/${nodeId}/test`, {
+      input,
+      type,
+      config,
+      executionId,
+    });
+    return data;
+  },
+
   // ─── Files ────────────────────────────────────────────────────────
 
   uploadFile: async (
@@ -186,3 +217,14 @@ export const workflowsApi = {
     return data;
   },
 };
+
+/** Opens the given absolute folder path in the host machine's native file manager. */
+export async function revealFolderInExplorer(
+  folderPath: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { data } = await apiClient.post<{ success: boolean; error?: string }>(
+    '/api/workflows/reveal-folder',
+    { path: folderPath },
+  );
+  return data;
+}

@@ -8,6 +8,14 @@ import {
   MessageSquare,
   Type,
   File,
+  Repeat2,
+  Github,
+  MessageCircle,
+  Phone,
+  Terminal,
+  HardDriveDownload,
+  HardDriveUpload,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -20,7 +28,15 @@ export type NodeTypeId =
   | 'TRANSFORM'
   | 'PROMPT'
   | 'TEXT'
-  | 'FILE';
+  | 'FILE'
+  | 'LOOP'
+  | 'GITHUB'
+  | 'SLACK'
+  | 'WHATSAPP'
+  | 'SHELL'
+  | 'WORKSPACE_READ'
+  | 'WORKSPACE_WRITE'
+  | 'SUBWORKFLOW';
 
 export interface NodeTypeMeta {
   id: NodeTypeId;
@@ -143,6 +159,107 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     bgColor: 'bg-pink-500/10',
     borderColor: 'border-pink-500/40',
     defaultConfig: { files: [] },
+  },
+  {
+    id: 'LOOP',
+    label: 'Loop',
+    labelFr: 'Boucle',
+    description: 'Iterate over an array and transform each item',
+    descriptionFr: 'Itérer sur un tableau et transformer chaque élément',
+    icon: Repeat2,
+    color: 'text-teal-500',
+    bgColor: 'bg-teal-500/10',
+    borderColor: 'border-teal-500/40',
+    defaultConfig: {
+      collection: '',
+      itemScript: 'return item;',
+      filterScript: '',
+      maxIterations: 100,
+    },
+  },
+  {
+    id: 'GITHUB',
+    label: 'GitHub API',
+    labelFr: 'API GitHub',
+    description: 'Execute requests against the GitHub REST API',
+    descriptionFr: "Exécuter des requêtes vers l'API GitHub",
+    icon: Github,
+    color: 'text-neutral-500 dark:text-neutral-300',
+    bgColor: 'bg-neutral-500/10 dark:bg-neutral-300/10',
+    borderColor: 'border-neutral-500/40 dark:border-neutral-300/40',
+    defaultConfig: { token: '', endpoint: '/user', method: 'GET', body: '' },
+  },
+  {
+    id: 'SLACK',
+    label: 'Slack Message',
+    labelFr: 'Message Slack',
+    description: 'Post a message to a Slack channel',
+    descriptionFr: 'Publier un message sur un canal Slack',
+    icon: MessageCircle,
+    color: 'text-rose-600',
+    bgColor: 'bg-rose-500/10',
+    borderColor: 'border-rose-500/40',
+    defaultConfig: { token: '', channel: '', message: '' },
+  },
+  {
+    id: 'WHATSAPP',
+    label: 'WhatsApp',
+    labelFr: 'WhatsApp',
+    description: 'Send a WhatsApp message via Cloud API',
+    descriptionFr: 'Envoyer un message WhatsApp via Cloud API',
+    icon: Phone,
+    color: 'text-green-500',
+    bgColor: 'bg-green-500/10',
+    borderColor: 'border-green-500/40',
+    defaultConfig: { token: '', phoneNumberId: '', to: '', message: '' },
+  },
+  {
+    id: 'SHELL',
+    label: 'Shell Execute',
+    labelFr: 'Script Shell',
+    description: 'Execute a shell command locally',
+    descriptionFr: 'Exécuter une commande shell localement',
+    icon: Terminal,
+    color: 'text-zinc-500',
+    bgColor: 'bg-zinc-500/10',
+    borderColor: 'border-zinc-500/40',
+    defaultConfig: { command: 'echo "Hello World"', timeout: 30000 },
+  },
+  {
+    id: 'WORKSPACE_READ',
+    label: 'Workspace Read',
+    labelFr: 'Lire Espace de Travail',
+    description: 'Read a file from the currently open local workspace',
+    descriptionFr: "Lire un fichier depuis l'espace de travail local ouvert",
+    icon: HardDriveDownload,
+    color: 'text-lime-500',
+    bgColor: 'bg-lime-500/10',
+    borderColor: 'border-lime-500/40',
+    defaultConfig: { workspaceId: '', filePath: '' },
+  },
+  {
+    id: 'WORKSPACE_WRITE',
+    label: 'Workspace Write',
+    labelFr: 'Écrire Espace de Travail',
+    description: 'Write content to a file in the currently open local workspace',
+    descriptionFr: "Écrire du contenu dans un fichier de l'espace de travail local",
+    icon: HardDriveUpload,
+    color: 'text-fuchsia-500',
+    bgColor: 'bg-fuchsia-500/10',
+    borderColor: 'border-fuchsia-500/40',
+    defaultConfig: { workspaceId: '', filePath: '', content: '' },
+  },
+  {
+    id: 'SUBWORKFLOW',
+    label: 'Sub-Workflow',
+    labelFr: 'Sous-Workflow',
+    description: 'Call another workflow as a reusable sub-process',
+    descriptionFr: 'Appeler un autre workflow comme sous-processus réutilisable',
+    icon: Workflow,
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-500/10',
+    borderColor: 'border-blue-500/40',
+    defaultConfig: { workflowId: '', inputMapping: {}, outputMapping: {} },
   },
 ];
 

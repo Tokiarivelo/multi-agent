@@ -3,7 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useCreateModel, useProviderModels } from '../hooks/useModels';
-import { ModelProvider, ProviderModel } from '@/types';
+import { useApiKeysByProvider } from '@/features/api-keys/hooks/useApiKeys';
+import { useAuthStore } from '@/store/auth.store';
+import { ModelProvider, ProviderModel, ApiKey } from '@/types';
 
 interface CreateModelModalProps {
   onClose: () => void;
@@ -18,10 +20,13 @@ export function CreateModelModal({ onClose }: CreateModelModalProps) {
   const [maxTokens, setMaxTokens] = useState<number>(4000);
   const [useCustomModelId, setUseCustomModelId] = useState(false);
   const [apiBaseUrl, setApiBaseUrl] = useState('');
+  const [apiKeyId, setApiKeyId] = useState<string>('');
 
+  const { user } = useAuthStore();
   const isCustomProvider = provider === ModelProvider.CUSTOM;
 
   const createModelMutation = useCreateModel();
+  const { data: apiKeys } = useApiKeysByProvider(user?.id, provider);
   const {
     data: providerModels,
     isLoading: isLoadingModels,
@@ -34,7 +39,10 @@ export function CreateModelModal({ onClose }: CreateModelModalProps) {
     setModelId('');
     setUseCustomModelId(false);
     setApiBaseUrl('');
+    setApiKeyId('');
   };
+
+  console.log('apiKeys :>>>>>>>>>>>>><<> ', apiKeys);
 
   // Auto-fill maxTokens when a provider model is selected
   const handleModelSelect = (selectedModelId: string) => {
@@ -50,14 +58,19 @@ export function CreateModelModal({ onClose }: CreateModelModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const providerSettings: Record<string, unknown> = {};
+    if (apiKeyId) providerSettings.apiKeyId = apiKeyId;
+    if (apiBaseUrl) providerSettings.baseUrl = apiBaseUrl;
+
     createModelMutation.mutate(
       {
         name,
-        provider,
+        provider: provider as ModelProvider,
         modelId,
         maxTokens,
         supportsStreaming: true,
         isActive: true,
+        providerSettings: Object.keys(providerSettings).length > 0 ? providerSettings : undefined,
       },
       { onSuccess: () => onClose() },
     );
@@ -92,6 +105,30 @@ export function CreateModelModal({ onClose }: CreateModelModalProps) {
               <p className="text-xs text-muted-foreground">{t('models.create.customHint')}</p>
             )}
           </div>
+
+          {/* API Key */}
+          {!isCustomProvider && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{t('models.create.apiKey', 'API Key')}</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={apiKeyId}
+                onChange={(e) => setApiKeyId(e.target.value)}
+              >
+                <option value="">
+                  {apiKeys?.length
+                    ? t('models.create.selectApiKey', 'Select an API Key (Optional)')
+                    : t('models.create.noApiKeys', 'No API Keys available')}
+                </option>
+                {apiKeys?.map((key: ApiKey) => (
+                  <option key={key.id} value={key.id}>
+                    {key.keyName || 'Unnamed Key'} ({key.keyPrefix}... isActive:{' '}
+                    {key.isActive ? 'Yes' : 'No'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Model Engine ID */}
           <div className="space-y-2">

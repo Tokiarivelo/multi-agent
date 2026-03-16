@@ -75,6 +75,7 @@ Enforce:
 - Always make it compatible with dark and light theme
 - Always use reactquery for request
 - Always use zustand for the stores
+- Always split components for preventing long lines of codes
 
 ---
 
@@ -148,6 +149,37 @@ Separate:
 - Vector memory
 
 Never tightly couple orchestration and LLM calls.
+
+---
+
+## 🔐 Workspace & File System Security (MANDATORY)
+
+### Server-Side Path (`nativePath`) Rules
+
+The `nativePath` on a workspace entry is the **only** authorized root for server-side file and shell operations.
+
+**Validation rules (enforced at BOTH frontend and backend):**
+
+- `nativePath` MUST be an **absolute path**:
+  - Unix: starts with `/` (e.g. `/home/user/project`)
+  - Windows: starts with a drive letter (e.g. `C:\Users\user\project`)
+- `nativePath` MUST NOT be:
+  - Empty or whitespace-only
+  - A relative path: `.`, `..`, `./`, `../`, `.\\`, `..\\`
+  - Any path not starting with `/` or a Windows drive root
+
+**Enforcement points:**
+
+- **Frontend** (`LocalWorkspace.tsx`): validate with `nativePathValidationError()` from `src/features/workspace/utils/pathValidation.ts` before calling `updateWorkspaceLocalPath`. Show an error toast and inline message — **never save an invalid path**.
+- **Backend** (`WorkflowExecutorService` — SHELL node): reject node execution if `cwd` is missing or not absolute. Throw a descriptive error.
+- Shared validation utility lives at `frontend/src/features/workspace/utils/pathValidation.ts` — **do not duplicate this logic**.
+
+### Write Permission Rules
+
+- `WORKSPACE_WRITE` / `WORKSPACE_READ` nodes MUST use the browser WebSocket bridge (`workspace:request` / `workspace:response`). They are implicitly scoped to the user-granted browser `FileSystemDirectoryHandle` — **no server-side path needed**.
+- `SHELL` nodes MUST use the workspace `nativePath` as `cwd`. A SHELL node **without a valid absolute `cwd` MUST NOT execute** — fail with a clear error.
+- Server-side file writes outside of a workspace with a valid `nativePath` are **forbidden**.
+- Never allow `cwd` to be injected from untrusted user input without absolute-path validation.
 
 ---
 

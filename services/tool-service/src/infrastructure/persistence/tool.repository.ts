@@ -15,6 +15,7 @@ export class PrismaToolRepository implements ToolRepository {
         category: tool.category,
         parameters: tool.parameters as any,
         code: tool.code,
+        icon: tool.icon,
         isBuiltIn: tool.isBuiltIn,
       },
     });
@@ -82,6 +83,7 @@ export class PrismaToolRepository implements ToolRepository {
         ...(updates.category && { category: updates.category }),
         ...(updates.parameters && { parameters: updates.parameters as any }),
         ...(updates.code !== undefined && { code: updates.code }),
+        ...(updates.icon !== undefined && { icon: updates.icon }),
       },
     });
 

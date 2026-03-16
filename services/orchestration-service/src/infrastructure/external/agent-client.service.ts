@@ -3,10 +3,22 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 
+export interface SubAgentConfig {
+  agentId: string;
+  role?: string;
+  compactHandoff?: boolean;
+}
+
 export interface AgentExecutionRequest {
   agentId: string;
   input: any;
   config?: Record<string, any>;
+  /** Additional tool IDs to give the agent (merged with agent's own tools) */
+  toolIds?: string[];
+  /** Sub-agents this agent may delegate to */
+  subAgents?: SubAgentConfig[];
+  /** Override the agent's maxTokens for this execution */
+  maxTokens?: number;
 }
 
 export interface AgentExecutionResponse {
@@ -32,10 +44,14 @@ export class AgentClientService {
       this.logger.log(`Executing agent ${request.agentId}`);
 
       const response = await firstValueFrom(
-        this.httpService.post(`${this.baseUrl}/agents/execute`, {
-          agentId: request.agentId,
-          input: request.input,
-          config: request.config,
+        this.httpService.post(`${this.baseUrl}/api/agents/${request.agentId}/execute`, {
+          input: typeof request.input === 'string' ? request.input : JSON.stringify(request.input),
+          metadata: {
+            ...request.config,
+            toolIds: request.toolIds ?? [],
+            subAgents: request.subAgents ?? [],
+            maxTokens: request.maxTokens,
+          },
         }),
       );
 
@@ -58,10 +74,10 @@ export class AgentClientService {
     }
   }
 
-  async getAgentStatus(agentId: string): Promise<any> {
+  async getAgentInfo(agentId: string): Promise<any> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${this.baseUrl}/agents/${agentId}`),
+        this.httpService.get(`${this.baseUrl}/api/agents/${agentId}`),
       );
       return response.data;
     } catch (error) {

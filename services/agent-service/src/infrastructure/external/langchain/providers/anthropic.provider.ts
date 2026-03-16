@@ -114,6 +114,6 @@ export class AnthropicProvider {
   }
 
   isSupported(provider: string): boolean {
-    return provider === 'anthropic';
+    return provider?.toLowerCase() === 'anthropic';
   }
 }

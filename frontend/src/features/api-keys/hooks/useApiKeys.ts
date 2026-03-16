@@ -19,6 +19,9 @@ export function useApiKeys(userId: string | undefined) {
 }
 
 export function useApiKeysByProvider(userId: string | undefined, provider: string | null) {
+  console.log('userId :>>>>>>>>>>>>>>>><> ', userId);
+  console.log('provider :>>>>>>>>>>>>>>><<> ', provider);
+
   return useQuery({
     queryKey: apiKeyQueryKeys.byProvider(userId ?? '', provider ?? ''),
     queryFn: () => apiKeysApi.getByProvider(userId!, provider!),

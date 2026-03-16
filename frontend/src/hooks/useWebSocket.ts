@@ -10,7 +10,7 @@ export function useWebSocket() {
         await natsClient.connect();
         setIsConnected(true);
       } catch (error) {
-        console.error("Failed to connect WebSocket:", error);
+        console.warn("WebSocket connection attempt failed (expected on load delay):", error);
         setIsConnected(false);
       }
     };

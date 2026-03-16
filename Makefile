@@ -1,6 +1,6 @@
 # Makefile for Multi-Agent Platform Kubernetes Deployment
 
-.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration
+.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-workspace-tools test-subworkflow
 
 # Default target
 .DEFAULT_GOAL := help
@@ -136,6 +136,36 @@ test-orchestration-watch: ## Run orchestration-service tests in watch mode
 dev-orchestration: ## Start orchestration-service in dev/watch mode
 	@echo "$(GREEN)Starting orchestration-service in dev mode…$(NC)"
 	cd services/orchestration-service && pnpm dev
+
+dev-agent: ## Start agent-service in dev/watch mode
+	@echo "$(GREEN)Starting agent-service in dev mode…$(NC)"
+	cd services/agent-service && pnpm dev
+
+test-agent: ## Run agent-service tests
+	@echo "$(GREEN)Running agent-service tests…$(NC)"
+	cd services/agent-service && pnpm test
+
+test-agent-watch: ## Run agent-service tests in watch mode
+	cd services/agent-service && pnpm test:watch
+
+test-mcp: ## Smoke-test the MCP endpoint (requires agent-service running on :3002)
+	@echo "$(GREEN)Testing MCP initialize handshake…$(NC)"
+	curl -s -X POST http://localhost:3002/mcp \
+	  -H 'Content-Type: application/json' \
+	  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | jq .
+
+seed-workspace-tools: ## Seed workspace_read and workspace_write tools into the database
+	@echo "$(GREEN)Seeding workspace tools…$(NC)"
+	cd packages/database && pnpm ts-node src/seed/seed-tools.ts
+	@echo "$(GREEN)Workspace tools seeded!$(NC)"
+
+test-subworkflow: ## Smoke-test SUBWORKFLOW node via the orchestration service test endpoint
+	@echo "$(GREEN)Testing SUBWORKFLOW node integration…$(NC)"
+	@echo "$(YELLOW)Requires: orchestration-service running on :8082 (or via gateway on :3000)$(NC)"
+	@curl -s -X POST http://localhost:3000/api/workflows/$$WORKFLOW_ID/nodes/$$NODE_ID/test \
+	  -H 'Content-Type: application/json' \
+	  -H 'x-user-id: test-user' \
+	  -d '{"input": {"message": "hello from parent"}, "type": "SUBWORKFLOW", "config": {"workflowId": "$$SUB_WORKFLOW_ID"}}' | jq . || echo "$(YELLOW)Set WORKFLOW_ID, NODE_ID and SUB_WORKFLOW_ID env variables$(NC)"
 
 # Database commands (via packages/database)
 prisma-generate: ## Generate Prisma client

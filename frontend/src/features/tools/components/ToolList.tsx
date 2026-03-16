@@ -1,12 +1,30 @@
-"use client";
+'use client';
 
-import { useTools } from "../hooks/useTools";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import Link from "next/link";
-import { getStatusColor } from "@/lib/utils";
+import { useTools } from '../hooks/useTools';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Plus, Wrench } from 'lucide-react';
+import Link from 'next/link';
+import * as LucideIcons from 'lucide-react';
+
+const DynamicIcon = ({ name, className }: { name?: string; className?: string }) => {
+  if (!name) return <Wrench className={className} />;
+  // Attempt to find the icon from lucide-react matching the name
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const IconComponent = (LucideIcons as any)[name] || (LucideIcons as any)[name.charAt(0).toUpperCase() + name.slice(1)];
+  if (!IconComponent) return <Wrench className={className} />;
+  return <IconComponent className={className} />;
+};
 
 export function ToolList() {
   const { data, isLoading, error } = useTools();
@@ -18,16 +36,24 @@ export function ToolList() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-bold">Tools</h2>
-        <p className="text-muted-foreground">Available tools for agents</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Tools</h2>
+          <p className="text-muted-foreground">Available tools for agents</p>
+        </div>
+        <Link href="/tools/new">
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Tool
+          </Button>
+        </Link>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>All Tools</CardTitle>
           <CardDescription>
-            {tools.length} tool{tools.length !== 1 ? "s" : ""} available
+            {tools.length} tool{tools.length !== 1 ? 's' : ''} available
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -39,30 +65,41 @@ export function ToolList() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[50px]">Icon</TableHead>
+                  <TableHead>Tool</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Origin</TableHead>
+                  <TableHead>Params</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {tools.map((tool) => (
                   <TableRow key={tool.id}>
-                    <TableCell className="font-medium">
-                      <Link href={`/tools/${tool.id}`} className="hover:underline">
-                        {tool.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {tool.description}
+                    <TableCell>
+                      <div className="bg-muted/50 p-2 rounded-md inline-block">
+                        <DynamicIcon name={tool.icon} className="h-4 w-4 text-primary" />
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{tool.type}</Badge>
+                      <div className="flex flex-col space-y-1">
+                        <Link href={`/tools/${tool.id}`} className="font-semibold hover:underline flex items-center gap-2">
+                          {tool.name}
+                        </Link>
+                        <span className="text-xs text-muted-foreground line-clamp-1">{tool.description}</span>
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getStatusColor(tool.status) as "default" | "success" | "warning" | "destructive"}>
-                        {tool.status}
-                      </Badge>
+                      <Badge variant="outline" className="bg-background">{tool.category || 'CUSTOM'}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {tool.isBuiltIn ? (
+                        <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-transparent">Built-in</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-transparent">Custom</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {Array.isArray(tool.parameters) ? tool.parameters.length : 0} defined
                     </TableCell>
                   </TableRow>
                 ))}

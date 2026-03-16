@@ -20,6 +20,8 @@ export class UpdateWorkflowDto {
     nodes: any[];
     edges: any[];
     version: number;
+    inputSchema?: any[];
+    outputSchema?: any[];
   };
 
   @ApiPropertyOptional({ enum: WorkflowStatus })

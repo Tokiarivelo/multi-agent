@@ -68,8 +68,8 @@ import { ApiKeyRepositoryInterface } from './domain/repositories/api-key.reposit
     },
     {
       provide: GetModelUseCase,
-      useFactory: (repo: ModelRepositoryInterface) => new GetModelUseCase(repo),
-      inject: ['ModelRepositoryInterface'],
+      useFactory: (repo: ModelRepositoryInterface, apiKeyRepo: ApiKeyRepositoryInterface) => new GetModelUseCase(repo, apiKeyRepo),
+      inject: ['ModelRepositoryInterface', 'ApiKeyRepositoryInterface'],
     },
     {
       provide: ListModelsUseCase,

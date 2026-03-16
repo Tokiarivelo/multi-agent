@@ -168,9 +168,14 @@ export function useDeleteEdge(workflowId: string) {
 // ─── Execution mutations ──────────────────────────────────────────────────────
 
 export function useExecuteWorkflow() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input?: Record<string, unknown> }) =>
       workflowsApi.execute(id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['executions'] });
+    },
     onError: () => toast.error('Failed to start execution'),
   });
 }

@@ -31,8 +31,10 @@ export class NatsWebSocketClient {
         };
 
         this.ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          reject(error);
+          console.warn('WebSocket connection issue:', error);
+          if (this.ws?.readyState !== WebSocket.OPEN) {
+            reject(error);
+          }
         };
 
         this.ws.onclose = () => {
@@ -47,7 +49,7 @@ export class NatsWebSocketClient {
 
   private reconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached');
+      console.warn('Max reconnection attempts reached');
       return;
     }
 
@@ -58,7 +60,9 @@ export class NatsWebSocketClient {
       console.log(
         `Reconnecting... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
       );
-      this.connect();
+      this.connect().catch((err) => {
+        console.warn('Reconnect attempt failed:', err);
+      });
     }, delay);
   }
 

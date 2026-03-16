@@ -24,6 +24,15 @@ export interface RegisterData {
 }
 
 // Workflow Types
+export interface WorkflowIOField {
+  key: string;
+  label?: string;
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'any';
+  description?: string;
+  required?: boolean;
+  defaultValue?: string;
+}
+
 export interface Workflow {
   id: string;
   name: string;
@@ -32,6 +41,8 @@ export interface Workflow {
     nodes: WorkflowNode[];
     edges: WorkflowEdge[];
     version: number;
+    inputSchema?: WorkflowIOField[];
+    outputSchema?: WorkflowIOField[];
   };
   status: 'draft' | 'active' | 'archived' | 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
   createdAt: string;
@@ -104,24 +115,25 @@ export interface Tool {
   id: string;
   name: string;
   description: string;
-  type: 'function' | 'api' | 'database';
-  schema: ToolSchema;
-  config?: Record<string, unknown>;
-  status: 'available' | 'unavailable';
+  category: 'WEB' | 'API' | 'DATABASE' | 'FILE' | 'CUSTOM' | string;
+  parameters: ToolParameter[];
+  code?: string;
+  icon?: string;
+  isBuiltIn: boolean;
+  status?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ToolSchema {
-  parameters: Record<string, ToolParameter>;
-  required?: string[];
-}
-
 export interface ToolParameter {
+  name: string;
   type: string;
   description: string;
-  enum?: string[];
+  required: boolean;
+  default?: unknown;
 }
+
+// End Tool Types
 
 export enum ModelProvider {
   OPENAI = 'OPENAI',
@@ -157,6 +169,7 @@ export interface CreateModelInput {
   supportsStreaming?: boolean;
   defaultTemperature?: number;
   isActive?: boolean;
+  providerSettings?: Record<string, unknown>;
 }
 
 export interface ProviderModel {
@@ -173,6 +186,7 @@ export interface ApiKey {
   provider: ModelProvider | string;
   keyName: string;
   apiKeyHash: string;
+  keyPrefix?: string;
   isActive: boolean;
   isValid: boolean;
   lastUsedAt?: string;
@@ -205,10 +219,17 @@ export interface Execution {
 export interface ExecutionLog {
   id: string;
   executionId: string;
-  level: 'debug' | 'info' | 'warn' | 'error';
-  message: string;
-  data?: Record<string, unknown>;
-  timestamp: string;
+  nodeId: string;
+  nodeName: string;
+  status: string;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  error?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  duration?: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ExecutionStep {
