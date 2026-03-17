@@ -6,7 +6,7 @@ import { workspaceStorageService } from '../services/workspaceStorage';
 export interface FileNode {
   name: string;
   kind: 'file' | 'directory';
-  handle: FileSystemHandle;
+  handle?: FileSystemHandle;
   path: string;
   children?: FileNode[];
 }
@@ -22,7 +22,8 @@ export interface TerminalEntry {
 export interface WorkspaceEntry {
   id: string; // stable random UUID
   name: string; // folder name (dirHandle.name)
-  rootHandle: FileSystemDirectoryHandle;
+  type: 'local' | 'server';
+  rootHandle?: FileSystemDirectoryHandle;
   fileTree: FileNode | null;
   hasPermission: boolean;
   nativePath?: string; // native absolute path for server-side tools
@@ -116,6 +117,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
             workspaces.map((w) => ({
               id: w.id,
               name: w.name,
+              type: w.type,
               handle: w.rootHandle,
               nativePath: w.nativePath,
             })),
@@ -132,6 +134,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         workspaces.map((w) => ({
           id: w.id,
           name: w.name,
+          type: w.type,
           handle: w.rootHandle,
           nativePath: w.nativePath,
         })),
@@ -153,6 +156,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         workspaces.map((w) => ({
           id: w.id,
           name: w.name,
+          type: w.type,
           handle: w.rootHandle,
           nativePath: w.nativePath,
         })),
@@ -206,6 +210,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const saved = workspaces.map((ws) => ({
         id: ws.id,
         name: ws.name,
+        type: ws.type,
         handle: ws.rootHandle,
         nativePath: ws.nativePath,
       }));
@@ -217,6 +222,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         workspaceStorageService.recordRecentWorkspace({
           id: updated.id,
           name: updated.name,
+          type: updated.type,
           handle: updated.rootHandle,
           nativePath: updated.nativePath,
         });

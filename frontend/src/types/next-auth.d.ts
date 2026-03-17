@@ -6,7 +6,8 @@ declare module 'next-auth' {
       id: string;
       email: string;
       name: string;
-      accessToken: string;
+      image?: string | null;
+      role?: string;
     } & DefaultSession['user'];
     accessToken: string;
   }
@@ -15,7 +16,12 @@ declare module 'next-auth' {
     id: string;
     email: string;
     name: string;
-    jwt: string; // Assuming gateway returns jwt
+    image?: string | null;
+    role?: string;
+    firstName?: string;
+    lastName?: string;
+    /** Backend JWT returned by the credentials authorize() function */
+    jwt?: string;
   }
 }
 
@@ -23,5 +29,8 @@ declare module 'next-auth/jwt' {
   interface JWT {
     id: string;
     accessToken: string;
+    role?: string;
+    picture?: string;
   }
 }
+

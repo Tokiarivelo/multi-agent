@@ -20,7 +20,11 @@ help: ## Show this help message
 	@echo 'Targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: ## Setup local Kubernetes cluster (minikube)
+check-node: ## Check if Node version is 24
+	@node -v | grep -q "v24" || (echo "$(RED)Error: Node 24 is required. Current version: $$(node -v)$(NC)"; exit 1)
+	@echo "$(GREEN)Node version check passed ($$(node -v))$(NC)"
+
+setup: check-node ## Setup local Kubernetes cluster (minikube)
 	@echo "$(GREEN)Setting up local Kubernetes cluster...$(NC)"
 	minikube start --cpus=4 --memory=8192 --disk-size=50g
 	kubectl create namespace multi-agent || true
@@ -136,6 +140,17 @@ test-orchestration-watch: ## Run orchestration-service tests in watch mode
 dev-orchestration: ## Start orchestration-service in dev/watch mode
 	@echo "$(GREEN)Starting orchestration-service in dev mode…$(NC)"
 	cd services/orchestration-service && pnpm dev
+
+dev-gateway: ## Start gateway-service in dev/watch mode
+	@echo "$(GREEN)Starting gateway-service in dev mode…$(NC)"
+	cd services/gateway-service && pnpm dev
+
+test-gateway: ## Run gateway-service tests
+	@echo "$(GREEN)Running gateway-service tests…$(NC)"
+	cd services/gateway-service && pnpm test
+
+test-gateway-watch: ## Run gateway-service tests in watch mode
+	cd services/gateway-service && pnpm test:watch
 
 dev-agent: ## Start agent-service in dev/watch mode
 	@echo "$(GREEN)Starting agent-service in dev mode…$(NC)"

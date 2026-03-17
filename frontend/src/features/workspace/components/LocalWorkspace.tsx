@@ -73,6 +73,9 @@ export function LocalWorkspace() {
   const [prevActivePath, setPrevActivePath] = useState<string | null>(null);
   const [recentWorkspaces, setRecentWorkspaces] = useState<SavedWorkspace[]>([]);
   const [nativePathError, setNativePathError] = useState<string | null>(null);
+  const [isApiSupported] = useState<boolean>(() => 
+    typeof window !== 'undefined' && 'showDirectoryPicker' in window
+  );
 
   if (activeFilePath !== prevActivePath) {
     setPrevActivePath(activeFilePath);
@@ -110,6 +113,20 @@ export function LocalWorkspace() {
             ? t('workspace.loading', 'Loading...')
             : t('workspace.openFolder', 'Open Local Folder')}
         </Button>
+
+        {!isApiSupported && (
+          <div className="flex items-start gap-3 p-4 mb-8 max-w-md bg-amber-500/10 border border-amber-500/20 rounded-xl text-left">
+            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 mb-1">
+                {t('workspace.apiNotSupported', 'Browser Not Supported')}
+              </p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t('workspace.apiNotSupportedDesc', 'Your browser does not support local directory access. Please use a Chromium-based browser like Chrome or Edge for this feature.')}
+              </p>
+            </div>
+          </div>
+        )}
 
         {recentWorkspaces.length > 0 && (
           <div className="w-full max-w-sm mt-4 text-left">

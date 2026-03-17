@@ -92,6 +92,7 @@ http://localhost:3000/api
 
 - `POST /auth/register` - Register a new user
 - `POST /auth/login` - Login and get JWT token
+- `POST /auth/social-login` - Social login sync (Google/GitHub)
 
 ### Health
 

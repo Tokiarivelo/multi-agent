@@ -59,11 +59,31 @@ export class AuthController {
 
   @Post('social-login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Social Login user' })
+  @ApiOperation({
+    summary: 'OAuth Social Login',
+    description:
+      'Called by NextAuth after a successful Google/GitHub OAuth flow. Creates or logs in a user and returns a backend JWT token.',
+  })
   @ApiResponse({
     status: 200,
-    description: 'User successfully logged in via social provider',
+    description: 'User successfully logged in via social provider. Returns accessToken + user.',
+    schema: {
+      example: {
+        accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        user: {
+          id: 'uuid',
+          email: 'user@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          provider: 'google',
+          role: 'USER',
+          image: 'https://example.com/avatar.jpg',
+        },
+      },
+    },
   })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  @ApiResponse({ status: 401, description: 'Account inactive' })
   async socialLogin(@Body() socialLoginDto: SocialLoginDto) {
     return this.socialLoginUseCase.execute(socialLoginDto);
   }

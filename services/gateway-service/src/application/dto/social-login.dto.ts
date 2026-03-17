@@ -17,12 +17,21 @@ export class SocialLoginDto {
   @IsNotEmpty()
   lastName!: string;
 
-  @ApiProperty({ example: 'google' })
+  @ApiProperty({ example: 'google', description: 'OAuth provider name: google | github' })
   @IsString()
   @IsNotEmpty()
   provider!: string;
 
-  @ApiProperty({ example: 'http://example.com/avatar.jpg' })
+  @ApiProperty({
+    example: '1234567890',
+    description: 'Provider account ID for future account linking',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  providerAccountId?: string;
+
+  @ApiProperty({ example: 'http://example.com/avatar.jpg', required: false })
   @IsString()
   @IsOptional()
   image?: string;

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useWorkflowExecutionStore, NodeStatus, SubExecutionRecord } from '../store/workflowExecution.store';
 import { useWorkspaceStore } from '@/features/workspace/store/workspaceStore';
+import { workflowsApi } from '../api/workflows.api';
 import { readFileAtPath, writeFileAtPath } from '@/features/workspace/hooks/useWorkspace';
 
 export type NodeUpdateEvent = {
@@ -253,7 +254,16 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
 
         try {
           if (operation === 'read') {
-            const content = await readFileAtPath(targetWs.rootHandle, payload.filePath as string);
+            let content = '';
+            if (targetWs.type === 'server') {
+              const res = await workflowsApi.readWorkspaceFile(payload.filePath as string);
+              content = res.content;
+            } else if (targetWs.rootHandle) {
+              content = await readFileAtPath(targetWs.rootHandle, payload.filePath as string);
+            } else {
+              throw new Error('Workspace handle missing');
+            }
+
             addWorkspaceEntry({
               type: 'info',
               text: `[Workflow] Read: ${payload.filePath} from "${targetWs.name}" (${content.length} chars)`,
@@ -264,11 +274,21 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
               result: { content, path: payload.filePath, workspaceName: targetWs.name },
             });
           } else if (operation === 'write') {
-            await writeFileAtPath(
-              targetWs.rootHandle,
-              payload.filePath as string,
-              (payload.content as string) ?? '',
-            );
+            if (targetWs.type === 'server') {
+              await workflowsApi.writeWorkspaceFile(
+                payload.filePath as string,
+                (payload.content as string) ?? '',
+              );
+            } else if (targetWs.rootHandle) {
+              await writeFileAtPath(
+                targetWs.rootHandle,
+                payload.filePath as string,
+                (payload.content as string) ?? '',
+              );
+            } else {
+              throw new Error('Workspace handle missing');
+            }
+
             addWorkspaceEntry({
               type: 'info',
               text: `[Workflow] Written: ${payload.filePath} → "${targetWs.name}"`,
