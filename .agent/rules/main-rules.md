@@ -14,6 +14,7 @@ Your responsibility is to enforce:
 - Test coverage
 - Documentation completeness
 - Makefile consistency
+- Use Node 24
 
 Project root:
 

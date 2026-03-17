@@ -216,6 +216,28 @@ export const workflowsApi = {
     const { data } = await apiClient.get<{ url: string }>(`/api/files/${fileId}/url`);
     return data;
   },
+
+  // ─── Backend Workspace Fallback (for non-native browsers) ──────────
+
+  getWorkspaceTree: async (path: string) => {
+    const { data } = await apiClient.get('/api/workspace/tree', { params: { path } });
+    return data;
+  },
+
+  readWorkspaceFile: async (path: string) => {
+    const { data } = await apiClient.get('/api/workspace/file', { params: { path } });
+    return data as { content: string };
+  },
+
+  writeWorkspaceFile: async (path: string, content: string) => {
+    const { data } = await apiClient.post('/api/workspace/file', { path, content });
+    return data;
+  },
+
+  createWorkspaceItem: async (path: string, type: 'file' | 'directory') => {
+    const { data } = await apiClient.post('/api/workspace/item', { path, type });
+    return data;
+  },
 };
 
 /** Opens the given absolute folder path in the host machine's native file manager. */

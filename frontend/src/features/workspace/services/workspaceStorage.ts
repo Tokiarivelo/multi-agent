@@ -3,7 +3,8 @@ import { get, set } from 'idb-keyval';
 export interface SavedWorkspace {
   id: string;
   name: string;
-  handle: FileSystemDirectoryHandle;
+  type?: 'local' | 'server';
+  handle?: FileSystemDirectoryHandle;
   nativePath?: string;
 }
 

@@ -108,6 +108,17 @@ JwtModule.register({
 })
 ```
 
+### OAuth Authentication
+
+The platform supports social login via Google and GitHub using NextAuth.
+
+1.  **Frontend Orchestration**: NextAuth handles the OAuth handshake and retrieves the provider profile.
+2.  **Backend Sync**: The frontend calls `POST /auth/social-login` with the provider profile.
+3.  **User Verification**: The Gateway Service verifies if the account is active and synchronizes the profile (image, name).
+4.  **JWT Issuance**: The backend issues a standard JWT for subsequent API requests, ensuring a unified authentication model for both credentials and social logins.
+
+For more details, see [OAUTH.md](file:///home/jessy/Documents/hairun/multi-agent/OAUTH.md).
+
 ### Password Security
 
 #### Password Hashing

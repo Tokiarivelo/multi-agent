@@ -4,7 +4,8 @@ import GoogleProvider from 'next-auth/providers/google';
 import GithubProvider from 'next-auth/providers/github';
 import axios from 'axios';
 
-// Determine API URL
+// Gateway listens at /api (global prefix). 
+// NEXT_PUBLIC_API_URL is now e.g. http://localhost:3000 (no /api suffix in .env)
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 export const authOptions: NextAuthOptions = {
@@ -19,47 +20,52 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials?.password) return null;
 
         try {
-          // Call Gateway Service Login
-          // Assuming gateway returns { accessToken: string, user: { ... } }
+          // Gateway auth endpoint — now explicitly including /api prefix
           const res = await axios.post(`${API_URL}/api/auth/login`, {
             email: credentials.email,
             password: credentials.password,
           });
 
           if (res.data) {
-            const user = res.data.user || {};
-            // Ensure we return an object that matches User interface
+            const { accessToken, user } = res.data;
             return {
-              id: user.id || 'unknown',
-              name: user.name || 'User',
-              email: user.email || credentials.email,
-              jwt: res.data.accessToken || res.data.token,
+              id: user.id,
+              email: user.email,
+              name: `${user.firstName} ${user.lastName}`.trim(),
+              firstName: user.firstName,
+              lastName: user.lastName,
+              image: user.image ?? null,
+              role: user.role,
+              jwt: accessToken,
             };
           }
           return null;
         } catch (error) {
-          console.error('Login failed:', error);
+          console.error('[NextAuth] Credentials login failed:', error);
           return null;
         }
       },
     }),
+
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
+
     GithubProvider({
       clientId: process.env.GITHUB_ID!,
       clientSecret: process.env.GITHUB_SECRET!,
     }),
   ],
+
   session: { strategy: 'jwt' },
+
   callbacks: {
     async jwt({ token, user, account }) {
-      // Initial sign in
+      // On initial sign-in, `user` and `account` are present
       if (account && user) {
         if (account.provider === 'google' || account.provider === 'github') {
           try {
-            // Split name into first and last
             const nameParts = (user.name || '').split(' ');
             const firstName = nameParts[0] || 'User';
             const lastName = nameParts.slice(1).join(' ') || 'Social';
@@ -69,40 +75,49 @@ export const authOptions: NextAuthOptions = {
               firstName,
               lastName,
               provider: account.provider,
+              providerAccountId: account.providerAccountId,
               image: user.image,
             });
 
             if (res.data) {
               token.accessToken = res.data.accessToken;
               token.id = res.data.user.id;
-              // Update user object in token if needed
-              token.name = res.data.user.firstName + ' ' + res.data.user.lastName;
-              token.picture = res.data.user.image;
+              token.role = res.data.user.role;
+              token.picture = res.data.user.image ?? user.image;
+              token.name = `${res.data.user.firstName} ${res.data.user.lastName}`.trim();
             }
           } catch (error) {
-            console.error('Social login failed', error);
-            // Fallback or error handling?
-            // If backend fails, we might still have next-auth session but no backend token.
+            console.error('[NextAuth] Social login backend call failed:', error);
+            // Propagate the error so NextAuth surfaces it on the callback page
+            throw new Error('social_login_failed');
           }
         } else {
-          // Credentials provider
-          token.accessToken = user.jwt;
+          // Credentials provider — user object returned from authorize()
+          token.accessToken = user.jwt!;
           token.id = user.id;
+          token.role = user.role;
+          token.picture = user.image ?? undefined;
         }
       }
       return token;
     },
+
     async session({ session, token }) {
       if (token && session.user) {
         session.accessToken = token.accessToken as string;
         session.user.id = token.id as string;
-        // Optionally pass token to user object too if needed by client
+        session.user.role = token.role as string;
+        session.user.image = (token.picture as string) ?? null;
       }
       return session;
     },
   },
+
   pages: {
     signIn: '/login',
+    error: '/login', // Redirect OAuth errors back to login page with ?error=...
   },
+
   secret: process.env.NEXTAUTH_SECRET,
 };
+

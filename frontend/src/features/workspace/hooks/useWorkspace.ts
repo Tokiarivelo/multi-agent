@@ -9,6 +9,12 @@ import { workflowsApi } from '../../workflows/api/workflows.api';
 
 const IGNORED_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', '.cache']);
 
+const dirname = (p: string) => {
+  const parts = p.split('/').filter(Boolean);
+  if (parts.length <= 1) return '/';
+  return '/' + parts.slice(0, -1).join('/');
+};
+
 /** Recursively build a FileNode tree from a directory handle */
 export async function buildFileTree(
   dirHandle: FileSystemDirectoryHandle,
@@ -47,6 +53,22 @@ export async function buildFileTree(
     a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1,
   );
   return nodes;
+}
+
+/** Recursively build a FileNode tree from a backend path */
+export async function buildFileTreeServer(
+  rootPath: string,
+): Promise<FileNode> {
+  const data = await workflowsApi.getWorkspaceTree(rootPath);
+  
+  const mapNode = (n: { name: string; kind: 'file' | 'directory'; path: string; children?: (typeof n)[] }): FileNode => ({
+    name: n.name,
+    kind: n.kind,
+    path: n.path,
+    children: n.children?.map(mapNode),
+  });
+
+  return mapNode(data);
 }
 
 async function resolveDirHandle(
@@ -130,6 +152,35 @@ export const useWorkspace = () => {
 
   const openWorkspace = useCallback(async () => {
     const store = useWorkspaceStore.getState();
+    const isApiSupported = typeof window !== 'undefined' && 'showDirectoryPicker' in window;
+    
+    if (!isApiSupported) {
+      const path = window.prompt(t('workspace.enterAbsolutePath', 'Enter absolute path for workspace:'));
+      if (!path) return;
+
+      try {
+        store.setIsLoading(true);
+        const tree = await buildFileTreeServer(path);
+        const entry: WorkspaceEntry = {
+          id: crypto.randomUUID(),
+          name: tree.name,
+          type: 'server',
+          fileTree: tree,
+          hasPermission: true,
+          nativePath: path,
+        };
+        store.addWorkspace(entry);
+        toast.success(t('workspace.opened', 'Workspace opened successfully'));
+        return;
+      } catch (error) {
+        console.error('Error opening server workspace:', error);
+        toast.error(t('workspace.openError', 'Failed to open workspace'));
+        return;
+      } finally {
+        store.setIsLoading(false);
+      }
+    }
+
     try {
       store.setIsLoading(true);
       // @ts-expect-error File System Access API types might not be fully available
@@ -144,7 +195,7 @@ export const useWorkspace = () => {
           let matchedRecent: SavedWorkspace | undefined;
           for (const r of recent) {
             try {
-              if (await r.handle.isSameEntry(dirHandle)) {
+              if (r.handle && (await r.handle.isSameEntry(dirHandle))) {
                 matchedRecent = r;
                 break;
               }
@@ -169,7 +220,7 @@ export const useWorkspace = () => {
       let matchedRecent: SavedWorkspace | undefined;
       for (const r of recent) {
         try {
-          if (await r.handle.isSameEntry(dirHandle)) {
+          if (r.handle && (await r.handle.isSameEntry(dirHandle))) {
             matchedRecent = r;
             break;
           }
@@ -185,6 +236,7 @@ export const useWorkspace = () => {
       const entry: WorkspaceEntry = {
         id: matchedRecent?.id ?? crypto.randomUUID(),
         name: dirHandle.name,
+        type: 'local',
         rootHandle: dirHandle,
         fileTree: {
           name: dirHandle.name,
@@ -223,25 +275,31 @@ export const useWorkspace = () => {
       const store = useWorkspaceStore.getState();
       try {
         store.setIsLoading(true);
-        const existing = store.workspaces.find((w) => w.name === saved.name);
+        const existing = store.workspaces.find((w) => w.id === saved.id || w.name === saved.name);
         if (existing) {
           store.setActiveWorkspaceId(existing.id);
           return;
         }
 
-        const hasPermission = await workspaceStorageService.checkPermission(saved.handle);
         let children: import('../store/workspaceStore').FileNode[] | null = null;
-        if (hasPermission) {
-          try {
-            children = await buildFileTree(saved.handle as FileSystemDirectoryHandle);
-          } catch (e) {
-            console.warn('Failed to build tree for permitted handle', e);
+        let storagePermission = true;
+
+        if (saved.handle && saved.type === 'local') {
+          const hasPermission = await workspaceStorageService.checkPermission(saved.handle);
+          if (hasPermission) {
+            try {
+              children = await buildFileTree(saved.handle as FileSystemDirectoryHandle);
+            } catch (e) {
+              console.warn('Failed to build tree for permitted handle', e);
+            }
           }
+          storagePermission = hasPermission;
         }
 
         const entry: import('../store/workspaceStore').WorkspaceEntry = {
           id: saved.id,
           name: saved.name,
+          type: saved.type ?? 'local',
           rootHandle: saved.handle as FileSystemDirectoryHandle,
           fileTree: children
             ? {
@@ -252,7 +310,7 @@ export const useWorkspace = () => {
                 children,
               }
             : null,
-          hasPermission,
+          hasPermission: storagePermission,
           nativePath: saved.nativePath,
         };
 
@@ -262,7 +320,7 @@ export const useWorkspace = () => {
           text: `Workspace added from recent: ${saved.name}`,
         });
 
-        if (!hasPermission) {
+        if (!storagePermission) {
           toast.info(t('workspace.needsPermission', 'Workspace opened, but needs permission'));
         } else {
           toast.success(t('workspace.opened', 'Workspace opened successfully'));
@@ -288,21 +346,26 @@ export const useWorkspace = () => {
 
       const entries: WorkspaceEntry[] = await Promise.all(
         savedList.map(async (saved) => {
-          // Check if we already have permission without prompting
-          const hasPermission = await workspaceStorageService.checkPermission(saved.handle);
+          let hasPermission = true;
           let children: FileNode[] | null = null;
 
-          if (hasPermission) {
-            try {
-              children = await buildFileTree(saved.handle as FileSystemDirectoryHandle);
-            } catch (e) {
-              console.warn('Failed to build tree for permitted handle', e);
+          if (saved.type === 'local' && saved.handle) {
+            // Check if we already have permission without prompting
+            hasPermission = await workspaceStorageService.checkPermission(saved.handle);
+
+            if (hasPermission) {
+              try {
+                children = await buildFileTree(saved.handle as FileSystemDirectoryHandle);
+              } catch (e) {
+                console.warn('Failed to build tree for permitted handle', e);
+              }
             }
           }
 
           return {
             id: saved.id,
             name: saved.name,
+            type: saved.type ?? 'local',
             rootHandle: saved.handle as FileSystemDirectoryHandle,
             fileTree: children
               ? {
@@ -336,7 +399,7 @@ export const useWorkspace = () => {
     async (id: string) => {
       const store = useWorkspaceStore.getState();
       const ws = store.getWorkspaceById(id);
-      if (!ws) return;
+      if (!ws || ws.type !== 'local' || !ws.rootHandle) return;
       try {
         store.setIsLoading(true);
         const granted = await workspaceStorageService.requestPermission(ws.rootHandle);
@@ -415,11 +478,20 @@ export const useWorkspace = () => {
       }
       try {
         store.setIsLoading(true);
-        const fileHandle = node.handle as FileSystemFileHandle;
-        const file = await fileHandle.getFile();
-        const text = await file.text();
-        store.setActiveFileHandle(fileHandle, node.path);
-        store.setFileContent(text);
+        const ws = store.getActiveWorkspace();
+        if (!ws) return;
+
+        if (ws.type === 'server') {
+          const { content } = await workflowsApi.readWorkspaceFile(node.path);
+          store.setActiveFileHandle(null, node.path);
+          store.setFileContent(content);
+        } else {
+          const fileHandle = node.handle as FileSystemFileHandle;
+          const file = await fileHandle.getFile();
+          const text = await file.text();
+          store.setActiveFileHandle(fileHandle, node.path);
+          store.setFileContent(text);
+        }
         store.setIsDirty(false);
       } catch (error) {
         console.error('Error reading file:', error);
@@ -435,13 +507,20 @@ export const useWorkspace = () => {
 
   const saveFile = useCallback(async () => {
     const store = useWorkspaceStore.getState();
-    const { activeFileHandle, fileContent } = store;
-    if (!activeFileHandle) return;
+    const { activeFileHandle, fileContent, activeFilePath } = store;
+    const ws = store.getActiveWorkspace();
+    if (!ws || (!activeFileHandle && ws.type === 'local')) return;
+
     try {
       store.setIsLoading(true);
-      const writable = await activeFileHandle.createWritable();
-      await writable.write(fileContent);
-      await writable.close();
+      if (ws.type === 'server') {
+        if (!activeFilePath) return;
+        await workflowsApi.writeWorkspaceFile(activeFilePath, fileContent);
+      } else {
+        const writable = await activeFileHandle!.createWritable();
+        await writable.write(fileContent);
+        await writable.close();
+      }
       store.setIsDirty(false);
       toast.success(t('workspace.saved', 'File saved successfully'));
     } catch (error) {
@@ -460,14 +539,20 @@ export const useWorkspace = () => {
     if (!targetId) return;
     const ws = store.getWorkspaceById(targetId);
     if (!ws) return;
-    const children = await buildFileTree(ws.rootHandle);
-    store.updateWorkspaceTree(targetId, {
-      name: ws.rootHandle.name,
-      kind: 'directory',
-      handle: ws.rootHandle,
-      path: `/${ws.rootHandle.name}`,
-      children,
-    });
+
+    if (ws.type === 'server' && ws.nativePath) {
+      const tree = await buildFileTreeServer(ws.nativePath);
+      store.updateWorkspaceTree(targetId, tree);
+    } else if (ws.rootHandle) {
+      const children = await buildFileTree(ws.rootHandle);
+      store.updateWorkspaceTree(targetId, {
+        name: ws.rootHandle.name,
+        kind: 'directory',
+        handle: ws.rootHandle,
+        path: `/${ws.rootHandle.name}`,
+        children,
+      });
+    }
   }, []);
 
   // ── Create a file or folder ───────────────────────────────────────────────
@@ -497,36 +582,47 @@ export const useWorkspace = () => {
           checkIsDir(ws.fileTree.children);
         }
 
-        let dir = ws.rootHandle;
-        if (activePath && activePath !== `/${ws.rootHandle.name}`) {
-          const subPath = activePath.startsWith('/') ? activePath.slice(1) : activePath;
-          const parts = subPath.split('/').filter(Boolean);
+        if (ws.type === 'server') {
+          const itemPath = activePath 
+            ? (isDir ? `${activePath}/${targetName}` : `${dirname(activePath)}/${targetName}`)
+            : `${ws.nativePath}/${targetName}`;
+          
+          await workflowsApi.createWorkspaceItem(itemPath, type);
+          toast.success(t(`workspace.${type}Created`, `${type} created successfully`));
+          
+          const tree = await buildFileTreeServer(ws.nativePath!);
+          store.updateWorkspaceTree(ws.id, tree);
+        } else if (ws.rootHandle) {
+          let dir = ws.rootHandle;
+          if (activePath && activePath !== `/${ws.rootHandle.name}`) {
+            const subPath = activePath.startsWith('/') ? activePath.slice(1) : activePath;
+            const parts = subPath.split('/').filter(Boolean);
 
-          if (!isDir && parts.length > 0) {
-            parts.pop();
+            if (!isDir && parts.length > 0) {
+              parts.pop();
+            }
+
+            if (parts.length > 0) {
+              dir = await resolveDirHandle(ws.rootHandle, parts, true);
+            }
           }
 
-          if (parts.length > 0) {
-            dir = await resolveDirHandle(ws.rootHandle, parts, true);
+          if (type === 'file') {
+            await dir.getFileHandle(targetName, { create: true });
+          } else {
+            await dir.getDirectoryHandle(targetName, { create: true });
           }
-        }
 
-        if (type === 'file') {
-          await dir.getFileHandle(targetName, { create: true });
-        } else {
-          await dir.getDirectoryHandle(targetName, { create: true });
+          toast.success(t(`workspace.${type}Created`, `${type} created successfully`));
+          const children = await buildFileTree(ws.rootHandle);
+          store.updateWorkspaceTree(ws.id, {
+            name: ws.rootHandle.name,
+            kind: 'directory',
+            handle: ws.rootHandle,
+            path: `/${ws.rootHandle.name}`,
+            children,
+          });
         }
-
-        toast.success(t(`workspace.${type}Created`, `${type} created successfully`));
-        // Refresh tree for this workspace directly
-        const children = await buildFileTree(ws.rootHandle);
-        store.updateWorkspaceTree(ws.id, {
-          name: ws.rootHandle.name,
-          kind: 'directory',
-          handle: ws.rootHandle,
-          path: `/${ws.rootHandle.name}`,
-          children,
-        });
       } catch (error) {
         console.error(`Error creating ${type}:`, error);
         toast.error(t(`workspace.${type}CreateError`, `Failed to create ${type}`));

@@ -12,6 +12,7 @@ import { Request, Response, NextFunction } from 'express';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
 import { ConfigService } from '@nestjs/config';
+import { appendFileSync } from 'fs';
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -31,6 +32,7 @@ export class ProxyController {
         switch (service) {
           case 'workflows':
           case 'orchestration':
+          case 'workspace':
             target = this.configService.get<string>(
               'ORCHESTRATION_SERVICE_URL',
               'http://localhost:3003',
@@ -73,6 +75,14 @@ export class ProxyController {
     const segments = req.path.split('/').filter(Boolean);
     const service = segments[1];
 
+    // Debug logging
+    try {
+      appendFileSync(
+        '/tmp/gateway-debug.log',
+        `Path: ${req.path} | Service: ${service} | Segments: ${JSON.stringify(segments)}\n`,
+      );
+    } catch {}
+
     if (!service) {
       return next(new NotFoundException(`API Route not found`));
     }
@@ -86,6 +96,7 @@ export class ProxyController {
     switch (service) {
       case 'workflows':
       case 'orchestration':
+      case 'workspace':
       case 'agents':
       case 'executions':
       case 'models':

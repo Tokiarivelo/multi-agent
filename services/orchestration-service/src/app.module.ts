@@ -24,6 +24,7 @@ import { WORKFLOW_EXECUTOR } from './application/interfaces/workflow-executor.in
 
 // Presentation
 import { WorkflowController } from './presentation/controllers/workflow.controller';
+import { WorkspaceController } from './presentation/controllers/workspace.controller';
 import { HealthController } from './presentation/controllers/health.controller';
 import { WorkflowGateway } from './presentation/gateways/workflow.gateway';
 
@@ -39,7 +40,7 @@ import { WorkflowGateway } from './presentation/gateways/workflow.gateway';
       inject: [ConfigService],
     }),
   ],
-  controllers: [WorkflowController, HealthController],
+  controllers: [WorkflowController, WorkspaceController, HealthController],
   providers: [
     PrismaService,
     WorkflowExecutionService,
