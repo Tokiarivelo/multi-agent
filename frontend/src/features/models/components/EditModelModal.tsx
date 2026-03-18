@@ -81,8 +81,6 @@ export function EditModelModal({ model, onClose }: EditModelModalProps) {
 
   const hasModels = providerModels && providerModels.length > 0;
 
-  console.log('user :>>>>>>>>>>>>>>>><> ', user);
-
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card text-card-foreground shadow-lg border rounded-xl w-full max-w-md p-6 space-y-6">

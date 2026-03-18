@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChatAnthropic } from '@langchain/anthropic';
-import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
+import { HumanMessage, SystemMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
 import {
   LLMConfig,
   LLMResponse,
@@ -11,7 +11,7 @@ import { ConversationMessage } from '../../../../domain/entities/agent.entity';
 @Injectable()
 export class AnthropicProvider {
   private readonly logger = new Logger(AnthropicProvider.name);
-  private model: ChatAnthropic;
+  private model!: ChatAnthropic;
 
   async initialize(config: LLMConfig): Promise<void> {
     this.model = new ChatAnthropic({
@@ -21,6 +21,8 @@ export class AnthropicProvider {
       maxTokens: config.maxTokens ?? 4096,
       streaming: false,
     });
+    (this.model as any).topP = undefined;
+    (this.model as any).topK = undefined;
 
     this.logger.log(`Initialized Anthropic provider with model: ${config.model}`);
   }
@@ -31,8 +33,29 @@ export class AnthropicProvider {
 
       let response;
       if (tools && tools.length > 0) {
-        const modelWithTools = this.model.bind({ tools });
-        response = await modelWithTools.invoke(langchainMessages);
+        const anthropicTools = tools.map((t) => {
+          const fn = t.type === 'function' ? t.function : t;
+          let schema = fn.parameters || fn.input_schema;
+          
+          if (!schema || Object.keys(schema).length === 0) {
+            schema = {
+              type: 'object',
+              properties: {},
+            };
+          } else if (!schema.type) {
+            schema = {
+              type: 'object',
+              properties: schema.properties || schema,
+            };
+          }
+
+          return {
+            name: fn.name,
+            description: fn.description || `Tool ${fn.name}`,
+            input_schema: schema,
+          };
+        });
+        response = await this.model.bindTools(anthropicTools).invoke(langchainMessages);
       } else {
         response = await this.model.invoke(langchainMessages);
       }
@@ -64,16 +87,42 @@ export class AnthropicProvider {
         maxTokens: this.model.maxTokens,
         streaming: true,
       });
+      (streamingModel as any).topP = undefined;
+      (streamingModel as any).topK = undefined;
 
       const langchainMessages = this.convertMessages(messages);
 
       let fullContent = '';
       let tokenCount = 0;
 
-      const stream =
-        tools && tools.length > 0
-          ? await streamingModel.bind({ tools }).stream(langchainMessages)
-          : await streamingModel.stream(langchainMessages);
+      let boundModel: any = streamingModel;
+      if (tools && tools.length > 0) {
+        const anthropicTools = tools.map((t) => {
+          const fn = t.type === 'function' ? t.function : t;
+          let schema = fn.parameters || fn.input_schema;
+          
+          if (!schema || Object.keys(schema).length === 0) {
+            schema = {
+              type: 'object',
+              properties: {},
+            };
+          } else if (!schema.type) {
+            schema = {
+              type: 'object',
+              properties: schema.properties || schema,
+            };
+          }
+
+          return {
+            name: fn.name,
+            description: fn.description || `Tool ${fn.name}`,
+            input_schema: schema,
+          };
+        });
+        boundModel = streamingModel.bindTools(anthropicTools);
+      }
+
+      const stream = await boundModel.stream(langchainMessages);
 
       for await (const chunk of stream) {
         const content = chunk.content.toString();
@@ -101,8 +150,20 @@ export class AnthropicProvider {
           return new SystemMessage(msg.content);
         case 'user':
           return new HumanMessage(msg.content);
-        case 'assistant':
-          return new AIMessage(msg.content);
+        case 'assistant': {
+          const kwargs: any = { content: msg.content };
+          if (msg.toolCalls && msg.toolCalls.length > 0) {
+            kwargs.tool_calls = msg.toolCalls;
+          }
+          return new AIMessage(kwargs);
+        }
+        case 'tool':
+        case 'function':
+          return new ToolMessage({
+            content: msg.content || '',
+            name: msg.name || 'tool',
+            tool_call_id: msg.toolCallId || '',
+          });
         default:
           return new HumanMessage(msg.content);
       }

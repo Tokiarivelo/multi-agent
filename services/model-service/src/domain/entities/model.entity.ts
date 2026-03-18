@@ -58,6 +58,8 @@ export interface CreateModelInput {
 
 export interface UpdateModelInput {
   name?: string;
+  provider?: ModelProvider;
+  modelId?: string;
   description?: string;
   maxTokens?: number;
   supportsStreaming?: boolean;

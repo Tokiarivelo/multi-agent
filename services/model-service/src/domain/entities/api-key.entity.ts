@@ -37,6 +37,9 @@ export interface CreateApiKeyInput {
 
 export interface UpdateApiKeyInput {
   keyName?: string;
+  apiKey?: string;
+  encryptedKey?: string;
+  keyPrefix?: string;
   isActive?: boolean;
   metadata?: Record<string, any>;
 }

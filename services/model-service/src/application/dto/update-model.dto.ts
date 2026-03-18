@@ -1,9 +1,18 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, IsObject, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, IsObject, Min, Max, IsEnum } from 'class-validator';
+import { ModelProvider } from '../../domain/entities/model.entity';
 
 export class UpdateModelDto {
   @IsOptional()
   @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsEnum(ModelProvider)
+  provider?: ModelProvider;
+
+  @IsOptional()
+  @IsString()
+  modelId?: string;
 
   @IsOptional()
   @IsString()

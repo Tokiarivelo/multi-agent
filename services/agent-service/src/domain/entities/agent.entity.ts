@@ -34,10 +34,12 @@ export enum ExecutionStatus {
 }
 
 export interface ConversationMessage {
-  role: 'system' | 'user' | 'assistant' | 'function';
+  role: 'system' | 'user' | 'assistant' | 'function' | 'tool';
   content: string;
   name?: string;
   functionCall?: any;
+  toolCalls?: any[];
+  toolCallId?: string;
 }
 
 export interface AgentContext {

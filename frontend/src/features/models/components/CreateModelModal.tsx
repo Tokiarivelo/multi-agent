@@ -42,8 +42,6 @@ export function CreateModelModal({ onClose }: CreateModelModalProps) {
     setApiKeyId('');
   };
 
-  console.log('apiKeys :>>>>>>>>>>>>><<> ', apiKeys);
-
   // Auto-fill maxTokens when a provider model is selected
   const handleModelSelect = (selectedModelId: string) => {
     setModelId(selectedModelId);

@@ -1,5 +1,3 @@
-// Prisma Schema for Multi-Agent Platform
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,80 +7,64 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  firstName String
-  lastName  String
-  password  String?
-  image     String?
-  provider  String?  @default("credentials")
-  role      UserRole @default(USER)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  workflows          Workflow[]
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  firstName          String
+  lastName           String
+  password           String?
+  role               UserRole            @default(USER)
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  image              String?
+  provider           String?             @default("credentials")
   agents             Agent[]
   apiKeys            ApiKey[]
   executions         Execution[]
   collections        VectorCollection[]
   workflowExecutions WorkflowExecution[]
+  workflows          Workflow[]
 
   @@index([email])
   @@map("users")
 }
 
-enum UserRole {
-  ADMIN
-  USER
-  VIEWER
-}
-
 model Workflow {
-  id          String         @id @default(uuid())
-  userId      String
-  name        String
-  description String?
-  nodes       Json           // WorkflowNode[]
-  edges       Json           // WorkflowEdge[]
-  definition  Json?          // Full workflow definition (nodes + edges + version)
-  status      WorkflowStatus @default(DRAFT)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-
-  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String              @id @default(uuid())
+  userId             String
+  name               String
+  description        String?
+  nodes              Json
+  edges              Json
+  status             WorkflowStatus      @default(DRAFT)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  definition         Json?
   executions         Execution[]
   workflowExecutions WorkflowExecution[]
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([status])
   @@map("workflows")
 }
 
-enum WorkflowStatus {
-  DRAFT
-  ACTIVE
-  INACTIVE
-  ARCHIVED
-}
-
 model Agent {
-  id           String   @id @default(uuid())
+  id           String           @id @default(uuid())
   userId       String
   name         String
   description  String?
-  systemPrompt String?  @db.Text
+  systemPrompt String?
   modelId      String
-  tools        Json     // string[]
-  temperature  Float?   @default(0.7)
-  maxTokens    Int?     @default(2000)
+  tools        Json
+  temperature  Float?           @default(0.7)
+  maxTokens    Int?             @default(2000)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
   metadata     Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  model      Model            @relation(fields: [modelId], references: [id])
-  executions AgentExecution[]
+  executions   AgentExecution[]
+  model        Model            @relation(fields: [modelId], references: [id])
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([modelId])
@@ -92,17 +74,16 @@ model Agent {
 model AgentExecution {
   id          String          @id @default(uuid())
   agentId     String
-  input       String          @db.Text
-  output      String?         @db.Text
+  input       String
+  output      String?
   tokens      Int?
   status      ExecutionStatus @default(PENDING)
-  error       String?         @db.Text
+  error       String?
   startedAt   DateTime        @default(now())
   completedAt DateTime?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
-
-  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agent       Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@index([agentId])
   @@index([status])
@@ -114,49 +95,40 @@ model Tool {
   name        String       @unique
   description String
   category    ToolCategory
-  parameters  Json         // ToolParameter[]
-  code        String?      @db.Text
-  icon        String?
+  parameters  Json
+  code        String?
   isBuiltIn   Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  icon        String?
 
   @@index([category])
   @@index([isBuiltIn])
   @@map("tools")
 }
 
-enum ToolCategory {
-  WEB
-  API
-  DATABASE
-  FILE
-  CUSTOM
-}
-
 model Model {
   id                    String        @id @default(uuid())
   name                  String        @unique
   provider              ModelProvider
-  modelId               String?       // External model identifier (e.g. gpt-4o)
   modelName             String
-  description           String?
   maxTokens             Int
-  supportsStreaming      Boolean       @default(true)
+  supportsStreaming     Boolean       @default(true)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
   defaultTemperature    Float?
-  rateLimitPerMinute    Int?
-  rateLimitPerHour      Int?
-  rateLimitPerDay       Int?
+  description           String?
   inputCostPer1kTokens  Float?
-  outputCostPer1kTokens Float?
-  providerSettings      Json?
   isActive              Boolean       @default(true)
   isDefault             Boolean       @default(false)
   metadata              Json?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-
-  agents Agent[]
+  modelId               String?
+  outputCostPer1kTokens Float?
+  providerSettings      Json?
+  rateLimitPerDay       Int?
+  rateLimitPerHour      Int?
+  rateLimitPerMinute    Int?
+  agents                Agent[]
 
   @@index([provider])
   @@index([isActive])
@@ -164,31 +136,21 @@ model Model {
   @@map("models")
 }
 
-enum ModelProvider {
-  OPENAI
-  ANTHROPIC
-  GOOGLE
-  AZURE
-  OLLAMA
-  CUSTOM
-}
-
 model ApiKey {
   id           String        @id @default(uuid())
   userId       String
   provider     ModelProvider
-  keyName      String?
-  encryptedKey String        @db.Text
-  keyPrefix    String?
-  lastUsedAt   DateTime?
-  usageCount   Int           @default(0)
-  isActive     Boolean       @default(true)
-  isValid      Boolean       @default(true)
-  metadata     Json?
+  encryptedKey String
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isActive     Boolean       @default(true)
+  isValid      Boolean       @default(true)
+  keyName      String?
+  keyPrefix    String?
+  lastUsedAt   DateTime?
+  metadata     Json?
+  usageCount   Int           @default(0)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([provider])
@@ -203,14 +165,13 @@ model Execution {
   status      ExecutionStatus @default(PENDING)
   startedAt   DateTime        @default(now())
   completedAt DateTime?
-  error       String?         @db.Text
-  metadata    Json?           // Additional execution metadata
+  error       String?
+  metadata    Json?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
-
-  workflow Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  logs     ExecutionLog[]
+  logs        ExecutionLog[]
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workflow    Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([workflowId])
   @@index([userId])
@@ -219,30 +180,21 @@ model Execution {
   @@map("executions")
 }
 
-enum ExecutionStatus {
-  PENDING
-  RUNNING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
 model ExecutionLog {
   id          String          @id @default(uuid())
   executionId String
   nodeId      String
-  nodeName    String          // Name/type of the node
+  nodeName    String
   status      ExecutionStatus
   input       Json?
   output      Json?
-  error       String?         @db.Text
+  error       String?
   startedAt   DateTime        @default(now())
   completedAt DateTime?
-  duration    Int?            // Duration in milliseconds
+  duration    Int?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
-
-  execution Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  execution   Execution       @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
   @@index([executionId])
   @@index([nodeId])
@@ -256,16 +208,15 @@ model WorkflowExecution {
   status         ExecutionStatus @default(PENDING)
   input          Json?
   output         Json?
-  error          String?         @db.Text
-  nodeExecutions Json?           // NodeExecution[] stored as JSON
+  error          String?
+  nodeExecutions Json?
   currentNodeId  String?
   startedAt      DateTime?
   completedAt    DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
-
-  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workflow       Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([workflowId])
   @@index([userId])
@@ -280,10 +231,47 @@ model VectorCollection {
   dimension Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, name])
   @@index([userId])
   @@map("vector_collections")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+  VIEWER
+}
+
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum ToolCategory {
+  WEB
+  API
+  DATABASE
+  FILE
+  CUSTOM
+}
+
+enum ModelProvider {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  AZURE
+  OLLAMA
+  CUSTOM
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
 }

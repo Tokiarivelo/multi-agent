@@ -19,9 +19,6 @@ export function useApiKeys(userId: string | undefined) {
 }
 
 export function useApiKeysByProvider(userId: string | undefined, provider: string | null) {
-  console.log('userId :>>>>>>>>>>>>>>>><> ', userId);
-  console.log('provider :>>>>>>>>>>>>>>><<> ', provider);
-
   return useQuery({
     queryKey: apiKeyQueryKeys.byProvider(userId ?? '', provider ?? ''),
     queryFn: () => apiKeysApi.getByProvider(userId!, provider!),
@@ -46,8 +43,13 @@ export function useUpdateApiKey(userId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: { keyName?: string; isActive?: boolean } }) =>
-      apiKeysApi.update(id, input),
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: { keyName?: string; apiKey?: string; isActive?: boolean };
+    }) => apiKeysApi.update(id, input),
     onSuccess: () => {
       if (userId) {
         queryClient.invalidateQueries({ queryKey: apiKeyQueryKeys.byUser(userId) });
