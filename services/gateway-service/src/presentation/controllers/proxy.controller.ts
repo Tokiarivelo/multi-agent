@@ -61,6 +61,9 @@ export class ProxyController {
           case 'files':
             target = this.configService.get<string>('FILE_SERVICE_URL', 'http://localhost:3008');
             break;
+          case 'auth':
+            target = this.configService.get<string>('FRONTEND_SERVICE_URL', 'http://localhost:3001');
+            break;
         }
         return target;
       },
@@ -88,7 +91,7 @@ export class ProxyController {
     }
 
     // Controllers natively handled by this gateway skip proxy
-    if (service === 'auth' || service === 'health' || service === 'docs') {
+    if (service === 'health' || service === 'docs') {
       return next();
     }
 
@@ -105,6 +108,7 @@ export class ProxyController {
       case 'vectors':
       case 'collections':
       case 'files':
+      case 'auth':
         break;
       default:
         return next(

@@ -15,6 +15,7 @@ data:
   MODEL_SERVICE_URL: "http://model-service:3004"
   VECTOR_SERVICE_URL: "http://vector-service:3005"
   EXECUTION_SERVICE_URL: "http://execution-service:3006"
+  FRONTEND_SERVICE_URL: "http://frontend:3001"
   
   # PostgreSQL Configuration
   POSTGRES_HOST: "postgres"
