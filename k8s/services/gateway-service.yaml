@@ -76,6 +76,11 @@ spec:
                 configMapKeyRef:
                   name: multi-agent-config
                   key: ORCHESTRATION_SERVICE_URL
+            - name: FRONTEND_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: multi-agent-config
+                  key: FRONTEND_SERVICE_URL
           livenessProbe:
             httpGet:
               path: /health
