@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { CreateApiKeyModal } from './CreateApiKeyModal';
+import { EditApiKeyModal } from './EditApiKeyModal';
 import { useTranslation } from 'react-i18next';
 import { ApiKey } from '@/types';
 import {
@@ -20,7 +21,11 @@ import {
   Clock,
   Activity,
   AlertTriangle,
+  Edit2,
+  Copy,
+  Check,
 } from 'lucide-react';
+import { apiKeysApi } from '../api/api-keys.api';
 
 const PROVIDER_STYLES: Record<string, { bg: string; text: string; border: string; icon: string }> =
   {
@@ -84,15 +89,33 @@ function formatDate(dateStr: string | undefined) {
 
 interface ApiKeyCardProps {
   apiKey: ApiKey;
+  onEdit: (apiKey: ApiKey) => void;
   onDelete: (id: string) => void;
   onToggleActive: (id: string, isActive: boolean) => void;
   isDeleting: boolean;
   isUpdating: boolean;
 }
 
-function ApiKeyCard({ apiKey, onDelete, onToggleActive, isDeleting, isUpdating }: ApiKeyCardProps) {
+function ApiKeyCard({ apiKey, onEdit, onDelete, onToggleActive, isDeleting, isUpdating }: ApiKeyCardProps) {
   const { t } = useTranslation();
   const style = getProviderStyle(apiKey.provider);
+  const [isCopied, setIsCopied] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      setIsCopying(true);
+      const decKey = await apiKeysApi.getDecryptedKey(apiKey.id);
+      await navigator.clipboard.writeText(decKey);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy API key', error);
+      alert(t('apiKeys.card.copyFailed', 'Failed to copy full API key.'));
+    } finally {
+      setIsCopying(false);
+    }
+  };
 
   return (
     <Card className="futuristic-card group overflow-hidden">
@@ -174,6 +197,26 @@ function ApiKeyCard({ apiKey, onDelete, onToggleActive, isDeleting, isUpdating }
               )}
             </Button>
             <Button
+              variant="outline"
+              size="sm"
+              disabled={isCopying}
+              onClick={handleCopy}
+              className="rounded-xl text-xs gap-1.5"
+            >
+              {isCopied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+              {isCopied ? t('apiKeys.card.copied', 'Copied') : t('apiKeys.card.copy', 'Copy')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isUpdating || isDeleting}
+              onClick={() => onEdit(apiKey)}
+              className="rounded-xl text-xs gap-1.5"
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+              {t('apiKeys.card.edit', 'Edit')}
+            </Button>
+            <Button
               variant="destructive"
               size="sm"
               disabled={isDeleting}
@@ -202,6 +245,7 @@ export function ApiKeysPage() {
   const deleteMutation = useDeleteApiKey(user?.id);
   const updateMutation = useUpdateApiKey(user?.id);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingKey, setEditingKey] = useState<ApiKey | null>(null);
 
   if (!user) return null;
 
@@ -339,6 +383,7 @@ export function ApiKeysPage() {
                     <ApiKeyCard
                       key={key.id}
                       apiKey={key}
+                      onEdit={(key) => setEditingKey(key)}
                       onDelete={(id) => deleteMutation.mutate(id)}
                       onToggleActive={handleToggleActive}
                       isDeleting={deleteMutation.isPending}
@@ -351,9 +396,15 @@ export function ApiKeysPage() {
           })}
         </div>
       )}
-      {/* Create Modal */}
       {isCreateModalOpen && (
         <CreateApiKeyModal userId={user.id} onClose={() => setIsCreateModalOpen(false)} />
+      )}
+      {editingKey && (
+        <EditApiKeyModal
+          userId={user.id}
+          apiKey={editingKey}
+          onClose={() => setEditingKey(null)}
+        />
       )}
     </div>
   );

@@ -68,8 +68,12 @@ import { ApiKeyRepositoryInterface } from './domain/repositories/api-key.reposit
     },
     {
       provide: GetModelUseCase,
-      useFactory: (repo: ModelRepositoryInterface, apiKeyRepo: ApiKeyRepositoryInterface) => new GetModelUseCase(repo, apiKeyRepo),
-      inject: ['ModelRepositoryInterface', 'ApiKeyRepositoryInterface'],
+      useFactory: (
+        repo: ModelRepositoryInterface,
+        apiKeyRepo: ApiKeyRepositoryInterface,
+        encryption: EncryptionService,
+      ) => new GetModelUseCase(repo, apiKeyRepo, encryption),
+      inject: ['ModelRepositoryInterface', 'ApiKeyRepositoryInterface', EncryptionService],
     },
     {
       provide: ListModelsUseCase,
@@ -110,8 +114,12 @@ import { ApiKeyRepositoryInterface } from './domain/repositories/api-key.reposit
     },
     {
       provide: UpdateApiKeyUseCase,
-      useFactory: (repo: ApiKeyRepositoryInterface) => new UpdateApiKeyUseCase(repo),
-      inject: ['ApiKeyRepositoryInterface'],
+      useFactory: (
+        repo: ApiKeyRepositoryInterface,
+        encryption: EncryptionService,
+        validator: ProviderValidatorService,
+      ) => new UpdateApiKeyUseCase(repo, encryption, validator),
+      inject: ['ApiKeyRepositoryInterface', EncryptionService, ProviderValidatorService],
     },
     {
       provide: DeleteApiKeyUseCase,

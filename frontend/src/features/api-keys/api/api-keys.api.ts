@@ -19,8 +19,6 @@ export const apiKeysApi = {
       `/api/api-keys/provider/${provider}?userId=${userId}`,
     );
 
-    console.log('data :>>>>>>>>>>>>>>><> ', data);
-
     return Array.isArray(data) ? data : data?.data || [];
   },
 
@@ -29,9 +27,19 @@ export const apiKeysApi = {
     return data;
   },
 
-  update: async (id: string, input: { keyName?: string; isActive?: boolean }): Promise<ApiKey> => {
+  update: async (
+    id: string,
+    input: { keyName?: string; apiKey?: string; isActive?: boolean },
+  ): Promise<ApiKey> => {
     const { data } = await apiClient.put<ApiKey>(`/api/api-keys/${id}`, input);
     return data;
+  },
+
+  getDecryptedKey: async (id: string): Promise<string> => {
+    const res = await fetch(`/api/api-keys/${id}/decrypt`);
+    if (!res.ok) throw new Error('Failed to decrypt API key');
+    const data = await res.json();
+    return data.key;
   },
 
   delete: async (id: string): Promise<void> => {

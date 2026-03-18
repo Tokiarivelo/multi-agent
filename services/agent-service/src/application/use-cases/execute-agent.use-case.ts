@@ -74,7 +74,7 @@ export class ExecuteAgentUseCase {
 
       const llmConfig: LLMConfig = {
         provider: modelConfig.provider as any,
-        model: modelConfig.name,
+        model: modelConfig.modelName,
         apiKey: modelConfig.apiKey,
         baseUrl: modelConfig.baseUrl,
         temperature: agent.temperature,
@@ -110,12 +110,55 @@ export class ExecuteAgentUseCase {
       }
 
       // ── Execute primary agent ───────────────────────────────────────────
-      const response = await this.langchainProvider.execute(
+      let response = await this.langchainProvider.execute(
         context.conversationHistory,
         tools.length > 0 ? tools : undefined,
       );
 
       let totalTokens = response.tokens ?? 0;
+
+      let iterations = 0;
+      const MAX_ITERATIONS = 5;
+
+      while (response.toolCalls && response.toolCalls.length > 0 && iterations < MAX_ITERATIONS) {
+        iterations++;
+
+        context.conversationHistory.push({
+          role: 'assistant',
+          content: response.content || '',
+          toolCalls: response.toolCalls,
+        });
+
+        for (const toolCall of response.toolCalls) {
+          try {
+            const toolResult = await this.toolClient.executeTool(toolCall.name, toolCall.args);
+            context.conversationHistory.push({
+              role: 'tool',
+              content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
+              toolCallId: toolCall.id,
+              name: toolCall.name,
+            });
+          } catch (err) {
+            context.conversationHistory.push({
+              role: 'tool',
+              content: `Error executing tool: ${err instanceof Error ? err.message : String(err)}`,
+              toolCallId: toolCall.id,
+              name: toolCall.name,
+            });
+          }
+        }
+
+        this.agentExecutionService.validateTokenLimit(
+          context.conversationHistory,
+          effectiveMaxTokens,
+        );
+
+        response = await this.langchainProvider.execute(
+          context.conversationHistory,
+          tools.length > 0 ? tools : undefined,
+        );
+        totalTokens += response.tokens ?? 0;
+      }
       const subAgentResults: any[] = [];
 
       // ── Execute sub-agents ──────────────────────────────────────────────
@@ -143,7 +186,7 @@ export class ExecuteAgentUseCase {
           const subModelConfig = await this.modelClient.getModelConfig(subAgentEntity.modelId);
           await this.langchainProvider.initialize({
             provider: subModelConfig.provider as any,
-            model: subModelConfig.name,
+            model: subModelConfig.modelName,
             apiKey: subModelConfig.apiKey,
             baseUrl: subModelConfig.baseUrl,
             temperature: subAgentEntity.temperature,
@@ -240,7 +283,7 @@ export class ExecuteAgentUseCase {
 
       const llmConfig: LLMConfig = {
         provider: modelConfig.provider as any,
-        model: modelConfig.name,
+        model: modelConfig.modelName,
         apiKey: modelConfig.apiKey,
         baseUrl: modelConfig.baseUrl,
         temperature: agent.temperature,

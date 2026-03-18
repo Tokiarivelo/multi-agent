@@ -92,6 +92,8 @@ export class ModelRepository implements ModelRepositoryInterface {
       where: { id },
       data: {
         ...(input.name !== undefined && { name: input.name }),
+        ...(input.provider !== undefined && { provider: input.provider }),
+        ...(input.modelId !== undefined && { modelId: input.modelId, modelName: input.modelId }),
         ...(input.description !== undefined && { description: input.description }),
         ...(input.maxTokens !== undefined && { maxTokens: input.maxTokens }),
         ...(input.supportsStreaming !== undefined && {

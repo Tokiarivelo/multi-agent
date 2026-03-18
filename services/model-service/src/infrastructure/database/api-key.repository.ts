@@ -71,6 +71,8 @@ export class ApiKeyRepository implements ApiKeyRepositoryInterface {
         ...(input.keyName !== undefined && { keyName: input.keyName }),
         ...(input.isActive !== undefined && { isActive: input.isActive }),
         ...(input.metadata !== undefined && { metadata: input.metadata }),
+        ...(input.encryptedKey !== undefined && { encryptedKey: input.encryptedKey }),
+        ...(input.keyPrefix !== undefined && { keyPrefix: input.keyPrefix }),
       },
     });
 

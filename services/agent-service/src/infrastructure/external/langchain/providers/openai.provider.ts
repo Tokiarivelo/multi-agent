@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChatOpenAI } from '@langchain/openai';
-import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
+import { HumanMessage, SystemMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
 import {
   LLMConfig,
   LLMResponse,
@@ -11,7 +11,7 @@ import { ConversationMessage } from '../../../../domain/entities/agent.entity';
 @Injectable()
 export class OpenAIProvider {
   private readonly logger = new Logger(OpenAIProvider.name);
-  private model: ChatOpenAI;
+  private model!: ChatOpenAI;
 
   async initialize(config: LLMConfig): Promise<void> {
     this.model = new ChatOpenAI({
@@ -31,8 +31,15 @@ export class OpenAIProvider {
 
       let response;
       if (tools && tools.length > 0) {
-        const modelWithTools = this.model.bind({ tools });
-        response = await modelWithTools.invoke(langchainMessages);
+        const openAITools = tools.map((t) => ({
+          type: 'function' as const,
+          function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters,
+          },
+        }));
+        response = await this.model.bind({ tools: openAITools as any }).invoke(langchainMessages);
       } else {
         response = await this.model.invoke(langchainMessages);
       }
@@ -70,11 +77,24 @@ export class OpenAIProvider {
       let fullContent = '';
       let tokenCount = 0;
 
-      const stream =
-        tools && tools.length > 0
-          ? await streamingModel.bind({ tools }).stream(langchainMessages)
-          : await streamingModel.stream(langchainMessages);
+      let boundModel: any = streamingModel;
+      if (tools && tools.length > 0) {
+        const openAITools = tools.map((t) => ({
+          type: 'function' as const,
+          function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters,
+          },
+        }));
+        boundModel = streamingModel.bind({ tools: openAITools as any });
+      }
 
+      const stream = await boundModel.stream(langchainMessages);
+
+      if (!stream) {
+        throw new Error('Failed to create stream');
+      }
       for await (const chunk of stream) {
         const content = chunk.content.toString();
         if (content) {
@@ -101,8 +121,20 @@ export class OpenAIProvider {
           return new SystemMessage(msg.content);
         case 'user':
           return new HumanMessage(msg.content);
-        case 'assistant':
-          return new AIMessage(msg.content);
+        case 'assistant': {
+          const kwargs: any = { content: msg.content };
+          if (msg.toolCalls && msg.toolCalls.length > 0) {
+            kwargs.tool_calls = msg.toolCalls;
+          }
+          return new AIMessage(kwargs);
+        }
+        case 'tool':
+        case 'function':
+          return new ToolMessage({
+            content: msg.content || '',
+            name: msg.name || 'tool',
+            tool_call_id: msg.toolCallId || '',
+          });
         default:
           return new HumanMessage(msg.content);
       }

@@ -6,6 +6,7 @@ import { firstValueFrom } from 'rxjs';
 export interface ModelConfig {
   id: string;
   name: string;
+  modelName: string; // Actual API model ID (e.g. claude-haiku-4-5-20251001)
   provider: string;
   apiKey?: string;
   baseUrl?: string;
@@ -38,6 +39,7 @@ export class ModelClientService {
       return {
         id: model.id,
         name: model.name,
+        modelName: model.modelId || model.modelName || model.name,
         provider: model.provider,
         apiKey: model.apiKey,
         baseUrl: model.baseUrl,
@@ -66,6 +68,7 @@ export class ModelClientService {
       return modelsList.map((model) => ({
         id: model.id,
         name: model.name,
+        modelName: model.modelId || model.modelName || model.name,
         provider: model.provider,
         apiKey: model.apiKey,
         baseUrl: model.baseUrl,
