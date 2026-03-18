@@ -62,7 +62,10 @@ export class ProxyController {
             target = this.configService.get<string>('FILE_SERVICE_URL', 'http://localhost:3008');
             break;
           case 'auth':
-            target = this.configService.get<string>('FRONTEND_SERVICE_URL', 'http://localhost:3001');
+            target = this.configService.get<string>(
+              'FRONTEND_SERVICE_URL',
+              'http://localhost:3001',
+            );
             break;
         }
         return target;
