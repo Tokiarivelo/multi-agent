@@ -55,6 +55,7 @@ export class UserRepository implements IUserRepository {
           ...userData,
           password: userData.password || undefined,
           provider: userData.provider || 'credentials',
+          settings: (userData as any).settings || {},
         },
       });
 

@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { workspaceStorageService, SavedWorkspace } from '../services/workspaceStorage';
 import { workflowsApi } from '../../workflows/api/workflows.api';
+import { createIgnoreFilter } from '../utils/gitignore';
+import { Ignore } from 'ignore';
 
 // ─── FS utilities (exported for WS bridge) ───────────────────────────────────
 
@@ -19,36 +21,54 @@ const dirname = (p: string) => {
 export async function buildFileTree(
   dirHandle: FileSystemDirectoryHandle,
   basePath: string = '',
+  ig?: Ignore,
 ): Promise<FileNode[]> {
   const nodes: FileNode[] = [];
+
+  // If no ignore provided, check for .gitignore at this EXACT level (usually root)
+  let currentIg = ig;
+  if (!basePath) {
+    try {
+      const gitignoreHandle = await dirHandle.getFileHandle('.gitignore');
+      const file = await gitignoreHandle.getFile();
+      const content = await file.text();
+      currentIg = createIgnoreFilter(content);
+    } catch {
+      // no .gitignore at root
+    }
+  }
+
   // @ts-expect-error File System Access API types might not be fully available
   for await (const entry of dirHandle.values()) {
+    const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
+    
+    // Skip if ignored by global hardcoded dirs or .gitignore
+    if (IGNORED_DIRS.has(entry.name)) continue;
+    if (currentIg && currentIg.ignores(relativePath)) continue;
+
     if (entry.kind === 'file') {
       nodes.push({
         name: entry.name,
         kind: 'file',
         handle: entry,
-        path: `${basePath}/${entry.name}`,
+        path: `/${relativePath}`, // Ensure leading slash for consistency
       });
     } else if (entry.kind === 'directory') {
-      if (IGNORED_DIRS.has(entry.name)) continue;
-
       const children = await buildFileTree(
         entry as FileSystemDirectoryHandle,
-        `${basePath}/${entry.name}`,
-      );
-      children.sort((a, b) =>
-        a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1,
+        relativePath,
+        currentIg,
       );
       nodes.push({
         name: entry.name,
         kind: 'directory',
         handle: entry,
-        path: `${basePath}/${entry.name}`,
+        path: `/${relativePath}`,
         children,
       });
     }
   }
+  
   nodes.sort((a, b) =>
     a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1,
   );

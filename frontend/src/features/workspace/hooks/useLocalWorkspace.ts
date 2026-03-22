@@ -15,6 +15,8 @@ export function useLocalWorkspaceLogic() {
   const setTerminalOpen = useWorkspaceStore((s) => s.setTerminalOpen);
   const setTerminalWorkspaceId = useWorkspaceStore((s) => s.setTerminalWorkspaceId);
   const updateWorkspaceLocalPath = useWorkspaceStore((s) => s.updateWorkspaceLocalPath);
+  const watcherEnabled = useWorkspaceStore((s) => s.watcherEnabled);
+  const setWatcherEnabled = useWorkspaceStore((s) => s.setWatcherEnabled);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
@@ -79,5 +81,7 @@ export function useLocalWorkspaceLogic() {
     setSelectedFolder,
     selectedTreePath,
     loadRecentWorkspaces,
+    watcherEnabled,
+    setWatcherEnabled,
   };
 }

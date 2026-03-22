@@ -28,12 +28,6 @@ const CHUNK_OVERLAP = 200; // characters overlap between consecutive chunks
 @Injectable()
 export class FileIndexingService {
   private readonly logger = new Logger(FileIndexingService.name);
-  /** In-memory status store — replace with DB persistence for production */
-  private readonly statusMap = new Map<string, IndexEntry>();
-  /** Tracks file content hashes to prevent redundant vector database upserts */
-  private readonly indexedContentHashes = new Map<string, { hash: string; collectionId: string }>();
-  /** Tracks files currently indexing to prevent duplicate async race conditions */
-  private readonly activeIndexingPaths = new Set<string>();
 
   constructor(
     private readonly minio: MinioService,
@@ -42,15 +36,23 @@ export class FileIndexingService {
     @Inject(FILE_REPOSITORY) private readonly fileRepo: IFileRepository,
   ) {}
 
-  getStatus(fileId: string): IndexEntry | null {
-    return this.statusMap.get(fileId) ?? null;
+  async getStatus(fileId: string): Promise<IndexEntry | null> {
+    const file = await this.fileRepo.findById(fileId);
+    if (!file || !file.indexingStatus) return null;
+    return {
+      fileId,
+      status: file.indexingStatus.status,
+      collectionId: file.indexingStatus.collectionId || null,
+      chunkCount: file.indexingStatus.chunkCount || 0,
+      indexedAt: file.indexingStatus.indexedAt,
+      error: file.indexingStatus.error || null,
+    };
   }
 
   /**
    * Kick off async indexing without blocking the HTTP response.
-   * Optionally bind a specific embeddingModelId + apiKeyId on collection creation.
    */
-  indexFile(
+  async indexFile(
     fileId: string,
     userId: string,
     embeddingModelId?: string,
@@ -58,15 +60,14 @@ export class FileIndexingService {
     useSummarization?: boolean,
     summarizationModelId?: string,
     summarizationApiKeyId?: string,
-  ): void {
-    this.statusMap.set(fileId, {
-      fileId,
+  ): Promise<void> {
+    await this.fileRepo.updateIndexingStatus(fileId, {
       status: 'indexing',
-      collectionId: null,
-      chunkCount: 0,
+      fileId,
       indexedAt: null,
-      error: null,
+      error: undefined,
     });
+
     this.runIndexing(
       fileId,
       userId,
@@ -75,12 +76,12 @@ export class FileIndexingService {
       useSummarization,
       summarizationModelId,
       summarizationApiKeyId,
-    ).catch((err) => {
+    ).catch(async (err) => {
       this.logger.error(`Indexing failed for ${fileId}: ${err.message}`, err.stack);
-      const entry = this.statusMap.get(fileId);
-      if (entry) {
-        this.statusMap.set(fileId, { ...entry, status: 'error', error: err.message });
-      }
+      await this.fileRepo.updateIndexingStatus(fileId, {
+        status: 'error',
+        error: err.message,
+      });
     });
   }
 
@@ -99,35 +100,12 @@ export class FileIndexingService {
 
     if (!this.isIndexable(file)) {
       this.logger.warn(`File ${fileId} (${file.mimeType}) is not indexable as text — skipping`);
-      this.statusMap.set(fileId, {
-        fileId,
+      await this.fileRepo.updateIndexingStatus(fileId, {
         status: 'idle',
-        collectionId: null,
-        chunkCount: 0,
-        indexedAt: null,
         error: 'File type not supported for indexing',
       });
       return;
     }
-
-    const userFilePath = `${userId}::${file.originalName}`;
-
-    if (this.activeIndexingPaths.has(userFilePath)) {
-      this.logger.warn(
-        `Indexing for ${file.originalName} is already in progress. Dropping duplicate request.`,
-      );
-      this.statusMap.set(fileId, {
-        fileId,
-        status: 'indexed',
-        collectionId: null,
-        chunkCount: 0,
-        indexedAt: new Date(),
-        error: null,
-      });
-      return;
-    }
-
-    this.activeIndexingPaths.add(userFilePath);
 
     try {
       // Read content from MinIO
@@ -137,18 +115,13 @@ export class FileIndexingService {
       const configHash = `embed:${embeddingModelId || 'none'}::sum:${useSummarization ? summarizationModelId : 'off'}`;
       const contentHash = crypto.createHash('sha256').update(text).update(configHash).digest('hex');
 
-      const cached = this.indexedContentHashes.get(userFilePath);
-      if (cached && cached.hash === contentHash) {
+      if (file.indexingStatus?.contentHash === contentHash) {
         this.logger.log(
           `Skipping indexing for ${file.originalName}, identical content already indexed.`,
         );
-        this.statusMap.set(fileId, {
-          fileId,
+        await this.fileRepo.updateIndexingStatus(fileId, {
           status: 'indexed',
-          collectionId: cached.collectionId,
-          chunkCount: 0,
           indexedAt: new Date(),
-          error: null,
         });
         return;
       }
@@ -210,26 +183,27 @@ export class FileIndexingService {
 
       await this.vectorClient.upsertFileChunks(collectionId, fileId, vectorChunks);
 
-      this.statusMap.set(fileId, {
-        fileId,
+      await this.fileRepo.updateIndexingStatus(fileId, {
         status: 'indexed',
         collectionId,
         chunkCount: chunks.length,
         indexedAt: new Date(),
-        error: null,
+        contentHash,
       });
 
-      this.indexedContentHashes.set(userFilePath, { hash: contentHash, collectionId });
       this.logger.log(`File ${fileId} indexed successfully (${chunks.length} chunks)`);
-    } finally {
-      this.activeIndexingPaths.delete(userFilePath);
+    } catch (err) {
+      this.logger.error(`Error in runIndexing for ${fileId}: ${err.message}`);
+      throw err;
     }
   }
 
-  removeIndex(fileId: string): void {
-    this.statusMap.delete(fileId);
-    // Note: actual Qdrant point deletion by fileId filter requires a Qdrant delete-by-filter call.
-    // That endpoint can be added to VectorClientService when needed.
+  async removeIndex(fileId: string): Promise<void> {
+    await this.fileRepo.updateIndexingStatus(fileId, {
+      status: 'idle',
+      indexedAt: null,
+      error: undefined,
+    });
   }
 
   /** Chunk text into overlapping windows. */

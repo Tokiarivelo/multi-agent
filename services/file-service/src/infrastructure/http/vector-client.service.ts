@@ -27,7 +27,7 @@ export class VectorClientService {
   private readonly baseUrl: string;
 
   constructor(private readonly config: ConfigService) {
-    this.baseUrl = this.config.get<string>('VECTOR_SERVICE_URL', 'http://localhost:3005');
+    this.baseUrl = this.config.get<string>('VECTOR_SERVICE_URL', 'http://localhost:3007');
   }
 
   /**

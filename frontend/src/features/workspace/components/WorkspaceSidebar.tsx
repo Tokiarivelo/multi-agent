@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Terminal,
   DatabaseZap,
+  Settings,
   Loader2,
   CheckCircle2,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ import { WorkspaceFileTree } from './WorkspaceFileTree';
 import { WorkspaceEntry, FileNode } from '../store/workspaceStore';
 import { nativePathValidationError } from '../utils/pathValidation';
 import { useWorkspaceSidebar } from '../hooks/useWorkspaceSidebar';
+import { WorkspaceSettings } from './WorkspaceSettings';
 
 interface WorkspaceSidebarProps {
   activeWorkspace: WorkspaceEntry | null;
@@ -40,6 +42,7 @@ export function WorkspaceSidebar({
   const [nativePathError, setNativePathError] = useState<string | null>(null);
 
   const {
+    isSettingsOpen, setIsSettingsOpen,
     useSummarization, setUseSummarization,
     selectedModelId, setSelectedModelId,
     bulkIndexing,
@@ -101,6 +104,15 @@ export function WorkspaceSidebar({
             title={t('workspace.refresh', 'Refresh')}
           >
             <RefreshCw className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground hover:text-primary"
+            onClick={() => setIsSettingsOpen(true)}
+            title={t('workspace.settings', 'Workspace Settings')}
+          >
+            <Settings className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="ghost"
@@ -237,6 +249,11 @@ export function WorkspaceSidebar({
           <p className="text-xs text-muted-foreground italic px-2 py-3">Loading…</p>
         )}
       </ScrollArea>
+      
+      <WorkspaceSettings 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+      />
     </Resizable>
   );
 }

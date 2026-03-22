@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MinioService } from './infrastructure/minio/minio.service';
-import { InMemoryFileRepository } from './infrastructure/persistence/file.repository';
+import { PrismaFileRepository } from './infrastructure/persistence/prisma-file.repository';
+import { PrismaService } from '@multi-agent/database';
 import { FILE_REPOSITORY } from './domain/file.entity';
 import { FileService } from './application/file.service';
 import { FileIndexingService } from './application/file-indexing.service';
@@ -19,12 +20,13 @@ import { HealthController } from './presentation/controllers/health.controller';
   ],
   controllers: [FileController, HealthController],
   providers: [
+    PrismaService,
     MinioService,
     VectorClientService,
     ModelClientService,
     {
       provide: FILE_REPOSITORY,
-      useClass: InMemoryFileRepository,
+      useClass: PrismaFileRepository,
     },
     FileService,
     FileIndexingService,

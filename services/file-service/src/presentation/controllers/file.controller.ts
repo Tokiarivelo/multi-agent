@@ -14,6 +14,7 @@ import {
   Body,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiConsumes, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
@@ -23,6 +24,8 @@ import { FileIndexingService } from '../../application/file-indexing.service';
 @ApiTags('files')
 @Controller('api/files')
 export class FileController {
+  private readonly logger = new Logger(FileController.name);
+
   constructor(
     private readonly fileService: FileService,
     private readonly fileIndexingService: FileIndexingService,
@@ -37,7 +40,11 @@ export class FileController {
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload a file to MinIO' })
   @ApiResponse({ status: 201, description: 'File uploaded' })
-  async upload(@UploadedFile() file: Express.Multer.File, @Query('userId') userId: string) {
+  async upload(
+    @UploadedFile() file: Express.Multer.File,
+    @Query('userId') userId: string,
+    @Query('workspacePath') workspacePath?: string,
+  ) {
     if (!file) {
       throw new BadRequestException('File is missing or multipart transmission failed');
     }
@@ -46,6 +53,7 @@ export class FileController {
       file.originalname,
       file.buffer,
       file.mimetype,
+      workspacePath,
     );
     return record;
   }
@@ -53,10 +61,129 @@ export class FileController {
   @Post('initiate-upload')
   @ApiOperation({ summary: 'Get a presigned URL to upload a file directly to MinIO' })
   async initiateUpload(
-    @Body() dto: { originalName: string; mimeType: string; size: number },
+    @Body() dto: { originalName: string; mimeType: string; size: number; workspacePath?: string },
     @Query('userId') userId: string,
   ) {
-    return this.fileService.initiateUpload(userId, dto.originalName, dto.mimeType, dto.size || 0);
+    return this.fileService.initiateUpload(
+      userId,
+      dto.originalName,
+      dto.mimeType,
+      dto.size || 0,
+      dto.workspacePath,
+    );
+  }
+
+  @Get('by-path')
+  @ApiOperation({ summary: 'Get file record and indexing status by workspace path' })
+  async getByPath(@Query('userId') userId: string, @Query('path') path: string) {
+    const file = await this.fileService.findByPath(userId, path);
+    if (!file) {
+      return {
+        indexingStatus: { status: 'idle', fileId: 'none', indexedAt: null },
+      };
+    }
+
+    return {
+      ...file,
+      indexingStatus: file.indexingStatus || {
+        fileId: file.id,
+        status: 'idle',
+        indexedAt: null,
+      },
+    };
+  }
+
+  @Post('bulk-status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get file records and indexing statuses for multiple workspace paths' })
+  async getBulkStatusByPaths(@Query('userId') userId: string, @Body() body: { paths: string[] }) {
+    if (!body.paths || !Array.isArray(body.paths)) {
+      throw new BadRequestException('paths must be an array of strings');
+    }
+
+    const files = await this.fileService.findByPaths(userId, body.paths);
+    const result: Record<string, unknown> = {};
+
+    // For paths that exist in the DB, get their indexing status
+    for (const file of files) {
+      if (file.workspacePath) {
+        result[file.workspacePath] = {
+          ...file,
+          indexingStatus: file.indexingStatus || {
+            fileId: file.id,
+            status: 'idle',
+            indexedAt: null,
+          },
+        };
+      }
+    }
+
+    // For requested paths that DO NOT exist in exactly, return a default 'idle' state.
+    // This allows the frontend to have a consistent record.
+    for (const path of body.paths) {
+      if (!result[path]) {
+        result[path] = {
+          status: 'idle',
+          indexingStatus: { status: 'idle', fileId: 'none', indexedAt: null },
+        };
+      }
+    }
+
+    return result;
+  }
+
+  @Post('index-path')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Initiate indexing for a file or directory path' })
+  async indexByPath(
+    @Query('userId') userId: string,
+    @Body()
+    body: {
+      path: string;
+      embeddingModelId?: string;
+      apiKeyId?: string;
+      useSummarization?: boolean;
+      summarizationModelId?: string;
+      summarizationApiKeyId?: string;
+    },
+  ) {
+    if (!body.path) {
+      throw new BadRequestException('path is required');
+    }
+
+    // 1. Check if it's a single file
+    const file = await this.fileService.findByPath(userId, body.path);
+    const filesToIndex: import('../../domain/file.entity').FileRecord[] = file ? [file] : [];
+
+    // 2. Check if it's a directory (find all files with that prefix)
+    const subFiles = await this.fileService.findByPathPrefix(userId, body.path + '/');
+    for (const sf of subFiles) {
+      if (!filesToIndex.find((f) => f.id === sf.id)) {
+        filesToIndex.push(sf);
+      }
+    }
+
+    if (filesToIndex.length === 0) {
+      throw new NotFoundException(`No files found under path: ${body.path}`);
+    }
+
+    for (const f of filesToIndex) {
+      await this.fileIndexingService.indexFile(
+        f.id,
+        userId,
+        body.embeddingModelId,
+        body.apiKeyId,
+        body.useSummarization,
+        body.summarizationModelId,
+        body.summarizationApiKeyId,
+      );
+    }
+
+    this.logger.log(`Initiated indexing for ${filesToIndex.length} files under path: ${body.path}`);
+    return {
+      message: `Indexing started for ${filesToIndex.length} files`,
+      count: filesToIndex.length,
+    };
   }
 
   @Get()
@@ -83,7 +210,7 @@ export class FileController {
   @ApiOperation({ summary: 'Delete a file' })
   async delete(@Param('id') id: string, @Query('userId') userId: string) {
     await this.fileService.deleteFile(id, userId);
-    this.fileIndexingService.removeIndex(id);
+    await this.fileIndexingService.removeIndex(id);
   }
 
   // ── Vector indexing endpoints ─────────────────────────────────────────────
@@ -103,7 +230,7 @@ export class FileController {
       summarizationApiKeyId?: string;
     },
   ) {
-    this.fileIndexingService.indexFile(
+    await this.fileIndexingService.indexFile(
       id,
       userId,
       body?.embeddingModelId,
@@ -118,7 +245,7 @@ export class FileController {
   @Get(':id/index-status')
   @ApiOperation({ summary: 'Get the indexing status of a file' })
   async getIndexStatus(@Param('id') id: string) {
-    const status = this.fileIndexingService.getStatus(id);
+    const status = await this.fileIndexingService.getStatus(id);
     if (!status) return { fileId: id, status: 'idle' };
     return status;
   }
@@ -127,7 +254,7 @@ export class FileController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove a file from the vector index' })
   async removeIndex(@Param('id') id: string) {
-    this.fileIndexingService.removeIndex(id);
+    await this.fileIndexingService.removeIndex(id);
   }
 
   @Post('search')

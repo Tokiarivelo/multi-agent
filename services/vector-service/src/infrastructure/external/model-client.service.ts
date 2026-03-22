@@ -87,14 +87,28 @@ export class ModelClientService {
     }
 
     // ── Fetch model record ────────────────────────────────────────────────
-    let model: { provider: string; modelId?: string; modelName?: string; baseUrl?: string };
+    let model: { provider: string; modelId?: string; modelName?: string; baseUrl?: string } | null = null;
     try {
       const res = await fetch(`${this.modelServiceUrl}/api/models/${modelIdToFetch}`);
       if (!res.ok) throw new Error(`model-service returned ${res.status}`);
       model = await res.json();
     } catch (err) {
-      this.logger.error(`Failed to fetch model ${modelIdToFetch}: ${err}.`);
-      throw new Error(`Could not resolve embedding model config from model-service.`);
+      this.logger.error(`Failed to fetch model ${modelIdToFetch}: ${err}. Falling back to NONE provider.`);
+      return {
+        provider: 'NONE',
+        modelId: 'dummy-none-model',
+        apiKey: '',
+        dimension: fallbackDimension,
+      };
+    }
+
+    if (!model) {
+      return {
+        provider: 'NONE',
+        modelId: 'dummy-none-model',
+        apiKey: '',
+        dimension: fallbackDimension,
+      };
     }
 
     const providerModelId: string = model.modelId ?? model.modelName ?? '';

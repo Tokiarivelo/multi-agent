@@ -8,6 +8,8 @@ import {
   XCircle,
   FolderPlus,
   Clock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useWorkspaceHeaderLogic } from '../hooks/useWorkspaceHeader';
 import { cn } from '@/lib/utils';
@@ -33,6 +35,8 @@ interface WorkspaceHeaderProps {
   openWorkspace: () => void;
   openRecentWorkspace: (ws: SavedWorkspace) => void;
   loadRecentWorkspaces: () => void;
+  watcherEnabled: boolean;
+  setWatcherEnabled: (enabled: boolean) => void;
 }
 
 export function WorkspaceHeader({
@@ -46,6 +50,8 @@ export function WorkspaceHeader({
   openWorkspace,
   openRecentWorkspace,
   loadRecentWorkspaces,
+  watcherEnabled,
+  setWatcherEnabled,
 }: WorkspaceHeaderProps) {
   const { t } = useWorkspaceHeaderLogic();
 
@@ -140,6 +146,40 @@ export function WorkspaceHeader({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <div className="flex-1" />
+
+      {/* Watcher Toggle */}
+      <div className="flex items-center gap-2 pr-4 pl-2 border-l border-border/30 h-full">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setWatcherEnabled(!watcherEnabled)}
+          className={cn(
+            "h-8 gap-2 rounded-lg transition-all",
+            watcherEnabled 
+              ? "bg-lime-500/10 text-lime-600 dark:text-lime-400 hover:bg-lime-500/20" 
+              : "text-muted-foreground hover:bg-muted/50"
+          )}
+          title={watcherEnabled ? "Watcher Enabled (Auto-refreshing)" : "Watcher Disabled"}
+        >
+          {watcherEnabled ? (
+            <>
+              <div className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-lime-500"></span>
+              </div>
+              <Eye className="h-4 w-4" />
+              <span className="text-xs font-semibold">Watching</span>
+            </>
+          ) : (
+            <>
+              <EyeOff className="h-4 w-4" />
+              <span className="text-xs">Watcher</span>
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

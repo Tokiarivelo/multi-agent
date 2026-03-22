@@ -28,14 +28,19 @@ export class UpsertDocumentUseCase {
       throw new NotFoundException(`Collection '${dto.collectionId}' not found`);
     }
 
-    const embeddingConfig = await this.modelClient.resolveEmbeddingConfig(
-      collection.embeddingModelId,
-      collection.apiKeyId,
-      collection.dimension,
-    );
-
     let embedding = dto.embedding;
     if (!embedding) {
+      const embeddingConfig = await this.modelClient
+        .resolveEmbeddingConfig(collection.embeddingModelId, collection.apiKeyId, collection.dimension)
+        .catch((err) => {
+          this.logger.warn(`Failed to resolve embedding config: ${err.message}. Using fallback.`);
+          return {
+            provider: 'NONE' as const,
+            modelId: 'fallback',
+            apiKey: '',
+            dimension: collection.dimension,
+          };
+        });
       embedding = await this.embeddingService.generateEmbedding(dto.content, embeddingConfig);
     }
 
@@ -56,6 +61,23 @@ export class UpsertDocumentUseCase {
     const point = document.toQdrantPoint(documentId);
 
     const qdrantCollectionName = collection.getQdrantCollectionName();
+    
+    // Auto-repair if collection is missing in Qdrant but persists in database
+    const qdrantExists = await this.qdrantClient.collectionExists(qdrantCollectionName);
+    if (!qdrantExists) {
+      this.logger.warn(`Collection ${qdrantCollectionName} missing in Qdrant. Re-creating...`);
+      const distanceMap = { 
+        cosine: 'Cosine' as const, 
+        euclidean: 'Euclid' as const, 
+        dot: 'Dot' as const 
+      };
+      await this.qdrantClient.createCollection(
+        qdrantCollectionName,
+        collection.dimension,
+        distanceMap[collection.distance] || 'Cosine'
+      );
+    }
+
     await this.qdrantClient.upsertPoints(qdrantCollectionName, [point]);
 
     this.logger.log(`Document upserted successfully: ${documentId}`);
@@ -72,18 +94,23 @@ export class UpsertDocumentUseCase {
       throw new NotFoundException(`Collection '${dto.collectionId}' not found`);
     }
 
-    const embeddingConfig = await this.modelClient.resolveEmbeddingConfig(
-      collection.embeddingModelId,
-      collection.apiKeyId,
-      collection.dimension,
-    );
-
     // Separate documents that already have embeddings from those that need generation
     const needEmbedding = dto.documents.filter((d) => !d.embedding);
     const textsToEmbed = needEmbedding.map((d) => d.content);
 
     let generatedEmbeddings: number[][] = [];
     if (textsToEmbed.length > 0) {
+      const embeddingConfig = await this.modelClient
+        .resolveEmbeddingConfig(collection.embeddingModelId, collection.apiKeyId, collection.dimension)
+        .catch((err) => {
+          this.logger.warn(`Failed to resolve embedding config for batch: ${err.message}. Using fallback.`);
+          return {
+            provider: 'NONE' as const,
+            modelId: 'fallback',
+            apiKey: '',
+            dimension: collection.dimension,
+          };
+        });
       generatedEmbeddings = await this.embeddingService.generateEmbeddings(
         textsToEmbed,
         embeddingConfig,
@@ -116,6 +143,23 @@ export class UpsertDocumentUseCase {
     }
 
     const qdrantCollectionName = collection.getQdrantCollectionName();
+    
+    // Auto-repair if collection is missing in Qdrant but persists in database
+    const qdrantExists = await this.qdrantClient.collectionExists(qdrantCollectionName);
+    if (!qdrantExists) {
+      this.logger.warn(`Collection ${qdrantCollectionName} missing in Qdrant. Re-creating...`);
+      const distanceMap = { 
+        cosine: 'Cosine' as const, 
+        euclidean: 'Euclid' as const, 
+        dot: 'Dot' as const 
+      };
+      await this.qdrantClient.createCollection(
+        qdrantCollectionName,
+        collection.dimension,
+        distanceMap[collection.distance] || 'Cosine'
+      );
+    }
+
     await this.qdrantClient.upsertPoints(qdrantCollectionName, points);
 
     this.logger.log(`Batch upsert completed: ${documentIds.length} documents`);

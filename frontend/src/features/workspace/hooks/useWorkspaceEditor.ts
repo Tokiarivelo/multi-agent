@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { useTheme } from 'next-themes';
-import { useWorkspaceStore } from '../store/workspaceStore';
+import { useWorkspaceStore, type FileNode } from '../store/workspaceStore';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { useTranslation } from 'react-i18next';
 
@@ -65,13 +65,31 @@ export function useWorkspaceEditorLogic() {
     });
   };
 
+  const findNodeByPath = (nodes: FileNode[], path: string): FileNode | null => {
+    for (const node of nodes) {
+      if (node.path === path) return node;
+      if (node.children) {
+        const found = findNodeByPath(node.children, path);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const activeWorkspace = useWorkspaceStore((s) => s.getActiveWorkspace());
+  const activeFileNode = activeFilePath && activeWorkspace?.fileTree 
+    ? findNodeByPath([activeWorkspace.fileTree], activeFilePath) 
+    : null;
+
   return {
     theme,
     activeFilePath,
+    activeFileNode,
     fileContent,
     t,
     getLanguage,
     handleChange,
     handleEditorMount,
+    saveFile,
   };
 }

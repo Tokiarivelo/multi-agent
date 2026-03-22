@@ -2,11 +2,11 @@ import React from 'react';
 import { FileNode } from '../store/workspaceStore';
 import {
   Folder, FolderOpen, FileText, FileJson, FileCode, FileImage,
-  DatabaseZap, Loader2, CheckCircle2, AlertCircle,
+  DatabaseZap, Loader2, CheckCircle2, AlertCircle, RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FileIndexStatus, IndexStatus } from '../api/fileIndexingApi';
-import { useWorkspaceFileTreeLogic, useWorkspaceFileTreeNode } from '../hooks/useWorkspaceFileTree';
+import { useWorkspaceFileTreeLogic, useWorkspaceFileTreeNode, useBulkFileStatus } from '../hooks/useWorkspaceFileTree';
 
 interface WorkspaceFileTreeProps {
   nodes: FileNode[];
@@ -41,19 +41,34 @@ const getFileIcon = (fileName: string) => {
 
 const IndexStatusBadge = ({
   status,
+  isModified,
   onIndex,
 }: {
   status: IndexStatus;
+  isModified?: boolean;
   onIndex: () => void;
 }) => {
   if (status === 'indexing') {
     return <span title="Indexing…"><Loader2 className="h-3 w-3 text-violet-400 animate-spin shrink-0" /></span>;
   }
+  
   if (status === 'indexed') {
-    return <span title="Indexed in vector DB"><CheckCircle2 className="h-3 w-3 text-violet-400 shrink-0" /></span>;
+    if (isModified) {
+      return (
+        <button
+          onClick={(e) => { e.stopPropagation(); onIndex(); }}
+          className="h-3 w-3 text-yellow-500 hover:text-yellow-400 transition-colors shrink-0"
+          title="File modified since last indexing. Refresh to update."
+        >
+          <RefreshCw className="h-3 w-3" />
+        </button>
+      );
+    }
+    return <span title="Indexed in vector DB"><CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" /></span>;
   }
+
   if (status === 'error') {
-    return <span title="Indexing failed"><AlertCircle className="h-3 w-3 text-red-400 shrink-0" /></span>;
+    return <span title="Indexing failed"><AlertCircle className="h-3 w-3 text-red-500 shrink-0" /></span>;
   }
   // idle: show index button on hover
   return (
@@ -74,6 +89,8 @@ const FileTreeNode = ({
   depth = 0,
   getIndexStatus,
   onIndexFile,
+  globalStatuses,
+  globalRefetch,
 }: {
   node: FileNode;
   onSelect: (node: FileNode) => void;
@@ -81,18 +98,26 @@ const FileTreeNode = ({
   depth?: number;
   getIndexStatus?: (fileId: string) => FileIndexStatus;
   onIndexFile?: (node: FileNode) => Promise<void>;
+  globalStatuses?: Record<string, FileIndexStatus & { id?: string }>;
+  globalRefetch?: () => void;
 }) => {
   const {
     isOpen,
-    localStatus,
+    status,
+    isModified,
     isSelected,
     isDir,
     isIndexable,
     handleClick,
     handleIndex,
-  } = useWorkspaceFileTreeNode(node, onSelect, selectedPath, onIndexFile);
-
-  const displayStatus = localStatus;
+  } = useWorkspaceFileTreeNode(
+    node, 
+    onSelect, 
+    selectedPath, 
+    onIndexFile,
+    globalStatuses?.[node.path],
+    globalRefetch
+  );
 
   return (
     <div>
@@ -103,7 +128,7 @@ const FileTreeNode = ({
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
-        title={node.name}
+        title={isModified ? `${node.name} (Modified)` : node.name}
       >
         {isDir ? (
           isOpen ? (
@@ -114,9 +139,14 @@ const FileTreeNode = ({
         ) : (
           <span className="shrink-0">{getFileIcon(node.name)}</span>
         )}
-        <span className="truncate flex-1">{node.name}</span>
+        <span className={cn(
+          'truncate flex-1',
+          isModified && 'text-amber-500 italic font-medium'
+        )}>
+          {node.name}
+        </span>
         {isIndexable && (
-          <IndexStatusBadge status={displayStatus} onIndex={handleIndex} />
+          <IndexStatusBadge status={status} isModified={isModified} onIndex={handleIndex} />
         )}
       </div>
 
@@ -131,6 +161,8 @@ const FileTreeNode = ({
               depth={depth + 1}
               getIndexStatus={getIndexStatus}
               onIndexFile={onIndexFile}
+              globalStatuses={globalStatuses}
+              globalRefetch={globalRefetch}
             />
           ))}
         </div>
@@ -147,6 +179,8 @@ export function WorkspaceFileTree({
   onIndexFile,
 }: WorkspaceFileTreeProps) {
   const { t } = useWorkspaceFileTreeLogic();
+  const { bulkStatuses, refetchGlobal } = useBulkFileStatus(nodes);
+
   if (!nodes || nodes.length === 0) {
     return (
       <div className="p-4 text-sm text-muted-foreground italic">
@@ -166,6 +200,8 @@ export function WorkspaceFileTree({
           depth={0}
           getIndexStatus={getIndexStatus}
           onIndexFile={onIndexFile}
+          globalStatuses={bulkStatuses}
+          globalRefetch={refetchGlobal}
         />
       ))}
     </div>

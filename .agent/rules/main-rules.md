@@ -1,6 +1,7 @@
 ---
 trigger: always_on
 ---
+
 # Architecture Guardian Index
 
 This is the main rule index. For fine-grained directives, the Architecture Guardian automatically refers to:

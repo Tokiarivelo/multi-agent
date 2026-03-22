@@ -6,8 +6,10 @@ import { WorkspaceEmptyState } from './WorkspaceEmptyState';
 import { WorkspaceHeader } from './WorkspaceHeader';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { WorkspaceContent } from './WorkspaceContent';
+import { useWorkspaceWatcher } from '../hooks/useWorkspaceWatcher';
 
 export function LocalWorkspace() {
+  useWorkspaceWatcher();
   const {
     workspaces,
     activeWorkspaceId,
@@ -35,6 +37,8 @@ export function LocalWorkspace() {
     setSelectedFolder,
     selectedTreePath,
     loadRecentWorkspaces,
+    watcherEnabled,
+    setWatcherEnabled,
   } = useLocalWorkspaceLogic();
 
   // Empty state — no workspaces
@@ -65,6 +69,8 @@ export function LocalWorkspace() {
         openWorkspace={openWorkspace}
         openRecentWorkspace={openRecentWorkspace}
         loadRecentWorkspaces={loadRecentWorkspaces}
+        watcherEnabled={watcherEnabled}
+        setWatcherEnabled={setWatcherEnabled}
       />
 
       {/* ── Main content ──────────────────────────────────────────────────── */}

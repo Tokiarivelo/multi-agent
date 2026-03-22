@@ -10,6 +10,7 @@ export class User {
   isActive!: boolean;
   provider?: string | null;
   image?: string | null;
+  settings?: any;
   createdAt!: Date;
   updatedAt!: Date;
 
