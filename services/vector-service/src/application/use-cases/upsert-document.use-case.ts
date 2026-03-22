@@ -2,6 +2,7 @@ import { Injectable, Inject, NotFoundException, BadRequestException, Logger } fr
 import { IVectorRepository } from '../../domain/repositories/vector.repository.interface';
 import { IQdrantClient } from '../interfaces/qdrant.client.interface';
 import { EmbeddingService } from '../../domain/services/embedding.service';
+import { ModelClientService } from '../../infrastructure/external/model-client.service';
 import { UpsertDocumentDto, UpsertDocumentsDto } from '../dto/upsert-document.dto';
 import { Document } from '../../domain/entities/document.entity';
 import { v4 as uuidv4 } from 'uuid';
@@ -16,31 +17,34 @@ export class UpsertDocumentUseCase {
     @Inject('IQdrantClient')
     private readonly qdrantClient: IQdrantClient,
     private readonly embeddingService: EmbeddingService,
+    private readonly modelClient: ModelClientService,
   ) {}
 
   async execute(dto: UpsertDocumentDto): Promise<{ documentId: string }> {
     this.logger.log(`Upserting document to collection: ${dto.collectionId}`);
 
-    // Get collection
     const collection = await this.vectorRepository.findCollectionById(dto.collectionId);
     if (!collection) {
       throw new NotFoundException(`Collection '${dto.collectionId}' not found`);
     }
 
-    // Generate embedding if not provided
+    const embeddingConfig = await this.modelClient.resolveEmbeddingConfig(
+      collection.embeddingModelId,
+      collection.apiKeyId,
+      collection.dimension,
+    );
+
     let embedding = dto.embedding;
     if (!embedding) {
-      embedding = await this.embeddingService.generateEmbedding(dto.content);
+      embedding = await this.embeddingService.generateEmbedding(dto.content, embeddingConfig);
     }
 
-    // Validate embedding dimension
     if (embedding.length !== collection.dimension) {
       throw new BadRequestException(
         `Embedding dimension ${embedding.length} does not match collection dimension ${collection.dimension}`,
       );
     }
 
-    // Create document
     const document = Document.create(
       dto.collectionId,
       dto.content,
@@ -51,7 +55,6 @@ export class UpsertDocumentUseCase {
     const documentId = dto.documentId || uuidv4();
     const point = document.toQdrantPoint(documentId);
 
-    // Upsert to Qdrant
     const qdrantCollectionName = collection.getQdrantCollectionName();
     await this.qdrantClient.upsertPoints(qdrantCollectionName, [point]);
 
@@ -60,25 +63,40 @@ export class UpsertDocumentUseCase {
   }
 
   async executeBatch(dto: UpsertDocumentsDto): Promise<{ documentIds: string[] }> {
-    this.logger.log(`Batch upserting ${dto.documents.length} documents to collection: ${dto.collectionId}`);
+    this.logger.log(
+      `Batch upserting ${dto.documents.length} documents to collection: ${dto.collectionId}`,
+    );
 
-    // Get collection
     const collection = await this.vectorRepository.findCollectionById(dto.collectionId);
     if (!collection) {
       throw new NotFoundException(`Collection '${dto.collectionId}' not found`);
     }
 
+    const embeddingConfig = await this.modelClient.resolveEmbeddingConfig(
+      collection.embeddingModelId,
+      collection.apiKeyId,
+      collection.dimension,
+    );
+
+    // Separate documents that already have embeddings from those that need generation
+    const needEmbedding = dto.documents.filter((d) => !d.embedding);
+    const textsToEmbed = needEmbedding.map((d) => d.content);
+
+    let generatedEmbeddings: number[][] = [];
+    if (textsToEmbed.length > 0) {
+      generatedEmbeddings = await this.embeddingService.generateEmbeddings(
+        textsToEmbed,
+        embeddingConfig,
+      );
+    }
+
     const documentIds: string[] = [];
-    const points: Array<{ id: string; vector: number[]; payload: Record<string, any> }> = [];
+    const points: Array<{ id: string; vector: number[]; payload: Record<string, unknown> }> = [];
+    let genIdx = 0;
 
     for (const doc of dto.documents) {
-      // Generate embedding if not provided
-      let embedding = doc.embedding;
-      if (!embedding) {
-        embedding = await this.embeddingService.generateEmbedding(doc.content);
-      }
+      const embedding = doc.embedding ?? generatedEmbeddings[genIdx++];
 
-      // Validate embedding dimension
       if (embedding.length !== collection.dimension) {
         throw new BadRequestException(
           `Embedding dimension ${embedding.length} does not match collection dimension ${collection.dimension}`,
@@ -97,7 +115,6 @@ export class UpsertDocumentUseCase {
       points.push(document.toQdrantPoint(documentId));
     }
 
-    // Batch upsert to Qdrant
     const qdrantCollectionName = collection.getQdrantCollectionName();
     await this.qdrantClient.upsertPoints(qdrantCollectionName, points);
 

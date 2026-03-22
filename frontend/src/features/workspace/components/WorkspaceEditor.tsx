@@ -1,29 +1,20 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import Editor from '@monaco-editor/react';
-import { useTheme } from 'next-themes';
-import { useWorkspaceStore } from '../store/workspaceStore';
-import { useWorkspace } from '../hooks/useWorkspace';
-import { useTranslation } from 'react-i18next';
 import { FileCode, Loader2 } from 'lucide-react';
+import { useWorkspaceEditorLogic } from '../hooks/useWorkspaceEditor';
 
 export function WorkspaceEditor() {
-  const { theme } = useTheme();
-  const activeFilePath = useWorkspaceStore((s) => s.activeFilePath);
-  const fileContent = useWorkspaceStore((s) => s.fileContent);
-  const setFileContent = useWorkspaceStore((s) => s.setFileContent);
-  const setIsDirty = useWorkspaceStore((s) => s.setIsDirty);
-  const { t } = useTranslation('common');
-  const { saveFile } = useWorkspace();
-
-  const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
+  const {
+    theme,
+    activeFilePath,
+    fileContent,
+    t,
+    getLanguage,
+    handleChange,
+    handleEditorMount,
+  } = useWorkspaceEditorLogic();
 
   if (!activeFilePath) {
     return (
@@ -40,49 +31,7 @@ export function WorkspaceEditor() {
     );
   }
 
-  const getLanguage = (path: string) => {
-    const ext = path.split('.').pop()?.toLowerCase();
-    switch (ext) {
-      case 'js':
-      case 'jsx':
-        return 'javascript';
-      case 'ts':
-      case 'tsx':
-        return 'typescript';
-      case 'json':
-        return 'json';
-      case 'html':
-        return 'html';
-      case 'css':
-        return 'css';
-      case 'md':
-        return 'markdown';
-      case 'py':
-        return 'python';
-      default:
-        return 'plaintext';
-    }
-  };
 
-  const handleChange = (value: string | undefined) => {
-    if (value !== undefined) {
-      if (!useWorkspaceStore.getState().isDirty) {
-        setIsDirty(true);
-      }
-
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        setFileContent(value);
-      }, 250);
-    }
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleEditorMount = (editorInstance: any, monaco: any) => {
-    editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      saveFile();
-    });
-  };
 
   return (
     <div className="flex-1 w-full h-full relative">

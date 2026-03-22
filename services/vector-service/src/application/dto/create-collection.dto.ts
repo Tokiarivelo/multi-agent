@@ -14,4 +14,14 @@ export class CreateCollectionDto {
   @IsEnum(['cosine', 'euclidean', 'dot'])
   @IsOptional()
   distance?: 'cosine' | 'euclidean' | 'dot';
+
+  /** Model record ID from model-service to use for embeddings (optional) */
+  @IsString()
+  @IsOptional()
+  embeddingModelId?: string;
+
+  /** ApiKey record ID from model-service to use for embeddings (optional) */
+  @IsString()
+  @IsOptional()
+  apiKeyId?: string;
 }

@@ -5,7 +5,7 @@ module.exports = {
   testMatch: ['**/__tests__/**/*.test.ts?(x)', '**/*.test.ts?(x)', '**/*.spec.ts?(x)'],
   transform: {
     '^.+\\.tsx?$': [
-      'ts-jest',
+      require.resolve('ts-jest'),
       {
         tsconfig: 'tsconfig.json',
         jsx: 'react-jsx',

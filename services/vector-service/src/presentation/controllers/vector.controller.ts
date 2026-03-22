@@ -18,6 +18,7 @@ import { CreateCollectionDto } from '../../application/dto/create-collection.dto
 import { UpsertDocumentDto, UpsertDocumentsDto } from '../../application/dto/upsert-document.dto';
 import { SearchDto } from '../../application/dto/search.dto';
 import { IVectorRepository } from '../../domain/repositories/vector.repository.interface';
+import { ModelClientService } from '../../infrastructure/external/model-client.service';
 import { Inject } from '@nestjs/common';
 
 @Controller('vectors')
@@ -29,24 +30,33 @@ export class VectorController {
     private readonly upsertDocumentUseCase: UpsertDocumentUseCase,
     private readonly searchSimilarUseCase: SearchSimilarUseCase,
     private readonly deleteCollectionUseCase: DeleteCollectionUseCase,
+    private readonly modelClient: ModelClientService,
     @Inject('IVectorRepository')
     private readonly vectorRepository: IVectorRepository,
   ) {}
+
+  // ── Collection helpers ────────────────────────────────────────────────────
+
+  private serializeCollection(c: import('../../domain/entities/collection.entity').Collection) {
+    return {
+      id: c.id,
+      name: c.name,
+      userId: c.userId,
+      dimension: c.dimension,
+      distance: c.distance,
+      embeddingModelId: c.embeddingModelId,
+      apiKeyId: c.apiKeyId,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+    };
+  }
 
   @Post('collections')
   @HttpCode(HttpStatus.CREATED)
   async createCollection(@Body() dto: CreateCollectionDto) {
     this.logger.log(`POST /vectors/collections - Creating collection: ${dto.name}`);
     const collection = await this.createCollectionUseCase.execute(dto);
-    return {
-      id: collection.id,
-      name: collection.name,
-      userId: collection.userId,
-      dimension: collection.dimension,
-      distance: collection.distance,
-      createdAt: collection.createdAt,
-      updatedAt: collection.updatedAt,
-    };
+    return this.serializeCollection(collection);
   }
 
   @Get('collections')
@@ -64,15 +74,7 @@ export class VectorController {
     const result = await this.vectorRepository.listCollectionsByUserId(userId, pageNum, limitNum);
 
     return {
-      data: result.data.map((c) => ({
-        id: c.id,
-        name: c.name,
-        userId: c.userId,
-        dimension: c.dimension,
-        distance: c.distance,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-      })),
+      data: result.data.map((c) => this.serializeCollection(c)),
       total: result.total,
       page: result.page,
       limit: result.limit,
@@ -86,15 +88,21 @@ export class VectorController {
     if (!collection) {
       return { error: 'Collection not found' };
     }
-    return {
-      id: collection.id,
-      name: collection.name,
-      userId: collection.userId,
-      dimension: collection.dimension,
-      distance: collection.distance,
-      createdAt: collection.createdAt,
-      updatedAt: collection.updatedAt,
-    };
+    return this.serializeCollection(collection);
+  }
+
+  /**
+   * List API keys available for embedding configuration.
+   * Delegates to model-service — avoids exposing the model-service URL to clients.
+   */
+  @Get('embedding-keys')
+  async listEmbeddingKeys(
+    @Query('userId') userId: string,
+    @Query('provider') provider?: string,
+  ) {
+    this.logger.log(`GET /vectors/embedding-keys - userId: ${userId}`);
+    const keys = await this.modelClient.listApiKeys(userId, provider);
+    return { data: keys };
   }
 
   @Delete('collections/:id')
@@ -127,6 +135,34 @@ export class VectorController {
   async search(@Body() dto: SearchDto) {
     this.logger.log(`POST /vectors/search - Searching in collection: ${dto.collectionId}`);
     const results = await this.searchSimilarUseCase.execute(dto);
+    return { results };
+  }
+
+  /**
+   * Convenience endpoint: resolves the caller's "workspace_files" collection
+   * automatically and searches across all indexed files (or a specific file).
+   */
+  @Post('search-files')
+  @HttpCode(HttpStatus.OK)
+  async searchFiles(
+    @Body() body: { userId: string; query: string; limit?: number; fileId?: string },
+  ) {
+    this.logger.log(`POST /vectors/search-files - userId: ${body.userId}`);
+    const collectionName = 'workspace_files';
+    const result = await this.vectorRepository.findCollectionByNameAndUserId(
+      collectionName,
+      body.userId,
+    );
+    if (!result) {
+      return { results: [] };
+    }
+    const filter = body.fileId ? { fileId: body.fileId } : undefined;
+    const results = await this.searchSimilarUseCase.execute({
+      collectionId: result.id,
+      query: body.query,
+      limit: body.limit ?? 5,
+      filter,
+    });
     return { results };
   }
 }

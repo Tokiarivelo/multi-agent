@@ -3,6 +3,7 @@ import { ConfigModule } from './infrastructure/config/config.module';
 import { PrismaService } from './infrastructure/database/prisma.service';
 import { VectorRepository } from './infrastructure/persistence/vector.repository';
 import { QdrantClientService } from './infrastructure/external/qdrant.client';
+import { ModelClientService } from './infrastructure/external/model-client.service';
 import { EmbeddingService } from './domain/services/embedding.service';
 import { CreateCollectionUseCase } from './application/use-cases/create-collection.use-case';
 import { UpsertDocumentUseCase } from './application/use-cases/upsert-document.use-case';
@@ -24,6 +25,7 @@ import { HealthController } from './presentation/controllers/health.controller';
       provide: 'IQdrantClient',
       useClass: QdrantClientService,
     },
+    ModelClientService,
     EmbeddingService,
     CreateCollectionUseCase,
     UpsertDocumentUseCase,

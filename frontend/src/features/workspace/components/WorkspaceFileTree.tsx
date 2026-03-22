@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { FileNode } from '../store/workspaceStore';
-import { Folder, FolderOpen, FileText, FileJson, FileCode, FileImage } from 'lucide-react';
+import {
+  Folder, FolderOpen, FileText, FileJson, FileCode, FileImage,
+  DatabaseZap, Loader2, CheckCircle2, AlertCircle,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useTranslation } from 'react-i18next';
+import { FileIndexStatus, IndexStatus } from '../api/fileIndexingApi';
+import { useWorkspaceFileTreeLogic, useWorkspaceFileTreeNode } from '../hooks/useWorkspaceFileTree';
 
 interface WorkspaceFileTreeProps {
   nodes: FileNode[];
   onSelect: (node: FileNode) => void;
   selectedPath: string | null;
+  getIndexStatus?: (fileId: string) => FileIndexStatus;
+  onIndexFile?: (node: FileNode) => Promise<void>;
 }
 
 const getFileIcon = (fileName: string) => {
@@ -33,33 +39,66 @@ const getFileIcon = (fileName: string) => {
   }
 };
 
+const IndexStatusBadge = ({
+  status,
+  onIndex,
+}: {
+  status: IndexStatus;
+  onIndex: () => void;
+}) => {
+  if (status === 'indexing') {
+    return <span title="Indexing…"><Loader2 className="h-3 w-3 text-violet-400 animate-spin shrink-0" /></span>;
+  }
+  if (status === 'indexed') {
+    return <span title="Indexed in vector DB"><CheckCircle2 className="h-3 w-3 text-violet-400 shrink-0" /></span>;
+  }
+  if (status === 'error') {
+    return <span title="Indexing failed"><AlertCircle className="h-3 w-3 text-red-400 shrink-0" /></span>;
+  }
+  // idle: show index button on hover
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onIndex(); }}
+      className="h-3 w-3 text-muted-foreground/40 hover:text-violet-400 transition-colors shrink-0 opacity-0 group-hover/file:opacity-100"
+      title="Index this file into vector DB"
+    >
+      <DatabaseZap className="h-3 w-3" />
+    </button>
+  );
+};
+
 const FileTreeNode = ({
   node,
   onSelect,
   selectedPath,
   depth = 0,
+  getIndexStatus,
+  onIndexFile,
 }: {
   node: FileNode;
   onSelect: (node: FileNode) => void;
   selectedPath: string | null;
   depth?: number;
+  getIndexStatus?: (fileId: string) => FileIndexStatus;
+  onIndexFile?: (node: FileNode) => Promise<void>;
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const isSelected = selectedPath === node.path;
-  const isDir = node.kind === 'directory';
+  const {
+    isOpen,
+    localStatus,
+    isSelected,
+    isDir,
+    isIndexable,
+    handleClick,
+    handleIndex,
+  } = useWorkspaceFileTreeNode(node, onSelect, selectedPath, onIndexFile);
 
-  const handleClick = () => {
-    onSelect(node);
-    if (isDir) {
-      setIsOpen(!isOpen);
-    }
-  };
+  const displayStatus = localStatus;
 
   return (
     <div>
       <div
         className={cn(
-          'flex items-center gap-2 px-2 py-1.5 cursor-pointer text-sm rounded-md transition-colors w-full break-all whitespace-nowrap overflow-hidden text-ellipsis',
+          'group/file flex items-center gap-2 px-2 py-1.5 cursor-pointer text-sm rounded-md transition-colors w-full',
           isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50 text-foreground/80',
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -73,9 +112,12 @@ const FileTreeNode = ({
             <Folder className="h-4 w-4 text-blue-500 shrink-0" />
           )
         ) : (
-          getFileIcon(node.name)
+          <span className="shrink-0">{getFileIcon(node.name)}</span>
         )}
-        <span className="truncate">{node.name}</span>
+        <span className="truncate flex-1">{node.name}</span>
+        {isIndexable && (
+          <IndexStatusBadge status={displayStatus} onIndex={handleIndex} />
+        )}
       </div>
 
       {isDir && isOpen && node.children && (
@@ -87,6 +129,8 @@ const FileTreeNode = ({
               onSelect={onSelect}
               selectedPath={selectedPath}
               depth={depth + 1}
+              getIndexStatus={getIndexStatus}
+              onIndexFile={onIndexFile}
             />
           ))}
         </div>
@@ -95,8 +139,14 @@ const FileTreeNode = ({
   );
 };
 
-export function WorkspaceFileTree({ nodes, onSelect, selectedPath }: WorkspaceFileTreeProps) {
-  const { t } = useTranslation('common');
+export function WorkspaceFileTree({
+  nodes,
+  onSelect,
+  selectedPath,
+  getIndexStatus,
+  onIndexFile,
+}: WorkspaceFileTreeProps) {
+  const { t } = useWorkspaceFileTreeLogic();
   if (!nodes || nodes.length === 0) {
     return (
       <div className="p-4 text-sm text-muted-foreground italic">
@@ -114,6 +164,8 @@ export function WorkspaceFileTree({ nodes, onSelect, selectedPath }: WorkspaceFi
           onSelect={onSelect}
           selectedPath={selectedPath}
           depth={0}
+          getIndexStatus={getIndexStatus}
+          onIndexFile={onIndexFile}
         />
       ))}
     </div>
