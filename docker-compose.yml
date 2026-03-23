@@ -6,6 +6,8 @@ services:
       - "-js"
       - "-sd"
       - "/data"
+      - "-m"        # ← active le HTTP monitoring
+      - "8222"      # ← sur ce port
     ports:
       - "4222:4222"   # Client connections
       - "8222:8222"   # HTTP monitoring
