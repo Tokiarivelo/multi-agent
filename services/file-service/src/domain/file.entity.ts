@@ -1,3 +1,5 @@
+export type IndexingStatusType = 'idle' | 'indexing' | 'indexed' | 'error';
+
 export interface FileRecord {
   id: string;
   userId: string;
@@ -11,7 +13,7 @@ export interface FileRecord {
   url?: string;
   createdAt: Date;
   indexingStatus?: {
-    status: 'idle' | 'indexing' | 'indexed' | 'error';
+    status: IndexingStatusType;
     fileId: string;
     indexedAt: Date | null;
     error?: string;
@@ -33,6 +35,7 @@ export interface IFileRepository {
     pageSize?: number,
   ): Promise<{ data: FileRecord[]; total: number }>;
   delete(id: string): Promise<void>;
+  deleteByPaths(userId: string, workspacePaths: string[]): Promise<void>;
   updateIndexingStatus(
     fileId: string,
     status: Partial<FileRecord['indexingStatus']>,

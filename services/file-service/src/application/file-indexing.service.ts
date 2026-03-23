@@ -206,6 +206,50 @@ export class FileIndexingService {
     });
   }
 
+  /**
+   * Remove multiple files from both the Database and the Vector Store.
+   * Used for cleaning up deleted or ignored files.
+   */
+  async purgeFilesByPaths(userId: string, workspacePaths: string[]): Promise<void> {
+    const files = await this.fileRepo.findByPaths(userId, workspacePaths);
+    if (files.length === 0) return;
+
+    for (const file of files) {
+      if (file.indexingStatus?.collectionId) {
+        try {
+          await this.vectorClient.deleteFileVectors(file.indexingStatus.collectionId, file.id);
+        } catch (err) {
+          this.logger.warn(`Failed to delete vectors for file ${file.id}: ${err.message}`);
+        }
+      }
+    }
+
+    await this.fileRepo.deleteByPaths(userId, workspacePaths);
+    this.logger.log(`Purged ${files.length} files from DB and Vector store for user ${userId}`);
+  }
+
+  /**
+   * Identifies and removes files in the DB under a workspace root that are no longer
+   * in the provided visiblePaths list (e.g., deleted or gitignored).
+   */
+  async pruneWorkspace(
+    userId: string,
+    workspaceRoot: string,
+    visiblePaths: string[],
+  ): Promise<void> {
+    const allFilesInDb = await this.fileRepo.findByPathPrefix(userId, workspaceRoot);
+    const visibleSet = new Set(visiblePaths);
+
+    const orphans = allFilesInDb
+      .filter((f) => f.workspacePath && !visibleSet.has(f.workspacePath))
+      .map((f) => f.workspacePath!);
+
+    if (orphans.length > 0) {
+      this.logger.log(`Pruning ${orphans.length} orphan files for workspace ${workspaceRoot}`);
+      await this.purgeFilesByPaths(userId, orphans);
+    }
+  }
+
   /** Chunk text into overlapping windows. */
   private chunkText(text: string): string[] {
     const normalized = text.replace(/\r\n/g, '\n').trim();

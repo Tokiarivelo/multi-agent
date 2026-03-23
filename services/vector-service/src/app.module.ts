@@ -9,6 +9,7 @@ import { CreateCollectionUseCase } from './application/use-cases/create-collecti
 import { UpsertDocumentUseCase } from './application/use-cases/upsert-document.use-case';
 import { SearchSimilarUseCase } from './application/use-cases/search-similar.use-case';
 import { DeleteCollectionUseCase } from './application/use-cases/delete-collection.use-case';
+import { DeletePointsUseCase } from './application/use-cases/delete-points.use-case';
 import { VectorController } from './presentation/controllers/vector.controller';
 import { HealthController } from './presentation/controllers/health.controller';
 
@@ -31,6 +32,7 @@ import { HealthController } from './presentation/controllers/health.controller';
     UpsertDocumentUseCase,
     SearchSimilarUseCase,
     DeleteCollectionUseCase,
+    DeletePointsUseCase,
   ],
 })
 export class AppModule {}

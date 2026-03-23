@@ -122,4 +122,12 @@ export const fileIndexingApi = {
     const res = await apiClient.post(`/api/files/index-path`, { path });
     return res.data;
   },
+
+  purgeFiles: async (paths: string[]): Promise<void> => {
+    await apiClient.delete(`/api/files/purge`, { data: { paths } });
+  },
+
+  pruneWorkspace: async (workspaceRoot: string, visiblePaths: string[]): Promise<void> => {
+    await apiClient.post(`/api/files/prune-workspace`, { workspaceRoot, visiblePaths });
+  },
 };

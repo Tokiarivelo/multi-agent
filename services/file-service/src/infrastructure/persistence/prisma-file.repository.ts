@@ -4,7 +4,7 @@ import {
   File as PrismaFile,
   FileIndexingStatus as PrismaStatus,
 } from '@multi-agent/database';
-import { FileRecord, IFileRepository } from '../../domain/file.entity';
+import { FileRecord, IFileRepository, IndexingStatusType } from '../../domain/file.entity';
 
 @Injectable()
 export class PrismaFileRepository implements IFileRepository {
@@ -27,7 +27,7 @@ export class PrismaFileRepository implements IFileRepository {
       createdAt: file.createdAt,
       indexingStatus: file.indexingStatus
         ? {
-            status: file.indexingStatus.status as any,
+            status: file.indexingStatus.status as IndexingStatusType,
             fileId: file.indexingStatus.fileId,
             indexedAt: file.indexingStatus.indexedAt,
             error: file.indexingStatus.error || undefined,
@@ -116,12 +116,38 @@ export class PrismaFileRepository implements IFileRepository {
     await this.prisma.file.delete({ where: { id } });
   }
 
-  // Helper methodologies for IndexingStatus specifically
-  async updateIndexingStatus(fileId: string, status: Partial<PrismaStatus>): Promise<void> {
+  async deleteByPaths(userId: string, workspacePaths: string[]): Promise<void> {
+    await this.prisma.file.deleteMany({
+      where: {
+        userId,
+        workspacePath: { in: workspacePaths },
+      },
+    });
+  }
+
+  async updateIndexingStatus(
+    fileId: string,
+    status: Partial<FileRecord['indexingStatus']>,
+  ): Promise<void> {
     await this.prisma.fileIndexingStatus.upsert({
       where: { fileId },
-      update: status,
-      create: { ...(status as any), fileId },
+      update: {
+        status: status.status,
+        indexedAt: status.indexedAt,
+        error: status.error,
+        contentHash: status.contentHash,
+        collectionId: status.collectionId,
+        chunkCount: status.chunkCount,
+      },
+      create: {
+        fileId,
+        status: status.status || 'idle',
+        indexedAt: status.indexedAt,
+        error: status.error,
+        contentHash: status.contentHash,
+        collectionId: status.collectionId,
+        chunkCount: status.chunkCount,
+      },
     });
   }
 }

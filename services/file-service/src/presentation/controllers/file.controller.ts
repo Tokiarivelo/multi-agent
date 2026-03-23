@@ -257,6 +257,27 @@ export class FileController {
     await this.fileIndexingService.removeIndex(id);
   }
 
+  @Delete('purge')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Purge multiple files from DB and vector index' })
+  async purgeFiles(@Query('userId') userId: string, @Body() body: { paths: string[] }) {
+    if (!body.paths || body.paths.length === 0) return;
+    await this.fileIndexingService.purgeFilesByPaths(userId, body.paths);
+  }
+
+  @Post('prune-workspace')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Prune orphan files in a workspace based on current visible paths' })
+  async pruneWorkspace(
+    @Query('userId') userId: string,
+    @Body() body: { workspaceRoot: string; visiblePaths: string[] },
+  ) {
+    if (!body.workspaceRoot || !body.visiblePaths) {
+      throw new BadRequestException('workspaceRoot and visiblePaths are required');
+    }
+    await this.fileIndexingService.pruneWorkspace(userId, body.workspaceRoot, body.visiblePaths);
+  }
+
   @Post('search')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Semantic search across indexed workspace files' })

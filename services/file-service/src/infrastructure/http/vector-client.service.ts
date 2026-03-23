@@ -117,4 +117,18 @@ export class VectorClientService {
     const data = (await res.json()) as { results: VectorSearchResult[] };
     return data.results;
   }
+
+  /** Delete all vectors associated with a specific fileId. */
+  async deleteFileVectors(collectionId: string, fileId: string): Promise<void> {
+    const res = await fetch(`${this.baseUrl}/api/vectors/points`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ collectionId, filter: { fileId } }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Vector delete points failed (${res.status}): ${body}`);
+    }
+    this.logger.log(`Deleted vectors for file ${fileId} in collection ${collectionId}`);
+  }
 }

@@ -5,4 +5,5 @@ export interface IQdrantClient {
   search(collectionName: string, vector: number[], limit: number, filter?: Record<string, any>): Promise<Array<{ id: string; score: number; payload: Record<string, any> }>>;
   collectionExists(name: string): Promise<boolean>;
   listCollections(): Promise<string[]>;
+  deletePoints(collectionName: string, filter: Record<string, any>): Promise<void>;
 }
