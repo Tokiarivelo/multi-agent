@@ -4,6 +4,9 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { workspaceStorageService, SavedWorkspace } from '../services/workspaceStorage';
 import { workflowsApi } from '../../workflows/api/workflows.api';
+import { fileIndexingApi } from '../api/fileIndexingApi';
+import { createIgnoreFilter } from '../utils/gitignore';
+import { Ignore } from 'ignore';
 
 // ─── FS utilities (exported for WS bridge) ───────────────────────────────────
 
@@ -19,36 +22,54 @@ const dirname = (p: string) => {
 export async function buildFileTree(
   dirHandle: FileSystemDirectoryHandle,
   basePath: string = '',
+  ig?: Ignore,
 ): Promise<FileNode[]> {
   const nodes: FileNode[] = [];
+
+  // If no ignore provided, check for .gitignore at this EXACT level (usually root)
+  let currentIg = ig;
+  if (!basePath) {
+    try {
+      const gitignoreHandle = await dirHandle.getFileHandle('.gitignore');
+      const file = await gitignoreHandle.getFile();
+      const content = await file.text();
+      currentIg = createIgnoreFilter(content);
+    } catch {
+      // no .gitignore at root
+    }
+  }
+
   // @ts-expect-error File System Access API types might not be fully available
   for await (const entry of dirHandle.values()) {
+    const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
+    
+    // Skip if ignored by global hardcoded dirs or .gitignore
+    if (IGNORED_DIRS.has(entry.name)) continue;
+    if (currentIg && currentIg.ignores(relativePath)) continue;
+
     if (entry.kind === 'file') {
       nodes.push({
         name: entry.name,
         kind: 'file',
         handle: entry,
-        path: `${basePath}/${entry.name}`,
+        path: `/${relativePath}`, // Ensure leading slash for consistency
       });
     } else if (entry.kind === 'directory') {
-      if (IGNORED_DIRS.has(entry.name)) continue;
-
       const children = await buildFileTree(
         entry as FileSystemDirectoryHandle,
-        `${basePath}/${entry.name}`,
-      );
-      children.sort((a, b) =>
-        a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1,
+        relativePath,
+        currentIg,
       );
       nodes.push({
         name: entry.name,
         kind: 'directory',
         handle: entry,
-        path: `${basePath}/${entry.name}`,
+        path: `/${relativePath}`,
         children,
       });
     }
   }
+  
   nodes.sort((a, b) =>
     a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1,
   );
@@ -503,6 +524,53 @@ export const useWorkspace = () => {
     [t],
   );
 
+  // ── Refresh the file tree for a workspace ─────────────────────────────────
+
+  const refreshTree = useCallback(async (id?: string | null) => {
+    const store = useWorkspaceStore.getState();
+    const targetId = id ?? store.activeWorkspaceId;
+    if (!targetId) return;
+    const ws = store.getWorkspaceById(targetId);
+    if (!ws) return;
+
+    let newTree: FileNode | null = null;
+
+    if (ws.type === 'server' && ws.nativePath) {
+      newTree = await buildFileTreeServer(ws.nativePath);
+    } else if (ws.rootHandle) {
+      const children = await buildFileTree(ws.rootHandle);
+      newTree = {
+        name: ws.rootHandle.name,
+        kind: 'directory',
+        handle: ws.rootHandle,
+        path: `/${ws.rootHandle.name}`,
+        children,
+      };
+    }
+
+    if (newTree) {
+      store.updateWorkspaceTree(targetId, newTree);
+
+      // Automatic Pruning: remove files from DB if they are no longer in the tree (e.g. deleted or gitignored)
+      if (ws.nativePath) {
+        const visiblePaths: string[] = [];
+        const walk = (nodes: FileNode[]) => {
+          for (const node of nodes) {
+            if (node.kind === 'file') visiblePaths.push(node.path);
+            if (node.children) walk(node.children);
+          }
+        };
+        if (newTree.children) walk(newTree.children);
+        if (newTree.kind === 'file') visiblePaths.push(newTree.path);
+
+        // Non-blocking prune call
+        fileIndexingApi.pruneWorkspace(ws.nativePath, visiblePaths).catch((err) => {
+          console.error('Failed to auto-prune workspace:', err);
+        });
+      }
+    }
+  }, []);
+
   // ── Save the active file ──────────────────────────────────────────────────
 
   const saveFile = useCallback(async () => {
@@ -523,37 +591,18 @@ export const useWorkspace = () => {
       }
       store.setIsDirty(false);
       toast.success(t('workspace.saved', 'File saved successfully'));
+
+      // If saving .gitignore, trigger a refresh to prune newly ignored files immediately
+      if (activeFilePath?.endsWith('.gitignore') || activeFileHandle?.name === '.gitignore') {
+        refreshTree();
+      }
     } catch (error) {
       console.error('Error saving file:', error);
       toast.error(t('workspace.saveError', 'Failed to save file'));
     } finally {
       store.setIsLoading(false);
     }
-  }, [t]);
-
-  // ── Refresh the file tree for a workspace ─────────────────────────────────
-
-  const refreshTree = useCallback(async (id?: string | null) => {
-    const store = useWorkspaceStore.getState();
-    const targetId = id ?? store.activeWorkspaceId;
-    if (!targetId) return;
-    const ws = store.getWorkspaceById(targetId);
-    if (!ws) return;
-
-    if (ws.type === 'server' && ws.nativePath) {
-      const tree = await buildFileTreeServer(ws.nativePath);
-      store.updateWorkspaceTree(targetId, tree);
-    } else if (ws.rootHandle) {
-      const children = await buildFileTree(ws.rootHandle);
-      store.updateWorkspaceTree(targetId, {
-        name: ws.rootHandle.name,
-        kind: 'directory',
-        handle: ws.rootHandle,
-        path: `/${ws.rootHandle.name}`,
-        children,
-      });
-    }
-  }, []);
+  }, [t, refreshTree]);
 
   // ── Create a file or folder ───────────────────────────────────────────────
 

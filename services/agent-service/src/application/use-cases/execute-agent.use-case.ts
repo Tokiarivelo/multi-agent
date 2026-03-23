@@ -20,6 +20,7 @@ import {
 } from '../interfaces/langchain-provider.interface';
 import { ModelClientService } from '../../infrastructure/external/model-client.service';
 import { ToolClientService } from '../../infrastructure/external/tool-client.service';
+import { VectorClientService } from '../../infrastructure/external/vector-client.service';
 
 @Injectable()
 export class ExecuteAgentUseCase {
@@ -31,6 +32,7 @@ export class ExecuteAgentUseCase {
     private readonly agentExecutionService: AgentExecutionService,
     private readonly modelClient: ModelClientService,
     private readonly toolClient: ToolClientService,
+    private readonly vectorClient: VectorClientService,
   ) {}
 
   // ─── Compact handoff helper ──────────────────────────────────────────────
@@ -82,6 +84,18 @@ export class ExecuteAgentUseCase {
       };
       await this.langchainProvider.initialize(llmConfig);
 
+      // ── RAG: inject relevant file context before the user message ───────
+      // Enabled when metadata.userId + metadata.useVectorSearch are provided.
+      // The context block is prepended as a system-level injection to avoid
+      // inflating the conversation history and wasting tokens.
+      let ragContextBlock = '';
+      const ragUserId: string = (nodeMetadata.userId as string) ?? '';
+      const useVectorSearch: boolean = Boolean(nodeMetadata.useVectorSearch);
+      if (ragUserId && useVectorSearch) {
+        const ragResults = await this.vectorClient.searchFiles(ragUserId, dto.input, 5);
+        ragContextBlock = this.vectorClient.buildContextBlock(ragResults);
+      }
+
       // ── Build conversation messages ─────────────────────────────────────
       const messages: ConversationMessage[] = [];
       if (dto.conversationHistory) {
@@ -89,7 +103,12 @@ export class ExecuteAgentUseCase {
           ...dto.conversationHistory.map((m) => ({ role: m.role, content: m.content })),
         );
       }
-      messages.push({ role: 'user', content: dto.input });
+      // Prepend file context to the user message when available (single extra message
+      // keeps history clean and avoids duplicating context across turns).
+      const userContent = ragContextBlock
+        ? `${ragContextBlock}\n\nUser request:\n${dto.input}`
+        : dto.input;
+      messages.push({ role: 'user', content: userContent });
 
       const context = this.agentExecutionService.buildContext(messages, agent.systemPrompt);
       this.agentExecutionService.validateTokenLimit(

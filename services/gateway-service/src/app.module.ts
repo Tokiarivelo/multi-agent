@@ -19,11 +19,14 @@ import { LoginUseCase } from './application/use-cases/login.use-case';
 import { RegisterUseCase } from './application/use-cases/register.use-case';
 import { SocialLoginUseCase } from './application/use-cases/social-login.use-case';
 import { GetMeUseCase } from './application/use-cases/get-me.use-case';
+import { GetUserSettingsUseCase } from './application/use-cases/get-user-settings.use-case';
+import { UpdateUserSettingsUseCase } from './application/use-cases/update-user-settings.use-case';
 import { JWT_SERVICE } from './application/interfaces/jwt.service.interface';
 
 // Presentation
 import { AuthController } from './presentation/controllers/auth.controller';
 import { HealthController } from './presentation/controllers/health.controller';
+import { UserController } from './presentation/controllers/user.controller';
 import { ProxyController } from './presentation/controllers/proxy.controller';
 import { GatewaysModule } from './presentation/gateways/gateways.module';
 import { NatsModule } from './infrastructure/messaging/nats.module';
@@ -45,7 +48,7 @@ import { NatsModule } from './infrastructure/messaging/nats.module';
     NatsModule,
     GatewaysModule,
   ],
-  controllers: [AuthController, HealthController, ProxyController],
+  controllers: [AuthController, HealthController, UserController, ProxyController],
   providers: [
     PrismaService,
     AuthService,
@@ -54,6 +57,8 @@ import { NatsModule } from './infrastructure/messaging/nats.module';
     RegisterUseCase,
     SocialLoginUseCase,
     GetMeUseCase,
+    GetUserSettingsUseCase,
+    UpdateUserSettingsUseCase,
     {
       provide: USER_REPOSITORY,
       useClass: UserRepository,

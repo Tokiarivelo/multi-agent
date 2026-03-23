@@ -100,6 +100,15 @@ export class QdrantClientService implements IQdrantClient, OnModuleInit {
     return response.collections.map(c => c.name);
   }
 
+  async deletePoints(collectionName: string, filter: Record<string, any>): Promise<void> {
+    this.logger.log(`Deleting points from collection: ${collectionName} with filter: ${JSON.stringify(filter)}`);
+    
+    await this.client.delete(collectionName, {
+      filter: this.buildQdrantFilter(filter),
+      wait: true,
+    });
+  }
+
   private buildQdrantFilter(filter: Record<string, any>): any {
     // Convert simple filter object to Qdrant filter format
     const must: any[] = [];

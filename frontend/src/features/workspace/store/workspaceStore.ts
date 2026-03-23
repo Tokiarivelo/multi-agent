@@ -48,6 +48,7 @@ interface WorkspaceState {
   terminalOpen: boolean;
   terminalWorkspaceId: string | null; // which workspace the terminal targets
   currentTerminalPath: string; // The active directory path relative to workspace root
+  watcherEnabled: boolean; // whether periodic workspace scanning is active
 
   // ── Workspace CRUD ──
   setWorkspaces: (workspaces: WorkspaceEntry[]) => void;
@@ -70,6 +71,7 @@ interface WorkspaceState {
   clearTerminal: () => void;
   setTerminalOpen: (open: boolean) => void;
   setCurrentTerminalPath: (path: string) => void;
+  setWatcherEnabled: (enabled: boolean) => void;
 
   // ── Derived helpers ──
   getActiveWorkspace: () => WorkspaceEntry | null;
@@ -92,6 +94,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   terminalOpen: false,
   terminalWorkspaceId: null,
   currentTerminalPath: '',
+  watcherEnabled: false,
 
   // ── Workspace CRUD ──────────────────────────────────────────────────────────
 
@@ -240,6 +243,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   clearTerminal: () => set({ terminalHistory: [] }),
   setTerminalOpen: (open) => set({ terminalOpen: open }),
   setCurrentTerminalPath: (path) => set({ currentTerminalPath: path }),
+  setWatcherEnabled: (enabled) => set({ watcherEnabled: enabled }),
 
   // ── Derived ──────────────────────────────────────────────────────────────────
 

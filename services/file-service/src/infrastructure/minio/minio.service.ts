@@ -47,6 +47,16 @@ export class MinioService implements OnModuleInit {
     return this.client.presignedPutObject(this.bucket, key, expirySeconds);
   }
 
+  async getObject(key: string): Promise<Buffer> {
+    const stream = await this.client.getObject(this.bucket, key);
+    const chunks: Buffer[] = [];
+    return new Promise((resolve, reject) => {
+      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
+    });
+  }
+
   async delete(key: string): Promise<void> {
     await this.client.removeObject(this.bucket, key);
   }

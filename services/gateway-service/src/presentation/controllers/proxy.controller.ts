@@ -71,7 +71,14 @@ export class ProxyController {
         return target;
       },
       on: {
-        proxyReq: fixRequestBody,
+        proxyReq: (proxyReq, req: any) => {
+          const contentType = req.headers['content-type'];
+          if (contentType && contentType.includes('multipart/form-data')) {
+            // Skip fixRequestBody for multipart to prevent corruption
+            return;
+          }
+          return fixRequestBody(proxyReq, req);
+        },
       },
     });
   }
@@ -112,6 +119,7 @@ export class ProxyController {
       case 'collections':
       case 'files':
       case 'auth':
+      case 'users':
         break;
       default:
         return next(

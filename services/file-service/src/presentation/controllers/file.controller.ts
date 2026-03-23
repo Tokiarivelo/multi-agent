@@ -12,15 +12,24 @@ import {
   HttpCode,
   HttpStatus,
   Body,
+  NotFoundException,
+  BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiConsumes, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { FileService } from '../../application/file.service';
+import { FileIndexingService } from '../../application/file-indexing.service';
 
 @ApiTags('files')
 @Controller('api/files')
 export class FileController {
-  constructor(private readonly fileService: FileService) {}
+  private readonly logger = new Logger(FileController.name);
+
+  constructor(
+    private readonly fileService: FileService,
+    private readonly fileIndexingService: FileIndexingService,
+  ) {}
 
   /**
    * Upload a file (multipart/form-data). userId is injected by the gateway
@@ -31,12 +40,20 @@ export class FileController {
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload a file to MinIO' })
   @ApiResponse({ status: 201, description: 'File uploaded' })
-  async upload(@UploadedFile() file: Express.Multer.File, @Query('userId') userId: string) {
+  async upload(
+    @UploadedFile() file: Express.Multer.File,
+    @Query('userId') userId: string,
+    @Query('workspacePath') workspacePath?: string,
+  ) {
+    if (!file) {
+      throw new BadRequestException('File is missing or multipart transmission failed');
+    }
     const record = await this.fileService.upload(
       userId,
       file.originalname,
       file.buffer,
       file.mimetype,
+      workspacePath,
     );
     return record;
   }
@@ -44,10 +61,129 @@ export class FileController {
   @Post('initiate-upload')
   @ApiOperation({ summary: 'Get a presigned URL to upload a file directly to MinIO' })
   async initiateUpload(
-    @Body() dto: { originalName: string; mimeType: string; size: number },
+    @Body() dto: { originalName: string; mimeType: string; size: number; workspacePath?: string },
     @Query('userId') userId: string,
   ) {
-    return this.fileService.initiateUpload(userId, dto.originalName, dto.mimeType, dto.size || 0);
+    return this.fileService.initiateUpload(
+      userId,
+      dto.originalName,
+      dto.mimeType,
+      dto.size || 0,
+      dto.workspacePath,
+    );
+  }
+
+  @Get('by-path')
+  @ApiOperation({ summary: 'Get file record and indexing status by workspace path' })
+  async getByPath(@Query('userId') userId: string, @Query('path') path: string) {
+    const file = await this.fileService.findByPath(userId, path);
+    if (!file) {
+      return {
+        indexingStatus: { status: 'idle', fileId: 'none', indexedAt: null },
+      };
+    }
+
+    return {
+      ...file,
+      indexingStatus: file.indexingStatus || {
+        fileId: file.id,
+        status: 'idle',
+        indexedAt: null,
+      },
+    };
+  }
+
+  @Post('bulk-status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get file records and indexing statuses for multiple workspace paths' })
+  async getBulkStatusByPaths(@Query('userId') userId: string, @Body() body: { paths: string[] }) {
+    if (!body.paths || !Array.isArray(body.paths)) {
+      throw new BadRequestException('paths must be an array of strings');
+    }
+
+    const files = await this.fileService.findByPaths(userId, body.paths);
+    const result: Record<string, unknown> = {};
+
+    // For paths that exist in the DB, get their indexing status
+    for (const file of files) {
+      if (file.workspacePath) {
+        result[file.workspacePath] = {
+          ...file,
+          indexingStatus: file.indexingStatus || {
+            fileId: file.id,
+            status: 'idle',
+            indexedAt: null,
+          },
+        };
+      }
+    }
+
+    // For requested paths that DO NOT exist in exactly, return a default 'idle' state.
+    // This allows the frontend to have a consistent record.
+    for (const path of body.paths) {
+      if (!result[path]) {
+        result[path] = {
+          status: 'idle',
+          indexingStatus: { status: 'idle', fileId: 'none', indexedAt: null },
+        };
+      }
+    }
+
+    return result;
+  }
+
+  @Post('index-path')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Initiate indexing for a file or directory path' })
+  async indexByPath(
+    @Query('userId') userId: string,
+    @Body()
+    body: {
+      path: string;
+      embeddingModelId?: string;
+      apiKeyId?: string;
+      useSummarization?: boolean;
+      summarizationModelId?: string;
+      summarizationApiKeyId?: string;
+    },
+  ) {
+    if (!body.path) {
+      throw new BadRequestException('path is required');
+    }
+
+    // 1. Check if it's a single file
+    const file = await this.fileService.findByPath(userId, body.path);
+    const filesToIndex: import('../../domain/file.entity').FileRecord[] = file ? [file] : [];
+
+    // 2. Check if it's a directory (find all files with that prefix)
+    const subFiles = await this.fileService.findByPathPrefix(userId, body.path + '/');
+    for (const sf of subFiles) {
+      if (!filesToIndex.find((f) => f.id === sf.id)) {
+        filesToIndex.push(sf);
+      }
+    }
+
+    if (filesToIndex.length === 0) {
+      throw new NotFoundException(`No files found under path: ${body.path}`);
+    }
+
+    for (const f of filesToIndex) {
+      await this.fileIndexingService.indexFile(
+        f.id,
+        userId,
+        body.embeddingModelId,
+        body.apiKeyId,
+        body.useSummarization,
+        body.summarizationModelId,
+        body.summarizationApiKeyId,
+      );
+    }
+
+    this.logger.log(`Initiated indexing for ${filesToIndex.length} files under path: ${body.path}`);
+    return {
+      message: `Indexing started for ${filesToIndex.length} files`,
+      count: filesToIndex.length,
+    };
   }
 
   @Get()
@@ -74,5 +210,88 @@ export class FileController {
   @ApiOperation({ summary: 'Delete a file' })
   async delete(@Param('id') id: string, @Query('userId') userId: string) {
     await this.fileService.deleteFile(id, userId);
+    await this.fileIndexingService.removeIndex(id);
+  }
+
+  // ── Vector indexing endpoints ─────────────────────────────────────────────
+
+  @Post(':id/index')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Start async indexing of a file into the vector DB' })
+  async indexFile(
+    @Param('id') id: string,
+    @Query('userId') userId: string,
+    @Body()
+    body?: {
+      embeddingModelId?: string;
+      apiKeyId?: string;
+      useSummarization?: boolean;
+      summarizationModelId?: string;
+      summarizationApiKeyId?: string;
+    },
+  ) {
+    await this.fileIndexingService.indexFile(
+      id,
+      userId,
+      body?.embeddingModelId,
+      body?.apiKeyId,
+      body?.useSummarization,
+      body?.summarizationModelId,
+      body?.summarizationApiKeyId,
+    );
+    return { fileId: id, status: 'indexing' };
+  }
+
+  @Get(':id/index-status')
+  @ApiOperation({ summary: 'Get the indexing status of a file' })
+  async getIndexStatus(@Param('id') id: string) {
+    const status = await this.fileIndexingService.getStatus(id);
+    if (!status) return { fileId: id, status: 'idle' };
+    return status;
+  }
+
+  @Delete(':id/index')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remove a file from the vector index' })
+  async removeIndex(@Param('id') id: string) {
+    await this.fileIndexingService.removeIndex(id);
+  }
+
+  @Delete('purge')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Purge multiple files from DB and vector index' })
+  async purgeFiles(@Query('userId') userId: string, @Body() body: { paths: string[] }) {
+    if (!body.paths || body.paths.length === 0) return;
+    await this.fileIndexingService.purgeFilesByPaths(userId, body.paths);
+  }
+
+  @Post('prune-workspace')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Prune orphan files in a workspace based on current visible paths' })
+  async pruneWorkspace(
+    @Query('userId') userId: string,
+    @Body() body: { workspaceRoot: string; visiblePaths: string[] },
+  ) {
+    if (!body.workspaceRoot || !body.visiblePaths) {
+      throw new BadRequestException('workspaceRoot and visiblePaths are required');
+    }
+    await this.fileIndexingService.pruneWorkspace(userId, body.workspaceRoot, body.visiblePaths);
+  }
+
+  @Post('search')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Semantic search across indexed workspace files' })
+  async searchFiles(
+    @Query('userId') userId: string,
+    @Body() body: { query: string; limit?: number; fileId?: string },
+  ) {
+    if (!body.query) throw new NotFoundException('query is required');
+    const results = await this.fileIndexingService.searchFiles(
+      userId,
+      body.query,
+      body.limit ?? 5,
+      body.fileId,
+    );
+    return { results };
   }
 }

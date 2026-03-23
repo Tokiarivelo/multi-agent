@@ -18,7 +18,6 @@ export class CreateCollectionUseCase {
   async execute(dto: CreateCollectionDto): Promise<Collection> {
     this.logger.log(`Creating collection: ${dto.name} for user: ${dto.userId}`);
 
-    // Check if collection already exists
     const existing = await this.vectorRepository.findCollectionByNameAndUserId(
       dto.name,
       dto.userId,
@@ -30,15 +29,15 @@ export class CreateCollectionUseCase {
       );
     }
 
-    // Create collection entity
     const collection = Collection.create(
       dto.name,
       dto.userId,
       dto.dimension,
       dto.distance || 'cosine',
+      dto.embeddingModelId ?? null,
+      dto.apiKeyId ?? null,
     );
 
-    // Create collection in Qdrant
     const qdrantCollectionName = collection.getQdrantCollectionName();
     const distanceMap = {
       cosine: 'Cosine' as const,
@@ -52,10 +51,9 @@ export class CreateCollectionUseCase {
       distanceMap[dto.distance || 'cosine'],
     );
 
-    // Save collection metadata to database
     const savedCollection = await this.vectorRepository.createCollection(collection);
 
-    this.logger.log(`Collection created successfully: ${savedCollection.id}`);
+    this.logger.log(`Collection created: ${savedCollection.id} (model: ${dto.embeddingModelId ?? 'env-default'})`);
     return savedCollection;
   }
 }

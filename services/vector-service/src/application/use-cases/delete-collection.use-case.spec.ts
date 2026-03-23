@@ -23,6 +23,7 @@ describe('DeleteCollectionUseCase', () => {
     search: jest.fn(),
     collectionExists: jest.fn(),
     listCollections: jest.fn(),
+    deletePoints: jest.fn(),
   };
 
   let useCase: DeleteCollectionUseCase;

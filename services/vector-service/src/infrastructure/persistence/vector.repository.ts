@@ -6,6 +6,31 @@ import {
 import { Collection } from '../../domain/entities/collection.entity';
 import { PrismaService } from '../database/prisma.service';
 
+type PrismaCollection = {
+  id: string;
+  name: string;
+  userId: string;
+  dimension: number;
+  embeddingModelId: string | null;
+  apiKeyId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+function toCollection(c: PrismaCollection): Collection {
+  return new Collection(
+    c.id,
+    c.name,
+    c.userId,
+    c.dimension,
+    'cosine',
+    c.createdAt,
+    c.updatedAt,
+    c.embeddingModelId,
+    c.apiKeyId,
+  );
+}
+
 @Injectable()
 export class VectorRepository implements IVectorRepository {
   private readonly logger = new Logger(VectorRepository.name);
@@ -18,67 +43,27 @@ export class VectorRepository implements IVectorRepository {
         name: collection.name,
         userId: collection.userId,
         dimension: collection.dimension,
+        embeddingModelId: collection.embeddingModelId ?? undefined,
+        apiKeyId: collection.apiKeyId ?? undefined,
       },
     });
-
-    return new Collection(
-      created.id,
-      created.name,
-      created.userId,
-      created.dimension,
-      'cosine', // default distance metric, managed by Qdrant
-      created.createdAt,
-      created.updatedAt,
-    );
+    return toCollection(created as PrismaCollection);
   }
 
   async findCollectionById(id: string): Promise<Collection | null> {
-    const record = await this.prisma.vectorCollection.findUnique({
-      where: { id },
-    });
-
-    if (!record) {
-      return null;
-    }
-
-    return new Collection(
-      record.id,
-      record.name,
-      record.userId,
-      record.dimension,
-      'cosine',
-      record.createdAt,
-      record.updatedAt,
-    );
+    const record = await this.prisma.vectorCollection.findUnique({ where: { id } });
+    return record ? toCollection(record as PrismaCollection) : null;
   }
 
   async findCollectionByNameAndUserId(name: string, userId: string): Promise<Collection | null> {
-    const record = await this.prisma.vectorCollection.findFirst({
-      where: {
-        name,
-        userId,
-      },
-    });
-
-    if (!record) {
-      return null;
-    }
-
-    return new Collection(
-      record.id,
-      record.name,
-      record.userId,
-      record.dimension,
-      'cosine',
-      record.createdAt,
-      record.updatedAt,
-    );
+    const record = await this.prisma.vectorCollection.findFirst({ where: { name, userId } });
+    return record ? toCollection(record as PrismaCollection) : null;
   }
 
   async listCollectionsByUserId(
     userId: string,
-    pageParam: number = 1,
-    limitParam: number = 20,
+    pageParam = 1,
+    limitParam = 20,
   ): Promise<PaginatedCollections> {
     const page = pageParam || 1;
     const limit = limitParam || 20;
@@ -95,10 +80,7 @@ export class VectorRepository implements IVectorRepository {
     ]);
 
     return {
-      data: records.map(
-        (c: { id: string; name: string; userId: string; dimension: number; createdAt: Date; updatedAt: Date }) =>
-          new Collection(c.id, c.name, c.userId, c.dimension, 'cosine', c.createdAt, c.updatedAt),
-      ),
+      data: (records as PrismaCollection[]).map(toCollection),
       total,
       page,
       limit,
@@ -106,8 +88,6 @@ export class VectorRepository implements IVectorRepository {
   }
 
   async deleteCollection(id: string): Promise<void> {
-    await this.prisma.vectorCollection.delete({
-      where: { id },
-    });
+    await this.prisma.vectorCollection.delete({ where: { id } });
   }
 }

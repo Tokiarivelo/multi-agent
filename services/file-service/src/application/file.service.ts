@@ -16,6 +16,7 @@ export class FileService {
     originalName: string,
     buffer: Buffer,
     mimeType?: string,
+    workspacePath?: string,
   ): Promise<FileRecord> {
     const id = uuidv4();
     const ext = originalName.split('.').pop() ?? 'bin';
@@ -32,6 +33,7 @@ export class FileService {
       id,
       userId,
       originalName,
+      workspacePath,
       storedName,
       mimeType: resolvedMime,
       size: buffer.length,
@@ -49,6 +51,7 @@ export class FileService {
     originalName: string,
     mimeType: string,
     size: number,
+    workspacePath?: string,
   ): Promise<{ uploadUrl: string; record: FileRecord }> {
     const id = uuidv4();
     const ext = originalName.split('.').pop() ?? 'bin';
@@ -67,6 +70,7 @@ export class FileService {
       id,
       userId,
       originalName,
+      workspacePath,
       storedName,
       mimeType: resolvedMime,
       size,
@@ -89,6 +93,18 @@ export class FileService {
 
   async listFiles(userId: string, page = 1, pageSize = 20) {
     return this.repo.findByUser(userId, page, pageSize);
+  }
+
+  async findByPath(userId: string, workspacePath: string): Promise<FileRecord | null> {
+    return this.repo.findByPath(userId, workspacePath);
+  }
+
+  async findByPaths(userId: string, workspacePaths: string[]): Promise<FileRecord[]> {
+    return this.repo.findByPaths(userId, workspacePaths);
+  }
+
+  async findByPathPrefix(userId: string, prefix: string): Promise<FileRecord[]> {
+    return this.repo.findByPathPrefix(userId, prefix);
   }
 
   async deleteFile(id: string, userId: string): Promise<void> {

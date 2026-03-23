@@ -20,6 +20,7 @@ export interface IUserRepository {
     isActive: boolean;
     provider?: string | null;
     image?: string | null;
+    settings?: any;
   }): Promise<User>;
   update(id: string, user: Partial<User>): Promise<User>;
   delete(id: string): Promise<void>;
