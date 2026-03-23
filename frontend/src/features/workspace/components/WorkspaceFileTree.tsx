@@ -7,6 +7,7 @@ import {
 import { cn } from '@/lib/utils';
 import { FileIndexStatus, IndexStatus } from '../api/fileIndexingApi';
 import { useWorkspaceFileTreeLogic, useWorkspaceFileTreeNode, useBulkFileStatus } from '../hooks/useWorkspaceFileTree';
+import { useGitignore } from '../hooks/useGitignore';
 
 interface WorkspaceFileTreeProps {
   nodes: FileNode[];
@@ -14,6 +15,7 @@ interface WorkspaceFileTreeProps {
   selectedPath: string | null;
   getIndexStatus?: (fileId: string) => FileIndexStatus;
   onIndexFile?: (node: FileNode) => Promise<void>;
+  rootHandle?: FileSystemDirectoryHandle;
 }
 
 const getFileIcon = (fileName: string) => {
@@ -51,7 +53,7 @@ const IndexStatusBadge = ({
   if (status === 'indexing') {
     return <span title="Indexing…"><Loader2 className="h-3 w-3 text-violet-400 animate-spin shrink-0" /></span>;
   }
-  
+
   if (status === 'indexed') {
     if (isModified) {
       return (
@@ -91,6 +93,7 @@ const FileTreeNode = ({
   onIndexFile,
   globalStatuses,
   globalRefetch,
+  isIgnoredByGitignore,
 }: {
   node: FileNode;
   onSelect: (node: FileNode) => void;
@@ -100,6 +103,7 @@ const FileTreeNode = ({
   onIndexFile?: (node: FileNode) => Promise<void>;
   globalStatuses?: Record<string, FileIndexStatus & { id?: string }>;
   globalRefetch?: () => void;
+  isIgnoredByGitignore?: (path: string, isDir: boolean) => boolean;
 }) => {
   const {
     isOpen,
@@ -111,41 +115,60 @@ const FileTreeNode = ({
     handleClick,
     handleIndex,
   } = useWorkspaceFileTreeNode(
-    node, 
-    onSelect, 
-    selectedPath, 
+    node,
+    onSelect,
+    selectedPath,
     onIndexFile,
     globalStatuses?.[node.path],
     globalRefetch
   );
+
+  const isNotIndexable = !isDir && !isIndexable;
+  const isGitignored = isIgnoredByGitignore?.(node.path, isDir) ?? false;
+
+  // Tooltip explains why the file is dimmed
+  const title = isGitignored
+    ? `${node.name} (git ignored)`
+    : isModified
+    ? `${node.name} (Modified)`
+    : node.name;
 
   return (
     <div>
       <div
         className={cn(
           'group/file flex items-center gap-2 px-2 py-1.5 cursor-pointer text-sm rounded-md transition-colors w-full',
-          isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50 text-foreground/80',
+          // Gitignored: muted + italic, like VS Code
+          isGitignored && 'opacity-60 text-muted-foreground italic hover:opacity-80',
+          // Non-indexable extension: slightly dimmed but still normal cursor
+          !isGitignored && isNotIndexable && 'opacity-50 text-muted-foreground',
+          // Normal: selected or hover state
+          !isGitignored && !isNotIndexable && (
+            isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50 text-foreground/80'
+          ),
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
-        title={isModified ? `${node.name} (Modified)` : node.name}
+        title={title}
       >
         {isDir ? (
           isOpen ? (
-            <FolderOpen className="h-4 w-4 text-blue-500 shrink-0" />
+            <FolderOpen className={cn('h-4 w-4 shrink-0', isGitignored ? 'text-muted-foreground' : 'text-blue-500')} />
           ) : (
-            <Folder className="h-4 w-4 text-blue-500 shrink-0" />
+            <Folder className={cn('h-4 w-4 shrink-0', isGitignored ? 'text-muted-foreground' : 'text-blue-500')} />
           )
         ) : (
-          <span className="shrink-0">{getFileIcon(node.name)}</span>
+          <span className={cn('shrink-0', (isGitignored || isNotIndexable) && 'grayscale opacity-70')}>
+            {getFileIcon(node.name)}
+          </span>
         )}
         <span className={cn(
           'truncate flex-1',
-          isModified && 'text-amber-500 italic font-medium'
+          !isGitignored && !isNotIndexable && isModified && 'text-amber-500 italic font-medium',
         )}>
           {node.name}
         </span>
-        {isIndexable && (
+        {isIndexable && !isGitignored && (
           <IndexStatusBadge status={status} isModified={isModified} onIndex={handleIndex} />
         )}
       </div>
@@ -163,6 +186,7 @@ const FileTreeNode = ({
               onIndexFile={onIndexFile}
               globalStatuses={globalStatuses}
               globalRefetch={globalRefetch}
+              isIgnoredByGitignore={isIgnoredByGitignore}
             />
           ))}
         </div>
@@ -177,9 +201,11 @@ export function WorkspaceFileTree({
   selectedPath,
   getIndexStatus,
   onIndexFile,
+  rootHandle,
 }: WorkspaceFileTreeProps) {
   const { t } = useWorkspaceFileTreeLogic();
   const { bulkStatuses, refetchGlobal } = useBulkFileStatus(nodes);
+  const { isIgnoredByGitignore } = useGitignore(rootHandle);
 
   if (!nodes || nodes.length === 0) {
     return (
@@ -202,6 +228,7 @@ export function WorkspaceFileTree({
           onIndexFile={onIndexFile}
           globalStatuses={bulkStatuses}
           globalRefetch={refetchGlobal}
+          isIgnoredByGitignore={isIgnoredByGitignore}
         />
       ))}
     </div>

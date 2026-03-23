@@ -244,6 +244,7 @@ export function WorkspaceSidebar({
             selectedPath={selectedPath}
             getIndexStatus={getStatus}
             onIndexFile={uploadAndIndex}
+            rootHandle={activeWorkspace?.rootHandle}
           />
         ) : (
           <p className="text-xs text-muted-foreground italic px-2 py-3">Loading…</p>
