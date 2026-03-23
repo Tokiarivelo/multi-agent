@@ -54,6 +54,18 @@ export class BuiltInToolsService {
         return this.whatsappSendMessage(parameters as any);
       case 'shell_execute':
         return this.shellExecute(parameters as any);
+      case 'git_status':
+        return this.gitStatus(parameters as any);
+      case 'git_add':
+        return this.gitAdd(parameters as any);
+      case 'git_commit':
+        return this.gitCommit(parameters as any);
+      case 'git_push':
+        return this.gitPush(parameters as any);
+      case 'git_pull':
+        return this.gitPull(parameters as any);
+      case 'git_branch_create':
+        return this.gitBranchCreate(parameters as any);
       default:
         throw new Error(`Unknown built-in tool: ${toolName}`);
     }
@@ -281,6 +293,81 @@ export class BuiltInToolsService {
         timeout: params.timeout || 30000,
         cwd: execCwd,
       });
+      return { stdout, stderr, code: 0 };
+    } catch (error: any) {
+      return {
+        stdout: error.stdout,
+        stderr: error.stderr,
+        code: error.code || 1,
+        error: error.message,
+      };
+    }
+  }
+
+  // --- Git Tools ---
+
+  private async gitStatus(params: { cwd?: string }): Promise<any> {
+    if (!this.enableFileOps) throw new Error('File operations are disabled');
+    const cwd = this.resolvePath(params.cwd);
+    return this.execGitCommand('git status', cwd);
+  }
+
+  private async gitAdd(params: { paths?: string | string[]; cwd?: string }): Promise<any> {
+    if (!this.enableFileOps) throw new Error('File operations are disabled');
+    const cwd = this.resolvePath(params.cwd);
+    const paths = Array.isArray(params.paths) ? params.paths.join(' ') : params.paths || '.';
+    return this.execGitCommand(`git add ${paths}`, cwd);
+  }
+
+  private async gitCommit(params: { message: string; cwd?: string }): Promise<any> {
+    if (!this.enableFileOps) throw new Error('File operations are disabled');
+    const cwd = this.resolvePath(params.cwd);
+    return this.execGitCommand(`git commit -m "${params.message}"`, cwd);
+  }
+
+  private async gitPush(params: { remote?: string; branch?: string; cwd?: string }): Promise<any> {
+    if (!this.enableFileOps) throw new Error('File operations are disabled');
+    const cwd = this.resolvePath(params.cwd);
+    const remote = params.remote || 'origin';
+    const branch = params.branch || (await this.getCurrentBranch(cwd));
+    return this.execGitCommand(`git push ${remote} ${branch}`, cwd);
+  }
+
+  private async gitPull(params: { remote?: string; branch?: string; cwd?: string }): Promise<any> {
+    if (!this.enableFileOps) throw new Error('File operations are disabled');
+    const cwd = this.resolvePath(params.cwd);
+    const remote = params.remote || 'origin';
+    const branch = params.branch || (await this.getCurrentBranch(cwd));
+    return this.execGitCommand(`git pull ${remote} ${branch}`, cwd);
+  }
+
+  private async gitBranchCreate(params: {
+    name: string;
+    checkout?: boolean;
+    cwd?: string;
+  }): Promise<any> {
+    if (!this.enableFileOps) throw new Error('File operations are disabled');
+    const cwd = this.resolvePath(params.cwd);
+    const command = params.checkout ? `git checkout -b ${params.name}` : `git branch ${params.name}`;
+    return this.execGitCommand(command, cwd);
+  }
+
+  private async getCurrentBranch(cwd: string): Promise<string> {
+    const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd });
+    return stdout.trim();
+  }
+
+  private resolvePath(relativeOrAbsolutePath?: string): string {
+    if (!relativeOrAbsolutePath) return this.workspaceRoot;
+    return path.isAbsolute(relativeOrAbsolutePath)
+      ? relativeOrAbsolutePath
+      : path.resolve(this.workspaceRoot, relativeOrAbsolutePath);
+  }
+
+  private async execGitCommand(command: string, cwd: string): Promise<any> {
+    try {
+      this.logger.log(`Executing Git command in [${cwd}]: ${command}`);
+      const { stdout, stderr } = await execAsync(command, { cwd });
       return { stdout, stderr, code: 0 };
     } catch (error: any) {
       return {
