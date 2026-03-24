@@ -2027,7 +2027,7 @@ function NodeEditorForm({
                           padding: { top: 8 },
                           scrollBeyondLastLine: false,
                           formatOnPaste: true,
-                          formatOnType: true,
+                          formatOnType: false,
                         }}
                       />
                     </div>

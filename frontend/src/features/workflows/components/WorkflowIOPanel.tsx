@@ -209,7 +209,7 @@ function IOSection({
       <div className="space-y-2">
         {fields.map((f, i) => (
           <FieldRow
-            key={i}
+            key={f.key || i}
             index={i}
             field={f}
             showRequired={showRequired}
