@@ -19,4 +19,8 @@ export class ExecuteToolDto {
   @IsOptional()
   @IsString()
   userId?: string;
+
+  @IsOptional()
+  @IsString()
+  cwd?: string;
 }

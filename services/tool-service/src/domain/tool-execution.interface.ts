@@ -14,5 +14,5 @@ export interface ToolExecutionContext {
 }
 
 export interface SandboxExecutor {
-  execute(code: string, context: Record<string, any>, timeout: number): Promise<any>;
+  execute(code: string, context: Record<string, any>, timeout: number, cwd?: string): Promise<any>;
 }

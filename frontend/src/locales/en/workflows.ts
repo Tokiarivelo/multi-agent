@@ -112,4 +112,8 @@ export const workflows = {
   'workflows.execution_list.table.duration': 'Duration',
   'workflows.execution_list.empty.title': 'No executions yet',
   'workflows.execution_list.empty.desc': 'Start a workflow to see the execution history here.',
+  'workflows.create.title': 'Create New Workflow',
+  'workflows.create.submit': 'Create & Open Editor',
+  'workflows.create.creating': 'Creating...',
+  'workflows.create.nameRequired': 'Workflow name is required',
 };

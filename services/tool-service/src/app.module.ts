@@ -6,6 +6,7 @@ import { PrismaService } from '@infrastructure/database/prisma.service';
 import { PrismaToolRepository } from '@infrastructure/persistence/tool.repository';
 import { SandboxExecutorService } from '@infrastructure/sandbox/sandbox-executor.service';
 import { BuiltInToolsService } from '@infrastructure/sandbox/built-in-tools.service';
+import { McpExecutorService } from '@infrastructure/sandbox/mcp-executor.service';
 import { ToolController } from '@presentation/controllers/tool.controller';
 import { HealthController } from '@presentation/controllers/health.controller';
 import {
@@ -39,6 +40,7 @@ const TOOL_REPOSITORY = 'ToolRepository';
     },
     SandboxExecutorService,
     BuiltInToolsService,
+    McpExecutorService,
     CreateToolUseCase,
     UpdateToolUseCase,
     DeleteToolUseCase,

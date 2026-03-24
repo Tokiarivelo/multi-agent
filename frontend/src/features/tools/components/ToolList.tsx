@@ -13,9 +13,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Plus, Wrench } from 'lucide-react';
+import { Plus, Wrench, Play } from 'lucide-react';
 import Link from 'next/link';
 import * as LucideIcons from 'lucide-react';
+import { useState } from 'react';
+import { Tool } from '@/types';
+import { ExecuteToolModal } from './ExecuteToolModal';
 
 const DynamicIcon = ({ name, className }: { name?: string; className?: string }) => {
   if (!name) return <Wrench className={className} />;
@@ -28,6 +31,7 @@ const DynamicIcon = ({ name, className }: { name?: string; className?: string })
 
 export function ToolList() {
   const { data, isLoading, error } = useTools();
+  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-destructive">Error loading tools</div>;
@@ -70,6 +74,7 @@ export function ToolList() {
                   <TableHead>Category</TableHead>
                   <TableHead>Origin</TableHead>
                   <TableHead>Params</TableHead>
+                  <TableHead className="w-[80px]">Test</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -101,6 +106,17 @@ export function ToolList() {
                     <TableCell className="text-muted-foreground text-sm">
                       {Array.isArray(tool.parameters) ? tool.parameters.length : 0} defined
                     </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => setSelectedTool(tool)}
+                      >
+                        <Play className="h-3 w-3" />
+                        Test
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -108,6 +124,12 @@ export function ToolList() {
           )}
         </CardContent>
       </Card>
+
+      <ExecuteToolModal
+        tool={selectedTool}
+        open={!!selectedTool}
+        onOpenChange={(open) => { if (!open) setSelectedTool(null); }}
+      />
     </div>
   );
 }

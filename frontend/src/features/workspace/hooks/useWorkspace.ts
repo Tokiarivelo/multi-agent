@@ -414,6 +414,43 @@ export const useWorkspace = () => {
     }
   }, [t]);
 
+  // ─── Request permission for a disconnected workspace ────────────────────────
+  
+  const ensureWorkspacePermission = useCallback(
+    async (id: string, mode: 'read' | 'readwrite' = 'readwrite'): Promise<boolean> => {
+      const store = useWorkspaceStore.getState();
+      const ws = store.getWorkspaceById(id);
+      if (!ws || ws.type !== 'local' || !ws.rootHandle) return true;
+
+      // check status in store and verify with browser
+      const hasPermission = await workspaceStorageService.checkPermission(ws.rootHandle, mode);
+      if (hasPermission) {
+        if (!ws.hasPermission) store.updateWorkspacePermission(id, true);
+        return true;
+      }
+
+      // Need to request
+      const granted = await workspaceStorageService.requestPermission(ws.rootHandle, mode);
+      if (granted) {
+        store.updateWorkspacePermission(id, true);
+        // If it was lost, we might need to rebuild the tree
+        if (!ws.fileTree) {
+          const children = await buildFileTree(ws.rootHandle);
+          store.updateWorkspaceTree(id, {
+            name: ws.name,
+            kind: 'directory',
+            handle: ws.rootHandle,
+            path: `/${ws.name}`,
+            children,
+          });
+        }
+        return true;
+      }
+      return false;
+    },
+    [],
+  );
+
   // ── Request permission for a disconnected workspace ────────────────────────
 
   const requestWorkspacePermission = useCallback(
@@ -881,6 +918,7 @@ export const useWorkspace = () => {
     openRecentWorkspace,
     loadPersistedWorkspaces,
     requestWorkspacePermission,
+    ensureWorkspacePermission,
     openFile,
     saveFile,
     closeWorkspace,

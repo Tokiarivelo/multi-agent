@@ -1,6 +1,30 @@
-import { IsString, IsEnum, IsArray, IsBoolean, IsOptional, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsEnum,
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  ValidateNested,
+  IsObject,
+  IsIn,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ToolCategory, ToolParameter } from '@domain/tool.entity';
+
+export class McpConfigDto {
+  @IsString()
+  serverUrl: string;
+
+  @IsString()
+  toolName: string;
+
+  @IsIn(['http', 'sse'])
+  transport: 'http' | 'sse';
+
+  @IsOptional()
+  @IsObject()
+  headers?: Record<string, string>;
+}
 
 export class ToolParameterDto implements ToolParameter {
   @IsString()
@@ -45,4 +69,9 @@ export class CreateToolDto {
   @IsOptional()
   @IsBoolean()
   isBuiltIn?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => McpConfigDto)
+  mcpConfig?: McpConfigDto;
 }

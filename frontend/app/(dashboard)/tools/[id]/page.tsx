@@ -3,12 +3,16 @@
 import { useTool } from '@/features/tools/hooks/useTools';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
-import { use } from 'react';
+import { ExecuteToolModal } from '@/features/tools/components/ExecuteToolModal';
+import { Play } from 'lucide-react';
+import { use, useState } from 'react';
 
 export default function ToolDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: tool, isLoading, error } = useTool(id);
+  const [testOpen, setTestOpen] = useState(false);
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-destructive">Error loading tool</div>;
@@ -16,10 +20,18 @@ export default function ToolDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-bold">{tool.name}</h2>
-        <p className="text-muted-foreground">{tool.description}</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">{tool.name}</h2>
+          <p className="text-muted-foreground">{tool.description}</p>
+        </div>
+        <Button className="gap-2" onClick={() => setTestOpen(true)}>
+          <Play className="h-4 w-4" />
+          Test Tool
+        </Button>
       </div>
+
+      <ExecuteToolModal tool={tool} open={testOpen} onOpenChange={setTestOpen} />
 
       <Card>
         <CardHeader>

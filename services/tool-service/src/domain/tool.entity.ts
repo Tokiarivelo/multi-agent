@@ -4,6 +4,14 @@ export enum ToolCategory {
   DATABASE = 'DATABASE',
   FILE = 'FILE',
   CUSTOM = 'CUSTOM',
+  MCP = 'MCP',
+}
+
+export interface McpConfig {
+  serverUrl: string;
+  toolName: string;
+  transport: 'http' | 'sse';
+  headers?: Record<string, string>;
 }
 
 export interface ToolParameter {
@@ -23,6 +31,7 @@ export interface Tool {
   code?: string;
   icon?: string;
   isBuiltIn: boolean;
+  mcpConfig?: McpConfig;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +48,7 @@ export class ToolEntity {
     public readonly isBuiltIn: boolean,
     public readonly createdAt: Date,
     public readonly updatedAt: Date,
+    public readonly mcpConfig: McpConfig | null = null,
   ) {}
 
   static fromPrisma(data: any): ToolEntity {
@@ -53,6 +63,7 @@ export class ToolEntity {
       data.isBuiltIn,
       data.createdAt,
       data.updatedAt,
+      data.mcpConfig ?? null,
     );
   }
 
@@ -68,6 +79,7 @@ export class ToolEntity {
       isBuiltIn: this.isBuiltIn,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
+      mcpConfig: this.mcpConfig,
     };
   }
 

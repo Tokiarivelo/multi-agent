@@ -17,10 +17,13 @@ import {
 import { Plus, Play, Edit } from 'lucide-react';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor } from '@/lib/utils';
+import { useState } from 'react';
+import { CreateWorkflowModal } from './CreateWorkflowModal';
 
 export function WorkflowList() {
   const { t } = useTranslation();
   const { data, isLoading, error } = useWorkflows();
+  const [modalOpen, setModalOpen] = useState(false);
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-destructive">Error loading workflows</div>;
@@ -34,12 +37,11 @@ export function WorkflowList() {
           <h2 className="text-2xl font-bold">{t('workflows.title')}</h2>
           <p className="text-muted-foreground">{t('workflows.subtitle')}</p>
         </div>
-        <Link href="/workflows/new">
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            {t('workflows.new')}
-          </Button>
-        </Link>
+        <Button className="gap-2" onClick={() => setModalOpen(true)}>
+          <Plus className="h-4 w-4" />
+          {t('workflows.new')}
+        </Button>
+        <CreateWorkflowModal open={modalOpen} onOpenChange={setModalOpen} />
       </div>
 
       <Card>

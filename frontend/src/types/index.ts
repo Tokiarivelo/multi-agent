@@ -113,15 +113,23 @@ export interface AgentCreateInput {
 }
 
 // Tool Types
+export interface McpConfig {
+  serverUrl: string;
+  toolName: string;
+  transport: 'http' | 'sse';
+  headers?: Record<string, string>;
+}
+
 export interface Tool {
   id: string;
   name: string;
   description: string;
-  category: 'WEB' | 'API' | 'DATABASE' | 'FILE' | 'CUSTOM' | string;
+  category: 'WEB' | 'API' | 'DATABASE' | 'FILE' | 'CUSTOM' | 'MCP' | string;
   parameters: ToolParameter[];
   code?: string;
   icon?: string;
   isBuiltIn: boolean;
+  mcpConfig?: McpConfig;
   status?: string;
   createdAt: string;
   updatedAt: string;
@@ -133,6 +141,14 @@ export interface ToolParameter {
   description: string;
   required: boolean;
   default?: unknown;
+}
+
+export interface ToolExecutionResult {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+  executionTime: number;
+  memoryUsed?: number;
 }
 
 // End Tool Types

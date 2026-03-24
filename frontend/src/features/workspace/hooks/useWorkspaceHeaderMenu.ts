@@ -30,6 +30,8 @@ export function useWorkspaceHeaderMenuLogic() {
     }
   }, [loadPersistedWorkspaces]);
 
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const count = workspaces.length;
 
   return {
@@ -45,6 +47,8 @@ export function useWorkspaceHeaderMenuLogic() {
     recentWorkspaces,
     pathDialogWs,
     setPathDialogWs,
+    menuOpen,
+    setMenuOpen,
     count,
   };
 }

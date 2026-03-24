@@ -115,4 +115,8 @@ export const workflows = {
   'workflows.execution_list.table.duration': 'Durée',
   'workflows.execution_list.empty.title': "Aucune exécution pour le moment",
   'workflows.execution_list.empty.desc': "Lancez un workflow pour voir l'historique ici.",
+  'workflows.create.title': 'Créer un nouveau flux',
+  'workflows.create.submit': "Créer et ouvrir l'éditeur",
+  'workflows.create.creating': 'Création en cours...',
+  'workflows.create.nameRequired': 'Le nom du flux est requis',
 };

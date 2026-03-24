@@ -14,19 +14,22 @@ export class CreateWorkflowUseCase {
   ) {}
 
   async execute(dto: CreateWorkflowDto, userId: string): Promise<Workflow> {
+    const status = dto.status || WorkflowStatus.DRAFT;
     const workflowData = {
       name: dto.name,
       description: dto.description || '',
-      definition: dto.definition,
-      status: dto.status || WorkflowStatus.DRAFT,
+      definition: dto.definition ?? { nodes: [], edges: [], version: 1 },
+      status,
       userId,
     };
 
     const workflow = await this.workflowRepository.create(workflowData);
 
-    const validation = workflow.validate();
-    if (!validation.valid) {
-      throw new Error(`Workflow validation failed: ${validation.errors.join(', ')}`);
+    if (status !== WorkflowStatus.DRAFT) {
+      const validation = workflow.validate();
+      if (!validation.valid) {
+        throw new Error(`Workflow validation failed: ${validation.errors.join(', ')}`);
+      }
     }
 
     return workflow;

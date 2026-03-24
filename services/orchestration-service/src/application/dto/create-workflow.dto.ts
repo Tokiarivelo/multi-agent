@@ -11,8 +11,8 @@ export class CreateWorkflowDto {
   description?: string;
 
   @IsObject()
-  @IsNotEmpty()
-  definition!: {
+  @IsOptional()
+  definition?: {
     nodes: any[];
     edges: any[];
     version: number;

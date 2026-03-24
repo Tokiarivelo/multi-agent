@@ -551,7 +551,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const { logs, connected, executionStatus, clearLogs } = useWorkflowLogs({
     executionId: activeExecution?.id ?? null,
   });
-  const { refreshTree } = useWorkspace();
+  const { refreshTree, ensureWorkspacePermission } = useWorkspace();
 
   // ─── Save ─────────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -589,11 +589,16 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
     const activeWs = useWorkspaceStore.getState().getActiveWorkspace?.() ?? null;
     if (activeWs?.rootHandle) {
       try {
-        const rawName = name || workflow?.id || 'untitled_workflow';
-        const fileName = `${rawName.replace(/\s+/g, '_').toLowerCase()}.json`;
-        await writeFileAtPath(activeWs.rootHandle, fileName, JSON.stringify(workflowData, null, 2));
-        await refreshTree(activeWs.id);
-        toast.success(`Saved to workspace locally: ${fileName}`);
+        const ok = await ensureWorkspacePermission(activeWs.id, 'readwrite');
+        if (!ok) {
+          toast.error(t('workspace.permissionDenied', 'Permission denied. Cannot save locally.'));
+        } else {
+          const rawName = name || workflow?.id || 'untitled_workflow';
+          const fileName = `${rawName.replace(/\s+/g, '_').toLowerCase()}.json`;
+          await writeFileAtPath(activeWs.rootHandle, fileName, JSON.stringify(workflowData, null, 2));
+          await refreshTree(activeWs.id);
+          toast.success(`Saved to workspace locally: ${fileName}`);
+        }
       } catch (err) {
         toast.error(`Failed to save locally: ${err instanceof Error ? err.message : String(err)}`);
       }

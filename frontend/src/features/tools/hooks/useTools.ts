@@ -26,3 +26,19 @@ export function useCreateTool() {
     },
   });
 }
+
+export function useExecuteTool() {
+  return useMutation({
+    mutationFn: ({
+      toolId,
+      parameters,
+      cwd,
+      timeout,
+    }: {
+      toolId: string;
+      parameters: Record<string, unknown>;
+      cwd?: string;
+      timeout?: number;
+    }) => toolsApi.execute(toolId, parameters, cwd, timeout),
+  });
+}

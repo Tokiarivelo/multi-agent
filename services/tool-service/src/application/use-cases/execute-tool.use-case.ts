@@ -6,6 +6,8 @@ import { ToolExecutionResult } from '@domain/tool-execution.interface';
 import { ExecuteToolDto } from '@application/dto/execute-tool.dto';
 import { SandboxExecutorService } from '@infrastructure/sandbox/sandbox-executor.service';
 import { BuiltInToolsService } from '@infrastructure/sandbox/built-in-tools.service';
+import { McpExecutorService } from '@infrastructure/sandbox/mcp-executor.service';
+import { ToolCategory } from '@domain/tool.entity';
 
 @Injectable()
 export class ExecuteToolUseCase {
@@ -16,6 +18,7 @@ export class ExecuteToolUseCase {
     private readonly toolRepository: ToolRepository,
     private readonly sandboxExecutor: SandboxExecutorService,
     private readonly builtInTools: BuiltInToolsService,
+    private readonly mcpExecutor: McpExecutorService,
     private readonly configService: ConfigService,
   ) {
     this.defaultTimeout = this.configService.get<number>('TOOL_EXECUTION_TIMEOUT', 30000);
@@ -46,12 +49,24 @@ export class ExecuteToolUseCase {
       }
 
       const timeout = dto.timeout || this.defaultTimeout;
+
+      // Inject workspace cwd into parameters so built-in tools (shell, git, file ops)
+      // and sandboxed tools use the correct working directory. Only set when not already
+      // provided by the caller in their explicit parameters.
+      const parameters =
+        dto.cwd && !dto.parameters['cwd']
+          ? { ...dto.parameters, cwd: dto.cwd }
+          : dto.parameters;
+
       let result: any;
 
-      if (tool.isBuiltIn) {
-        result = await this.builtInTools.execute(tool.name, dto.parameters, timeout);
+      if (tool.category === ToolCategory.MCP) {
+        if (!tool.mcpConfig) throw new BadRequestException('MCP tool missing mcpConfig');
+        result = await this.mcpExecutor.execute(tool.mcpConfig, parameters, timeout);
+      } else if (tool.isBuiltIn) {
+        result = await this.builtInTools.execute(tool.name, parameters, timeout);
       } else if (tool.code) {
-        result = await this.sandboxExecutor.execute(tool.code, dto.parameters, timeout);
+        result = await this.sandboxExecutor.execute(tool.code, parameters, timeout, dto.cwd);
       } else {
         throw new BadRequestException('Tool has no executable code');
       }

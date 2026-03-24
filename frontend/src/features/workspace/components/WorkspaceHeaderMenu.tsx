@@ -41,12 +41,14 @@ export function WorkspaceHeaderMenu() {
     recentWorkspaces,
     pathDialogWs,
     setPathDialogWs,
+    menuOpen,
+    setMenuOpen,
     count,
   } = useWorkspaceHeaderMenuLogic();
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
@@ -117,6 +119,7 @@ export function WorkspaceHeaderMenu() {
                       requestWorkspacePermission(ws.id);
                     } else {
                       switchWorkspace(ws.id);
+                      setMenuOpen(false);
                     }
                   }}
                 >
@@ -166,6 +169,7 @@ export function WorkspaceHeaderMenu() {
                     onClick={(e) => {
                       e.stopPropagation();
                       setPathDialogWs({ id: ws.id, name: ws.name });
+                      setMenuOpen(false); // Close menu when dialog opens
                     }}
                     title={t('workspace.setServerPath', 'Set server path')}
                   >
@@ -223,6 +227,7 @@ export function WorkspaceHeaderMenu() {
             onSelect={(e: Event) => {
               e.preventDefault();
               openWorkspace();
+              setMenuOpen(false);
             }}
             className="gap-2 text-sm font-medium"
           >

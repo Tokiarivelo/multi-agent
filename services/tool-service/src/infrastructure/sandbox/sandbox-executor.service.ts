@@ -18,7 +18,14 @@ export class SandboxExecutorService implements SandboxExecutor {
     this.sandboxEnabled = this.configService.get<boolean>('SANDBOX_ENABLED', true);
   }
 
-  async execute(code: string, context: Record<string, unknown>, timeout: number): Promise<unknown> {
+  async execute(
+    code: string,
+    context: Record<string, unknown>,
+    timeout: number,
+    cwd?: string,
+  ): Promise<unknown> {
+    console.log('this.sandboxEnabled :>> ', this.sandboxEnabled);
+
     if (!this.sandboxEnabled) {
       this.logger.warn('Sandbox is disabled - executing code without isolation');
       return this.executeUnsafe(code, context);
@@ -49,6 +56,7 @@ export class SandboxExecutorService implements SandboxExecutor {
       await jail.set('_consoleLog', consoleLog);
       await jail.set('_consoleError', consoleError);
       await jail.set('_consoleWarn', consoleWarn);
+      await jail.set('_cwdPath', cwd ?? '/');
 
       // Setup console, __sandboxModules and custom require
       await ivmContext.eval(`
@@ -68,9 +76,9 @@ export class SandboxExecutorService implements SandboxExecutor {
           throw new Error("Cannot find module '" + name + "' or module is not allowed in the sandbox.");
         };
 
-        // process shim
+        // process shim — cwd resolved from host via _cwdPath
         global.process = {
-          cwd: () => "/",
+          cwd: () => _cwdPath,
           env: {},
           platform: "linux",
           versions: { node: "v20.0.0" }
@@ -125,6 +133,7 @@ export class SandboxExecutorService implements SandboxExecutor {
           ivmContext.global.deleteSync('_consoleError');
           ivmContext.global.deleteSync('_consoleWarn');
           ivmContext.global.deleteSync('_parametersJson');
+          ivmContext.global.deleteSync('_cwdPath');
         } catch (e) {
           // ignore cleanup errors
         }
@@ -169,7 +178,7 @@ export class SandboxExecutorService implements SandboxExecutor {
                   const result = fn(...args);
 
                   return JSON.stringify(result, (_key, val) =>
-                    Buffer.isBuffer(val) ? val.toString() : val
+                    Buffer.isBuffer(val) ? val.toString() : val,
                   );
                 } catch (error: unknown) {
                   return JSON.stringify({
@@ -180,19 +189,24 @@ export class SandboxExecutorService implements SandboxExecutor {
 
               const ref = new ivm.Reference(hostFunc);
 
-              await ivmContext.evalClosure(`
+              await ivmContext.evalClosure(
+                `
               global.__sandboxModules['${moduleName}']['${method}'] = (...args) => {
                 const resJson = $0.applySync(undefined, [JSON.stringify(args)], { result: { copy: true } });
                 return resJson ? JSON.parse(resJson) : undefined;
               };
-            `, [ref]);
+            `,
+                [ref],
+              );
 
               this.logger.debug(`Injected ${moduleName}.${method} into sandbox`);
             } catch (err: any) {
               this.logger.warn(`Failed to inject ${moduleName}.${method}: ${err.message}`);
             }
           } else {
-            this.logger.debug(`Skipping async method ${moduleName}.${method} - use sync version instead`);
+            this.logger.debug(
+              `Skipping async method ${moduleName}.${method} - use sync version instead`,
+            );
           }
         }
       } catch (err: any) {
