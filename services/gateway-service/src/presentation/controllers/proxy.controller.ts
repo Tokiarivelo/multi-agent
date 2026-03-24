@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
 import { ConfigService } from '@nestjs/config';
 import { appendFileSync } from 'fs';
+import { Public } from '../decorators/public.decorator';
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -83,6 +84,32 @@ export class ProxyController {
     });
   }
 
+  @Public()
+  @All('auth/*')
+  proxyAuth(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    const segments = req.path.split('/').filter(Boolean);
+    const service = segments[1];
+
+    if (service === 'auth') {
+      // List of native AuthController routes that stay in the gateway
+      const nativeAuthRoutes = ['login', 'register', 'social-login', 'me'];
+      if (nativeAuthRoutes.includes(segments[2])) {
+        return next();
+      }
+
+      // Otherwise, proxy to the frontend (e.g., NextAuth session/log)
+      return this.proxyMiddleware(req as any, res as any, next);
+    }
+
+    return next();
+  }
+
+  @Public()
+  @All(['health', 'docs'])
+  proxyPublicNative(@Next() next: NextFunction) {
+    return next();
+  }
+
   @All('*')
   proxy(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     const segments = req.path.split('/').filter(Boolean);
@@ -101,7 +128,7 @@ export class ProxyController {
     }
 
     // Controllers natively handled by this gateway skip proxy
-    if (service === 'health' || service === 'docs') {
+    if (service === 'health' || service === 'docs' || service === 'users') {
       return next();
     }
 
@@ -135,6 +162,8 @@ export class ProxyController {
         const glue = req.url.includes('?') ? '&' : '?';
         req.url = `${req.url}${glue}userId=${user.userId}`;
       }
+    } else if (service !== 'auth') {
+      this.logger.warn(`No user identity found for protected route: ${req.path}`);
     }
 
     this.logger.debug(`Proxying request: ${req.method} ${req.url}`);
