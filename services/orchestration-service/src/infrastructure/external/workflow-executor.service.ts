@@ -210,8 +210,28 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     );
 
     try {
+      // Strict Mode: validate input schema before execution
+      if (node.config?.strictMode && Array.isArray(node.config.inputFields)) {
+        const inputErrors = this.validateSchema(input, node.config.inputFields, 'input');
+        if (inputErrors.length > 0) {
+          throw new Error(
+            `[Strict Mode] Node "${node.customName || node.type}" input validation failed:\n${inputErrors.join('\n')}`,
+          );
+        }
+      }
+
       const nodeLogs: string[] = [];
       const output = await this.executeNodeByType(node, input, context, execution, nodeLogs);
+
+      // Strict Mode: validate output schema after execution
+      if (node.config?.strictMode && Array.isArray(node.config.outputFields)) {
+        const outputErrors = this.validateSchema(output, node.config.outputFields, 'output');
+        if (outputErrors.length > 0) {
+          throw new Error(
+            `[Strict Mode] Node "${node.customName || node.type}" output validation failed:\n${outputErrors.join('\n')}`,
+          );
+        }
+      }
 
       execution.completeNodeExecution(nodeId, output);
 
@@ -1008,6 +1028,16 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     }
 
     try {
+      // Strict Mode: validate input schema before test execution
+      if (node.config?.strictMode && Array.isArray(node.config.inputFields)) {
+        const inputErrors = this.validateSchema(input, node.config.inputFields, 'input');
+        if (inputErrors.length > 0) {
+          const msg = `[Strict Mode] Input validation failed:\n${inputErrors.join('\n')}`;
+          push(msg);
+          return { input, output: null, error: msg, logs };
+        }
+      }
+
       const output = await this.executeNodeByType(
         node,
         input,
@@ -1020,6 +1050,17 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         execution,
         logs,
       );
+      // Strict Mode: validate output schema after test execution
+      if (node.config?.strictMode && Array.isArray(node.config.outputFields)) {
+        const outputErrors = this.validateSchema(output, node.config.outputFields, 'output');
+        if (outputErrors.length > 0) {
+          const msg = `[Strict Mode] Output validation failed:\n${outputErrors.join('\n')}`;
+          push(msg);
+          push(`Status: FAILED`);
+          return { input, output, error: msg, logs };
+        }
+      }
+
       push(`Output: ${JSON.stringify(output, null, 2)}`);
       push(`Status: SUCCESS`);
       return { input, output, logs };
@@ -1029,5 +1070,45 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       push(`Status: FAILED`);
       return { input, output: null, error: errMsg, logs };
     }
+  }
+
+  /**
+   * Validates a value against an array of SchemaField definitions.
+   * Returns a list of error messages (empty = valid).
+   */
+  private validateSchema(
+    value: any,
+    fields: Array<{ name: string; type: string; required: boolean }>,
+    direction: 'input' | 'output',
+  ): string[] {
+    const errors: string[] = [];
+
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      errors.push(`  Expected ${direction} to be an object, got ${Array.isArray(value) ? 'array' : typeof value}`);
+      return errors;
+    }
+
+    for (const field of fields) {
+      const fieldValue = value[field.name];
+      const isMissing = fieldValue === undefined || fieldValue === null;
+
+      if (field.required && isMissing) {
+        errors.push(`  Missing required ${direction} field: "${field.name}"`);
+        continue;
+      }
+
+      if (!isMissing && field.type !== 'any') {
+        const actualType = Array.isArray(fieldValue) ? 'array' : typeof fieldValue;
+        const expectedType = field.type;
+
+        if (actualType !== expectedType) {
+          errors.push(
+            `  Field "${field.name}": expected ${expectedType}, got ${actualType}`,
+          );
+        }
+      }
+    }
+
+    return errors;
   }
 }

@@ -1840,20 +1840,42 @@ function NodeEditorForm({
             {/* In / Out Type Declarations (for Autocomplete) */}
             <div className="pt-4 border-t border-border/50">
               <Collapsible>
-                <CollapsibleTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-between items-center text-xs h-8 px-2 font-medium bg-muted/40 hover:bg-muted/80"
+                <div className="flex items-center gap-2">
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="flex-1 justify-between items-center text-xs h-8 px-2 font-medium bg-muted/40 hover:bg-muted/80"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Code2 className="h-4 w-4" />
+                        Data Types (Interfaces)
+                      </span>
+                      <span className="text-muted-foreground font-normal">
+                        {(config.outputType as string) ? '✓ defined' : 'click to define'}
+                      </span>
+                    </Button>
+                  </CollapsibleTrigger>
+                  {/* Strict Mode toggle */}
+                  <button
+                    type="button"
+                    title={
+                      config.strictMode
+                        ? 'Strict Mode ON — input/output validated against schema'
+                        : 'Strict Mode OFF — no schema validation'
+                    }
+                    onClick={() => handleConfigChange('strictMode', !config.strictMode)}
+                    className={`flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[10px] font-semibold border transition-colors shrink-0 ${
+                      config.strictMode
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/25'
+                        : 'bg-muted/40 text-muted-foreground border-border/40 hover:bg-muted/80'
+                    }`}
                   >
-                    <span className="flex items-center gap-2">
-                      <Code2 className="h-4 w-4" />
-                      Data Types (Interfaces)
-                    </span>
-                    <span className="text-muted-foreground font-normal">
-                      {(config.outputType as string) ? '✓ defined' : 'click to define'}
-                    </span>
-                  </Button>
-                </CollapsibleTrigger>
+                    <span
+                      className={`w-2 h-2 rounded-full ${config.strictMode ? 'bg-amber-500' : 'bg-muted-foreground/30'}`}
+                    />
+                    STRICT
+                  </button>
+                </div>
                 <CollapsibleContent className="space-y-4 pt-4 animate-in slide-in-from-top-1">
                   {/* Upstream types preview */}
                   {availableTypings &&
@@ -1892,6 +1914,11 @@ function NodeEditorForm({
                     <p className="text-[10px] text-muted-foreground">
                       Define fields visually — the TypeScript interface below is generated
                       automatically.
+                      {config.strictMode && (
+                        <span className="ml-1 text-amber-600 dark:text-amber-400 font-medium">
+                          Strict Mode is ON — these schemas will be enforced at runtime.
+                        </span>
+                      )}
                     </p>
                     <SchemaFieldEditor
                       label="Input fields"
