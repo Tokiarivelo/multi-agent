@@ -67,6 +67,10 @@ export class ExecuteAgentUseCase {
 
       const modelConfig = await this.modelClient.getModelConfig(agent.modelId);
       const nodeMetadata = (dto.metadata ?? {}) as Record<string, any>;
+      // Accept both keys: workspacePath (set by AGENT node) and cwd (legacy / direct runs)
+      const workspacePath =
+        (nodeMetadata.workspacePath as string | undefined) ||
+        (nodeMetadata.cwd as string | undefined);
 
       // Token budget: node override > agent default
       const effectiveMaxTokens =
@@ -110,7 +114,20 @@ export class ExecuteAgentUseCase {
         : dto.input;
       messages.push({ role: 'user', content: userContent });
 
-      const context = this.agentExecutionService.buildContext(messages, agent.systemPrompt);
+      const workspaceContextBlock = workspacePath
+        ? `\n\n[WORKSPACE CONTEXT]\n` +
+          `Active workspace path: ${workspacePath}\n` +
+          `Rules:\n` +
+          `- When calling file_read, pdf_read, or shell_execute, ALWAYS include cwd: "${workspacePath}"\n` +
+          `- Do NOT ask the user to confirm the path or file name — use the path above directly\n` +
+          `- Do NOT ask for permission before calling a tool — execute immediately when requested\n` +
+          `- If a file is not found, report the error; do not ask for an alternative path`
+        : '';
+
+      const context = this.agentExecutionService.buildContext(
+        messages,
+        (agent.systemPrompt ?? '') + workspaceContextBlock,
+      );
       this.agentExecutionService.validateTokenLimit(
         context.conversationHistory,
         effectiveMaxTokens,

@@ -113,6 +113,27 @@ const tools = [
     code: null,
   },
   {
+    name: 'pdf_read',
+    description: 'Extract text content from a PDF file on the server filesystem',
+    category: ToolCategory.FILE,
+    isBuiltIn: true,
+    parameters: [
+      {
+        name: 'path',
+        type: 'string',
+        description: 'Path to the PDF file (absolute or relative to workspace root)',
+        required: true,
+      },
+      {
+        name: 'cwd',
+        type: 'string',
+        description: 'Working directory to resolve relative paths from',
+        required: false,
+      },
+    ],
+    code: null,
+  },
+  {
     name: 'workspace_read',
     description:
       "Read a file from the user's currently open local workspace (browser File System Access API)",

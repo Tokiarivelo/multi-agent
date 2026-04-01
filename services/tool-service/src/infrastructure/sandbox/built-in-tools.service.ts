@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import * as cheerio from 'cheerio';
+import * as pdfParse from 'pdf-parse';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { exec } from 'child_process';
@@ -44,6 +45,8 @@ export class BuiltInToolsService {
         return this.jsonParser(parameters as any);
       case 'file_read':
         return this.fileRead(parameters as any);
+      case 'pdf_read':
+        return this.pdfRead(parameters as any);
       case 'file_write':
         return this.fileWrite(parameters as any);
       case 'github_api':
@@ -66,6 +69,12 @@ export class BuiltInToolsService {
         return this.gitPull(parameters as any);
       case 'git_branch_create':
         return this.gitBranchCreate(parameters as any);
+      case 'trello_create_card':
+        return this.trelloCreateCard(parameters as any);
+      case 'trello_get_lists':
+        return this.trelloGetLists(parameters as any);
+      case 'trello_move_card':
+        return this.trelloMoveCard(parameters as any);
       default:
         throw new Error(`Unknown built-in tool: ${toolName}`);
     }
@@ -146,16 +155,68 @@ export class BuiltInToolsService {
     }
   }
 
-  private async fileRead(params: { path: string }): Promise<string> {
+  private async fileRead(params: { path: string; cwd?: string }): Promise<{
+    success: boolean;
+    content: string;
+    path: string;
+  }> {
     if (!this.enableFileOps) {
       throw new Error('File operations are disabled');
     }
 
+    const basePath = params.cwd
+      ? path.isAbsolute(params.cwd)
+        ? params.cwd
+        : path.resolve(this.workspaceRoot, params.cwd)
+      : this.workspaceRoot;
+
+    const resolvedPath = path.isAbsolute(params.path)
+      ? params.path
+      : path.resolve(basePath, params.path);
+
     try {
-      const content = await fs.readFile(params.path, 'utf-8');
-      return content;
+      this.logger.log(`Reading file: ${resolvedPath}`);
+      const content = await fs.readFile(resolvedPath, 'utf-8');
+      return { success: true, content, path: resolvedPath };
     } catch (error) {
-      throw new Error(`File read failed: ${error.message}`);
+      throw new Error(`File read failed for "${resolvedPath}": ${error.message}`);
+    }
+  }
+
+  private async pdfRead(params: { path: string; cwd?: string }): Promise<{
+    success: boolean;
+    content: string;
+    pages: number;
+    info: object;
+    path: string;
+  }> {
+    if (!this.enableFileOps) {
+      throw new Error('File operations are disabled');
+    }
+
+    const basePath = params.cwd
+      ? path.isAbsolute(params.cwd)
+        ? params.cwd
+        : path.resolve(this.workspaceRoot, params.cwd)
+      : this.workspaceRoot;
+
+    const resolvedPath = path.isAbsolute(params.path)
+      ? params.path
+      : path.resolve(basePath, params.path);
+
+    try {
+      this.logger.log(`Reading PDF: ${resolvedPath}`);
+      const buffer = await fs.readFile(resolvedPath);
+      const data = await pdfParse(buffer);
+      return {
+        success: true,
+        content: data.text,
+        pages: data.numpages,
+        info: data.info ?? {},
+        path: resolvedPath,
+      };
+    } catch (error) {
+      throw new Error(`PDF read failed for "${resolvedPath}": ${error.message}`);
     }
   }
 
@@ -301,6 +362,123 @@ export class BuiltInToolsService {
         code: error.code || 1,
         error: error.message,
       };
+    }
+  }
+
+  private async trelloCreateCard(params: {
+    apiKey: string;
+    token: string;
+    listId: string;
+    name: string;
+    description?: string;
+  }): Promise<any> {
+    const { apiKey, token, listId, name, description } = params;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(
+          'https://api.trello.com/1/cards',
+          null,
+          {
+            params: {
+              key: apiKey,
+              token,
+              idList: listId,
+              name,
+              ...(description ? { desc: description } : {}),
+            },
+            timeout: 10000,
+          },
+        ),
+      );
+      return { success: true, card: response.data };
+    } catch (error: any) {
+      throw new Error(`Trello card creation failed: ${error.response?.data || error.message}`);
+    }
+  }
+
+  private async trelloGetLists(params: {
+    apiKey: string;
+    token: string;
+    boardId: string;
+  }): Promise<any> {
+    const { apiKey, token, boardId } = params;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`https://api.trello.com/1/boards/${boardId}/lists`, {
+          params: {
+            key: apiKey,
+            token,
+          },
+          timeout: 10000,
+        }),
+      );
+      return response.data.map((list: any) => ({
+        id: list.id,
+        name: list.name,
+      }));
+    } catch (error: any) {
+      throw new Error(`Trello get lists failed: ${error.response?.data || error.message}`);
+    }
+  }
+
+  private async trelloMoveCard(params: {
+    apiKey: string;
+    token: string;
+    listId: string;
+    cardId?: string;
+    cardName?: string;
+    boardId?: string;
+  }): Promise<any> {
+    const { apiKey, token, listId, cardName, boardId } = params;
+    let { cardId } = params;
+
+    if (!cardId && !cardName) {
+      throw new Error('Either cardId or cardName must be provided');
+    }
+
+    if (!cardId) {
+      if (!boardId) throw new Error('boardId is required when using cardName');
+
+      const listsResp = await firstValueFrom(
+        this.httpService.get(`https://api.trello.com/1/boards/${boardId}/lists`, {
+          params: { key: apiKey, token, cards: 'open', fields: 'id,name' },
+          timeout: 10000,
+        }),
+      );
+
+      const needle = cardName!.toLowerCase();
+      let match: any = null;
+
+      for (const list of listsResp.data) {
+        const cards = await firstValueFrom(
+          this.httpService.get(`https://api.trello.com/1/lists/${list.id}/cards`, {
+            params: { key: apiKey, token, fields: 'id,name' },
+            timeout: 10000,
+          }),
+        );
+        const exact = cards.data.find((c: any) => c.name.toLowerCase() === needle);
+        if (exact) { match = exact; break; }
+        if (!match) {
+          const partial = cards.data.find((c: any) => c.name.toLowerCase().includes(needle));
+          if (partial) match = partial;
+        }
+      }
+
+      if (!match) throw new Error(`Card not found with name: "${cardName}"`);
+      cardId = match.id;
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.put(
+          `https://api.trello.com/1/cards/${cardId}`,
+          null,
+          { params: { key: apiKey, token, idList: listId }, timeout: 10000 },
+        ),
+      );
+      return { success: true, card: { id: response.data.id, name: response.data.name, idList: response.data.idList } };
+    } catch (error: any) {
+      throw new Error(`Trello move card failed: ${error.response?.data || error.message}`);
     }
   }
 
