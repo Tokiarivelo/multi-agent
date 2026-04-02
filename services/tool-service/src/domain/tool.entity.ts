@@ -86,6 +86,19 @@ export class ToolEntity {
   validateParameters(params: Record<string, any>): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
+    if (!Array.isArray(this.parameters)) {
+      // JSON Schema format: { type: 'object', required: [...], properties: { ... } }
+      const schema = this.parameters as any;
+      if (schema?.required && Array.isArray(schema.required)) {
+        for (const requiredParam of schema.required) {
+          if (!(requiredParam in params)) {
+            errors.push(`Missing required parameter: ${requiredParam}`);
+          }
+        }
+      }
+      return { valid: errors.length === 0, errors };
+    }
+
     for (const param of this.parameters) {
       if (param.required && !(param.name in params)) {
         errors.push(`Missing required parameter: ${param.name}`);

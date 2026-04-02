@@ -1914,11 +1914,11 @@ function NodeEditorForm({
                     <p className="text-[10px] text-muted-foreground">
                       Define fields visually — the TypeScript interface below is generated
                       automatically.
-                      {config.strictMode && (
+                      {config.strictMode ? (
                         <span className="ml-1 text-amber-600 dark:text-amber-400 font-medium">
                           Strict Mode is ON — these schemas will be enforced at runtime.
                         </span>
-                      )}
+                      ) : null}
                     </p>
                     <SchemaFieldEditor
                       label="Input fields"

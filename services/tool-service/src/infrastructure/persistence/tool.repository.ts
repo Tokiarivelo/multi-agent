@@ -12,7 +12,7 @@ export class PrismaToolRepository implements ToolRepository {
       data: {
         name: tool.name,
         description: tool.description,
-        category: tool.category,
+        category: tool.category as any,
         parameters: tool.parameters as any,
         code: tool.code,
         icon: tool.icon,
@@ -50,7 +50,7 @@ export class PrismaToolRepository implements ToolRepository {
     const skip = (page - 1) * limit;
 
     const where = {
-      ...(filters?.category && { category: filters.category }),
+      ...(filters?.category && { category: filters.category as any }),
       ...(filters?.isBuiltIn !== undefined && { isBuiltIn: filters.isBuiltIn }),
     };
 
@@ -80,7 +80,7 @@ export class PrismaToolRepository implements ToolRepository {
       data: {
         ...(updates.name && { name: updates.name }),
         ...(updates.description && { description: updates.description }),
-        ...(updates.category && { category: updates.category }),
+        ...(updates.category && { category: updates.category as any }),
         ...(updates.parameters && { parameters: updates.parameters as any }),
         ...(updates.code !== undefined && { code: updates.code }),
         ...(updates.icon !== undefined && { icon: updates.icon }),

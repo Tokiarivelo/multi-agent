@@ -309,10 +309,20 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         return input;
 
       case NodeType.AGENT: {
+        // Propagate the active workspace path so the agent can use it as cwd
+        // for file_read, pdf_read, and shell_execute without manual configuration.
+        // context.variables.cwd is set by the frontend from the active workspace's nativePath.
+        const workspacePath =
+          (node.config.workspacePath as string | undefined) ||
+          (typeof context?.variables?.cwd === 'string' ? context.variables.cwd : undefined);
+
         const agentResult = await this.agentClient.executeAgent({
           agentId: node.config.agentId as string,
           input,
-          config: node.config,
+          config: {
+            ...node.config,
+            ...(workspacePath ? { workspacePath } : {}),
+          },
           toolIds: (node.config.toolIds as string[] | undefined) ?? [],
           subAgents: (node.config.subAgents as any[] | undefined) ?? [],
           maxTokens: node.config.maxTokens as number | undefined,
@@ -1084,7 +1094,9 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     const errors: string[] = [];
 
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      errors.push(`  Expected ${direction} to be an object, got ${Array.isArray(value) ? 'array' : typeof value}`);
+      errors.push(
+        `  Expected ${direction} to be an object, got ${Array.isArray(value) ? 'array' : typeof value}`,
+      );
       return errors;
     }
 
@@ -1102,9 +1114,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         const expectedType = field.type;
 
         if (actualType !== expectedType) {
-          errors.push(
-            `  Field "${field.name}": expected ${expectedType}, got ${actualType}`,
-          );
+          errors.push(`  Field "${field.name}": expected ${expectedType}, got ${actualType}`);
         }
       }
     }

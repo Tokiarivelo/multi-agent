@@ -17,10 +17,6 @@ export class UpdateToolUseCase {
       throw new NotFoundException(`Tool with ID "${id}" not found`);
     }
 
-    if (existingTool.isBuiltIn) {
-      throw new Error('Cannot update built-in tools');
-    }
-
     const tool = await this.toolRepository.update(id, dto);
     return tool;
   }
