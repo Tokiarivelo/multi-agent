@@ -62,6 +62,12 @@ export class ProxyController {
           case 'files':
             target = this.configService.get<string>('FILE_SERVICE_URL', 'http://localhost:3008');
             break;
+          case 'github':
+            target = this.configService.get<string>(
+              'GITHUB_MCP_SERVICE_URL',
+              'http://localhost:3010',
+            );
+            break;
           case 'auth':
             target = this.configService.get<string>(
               'FRONTEND_SERVICE_URL',
@@ -108,6 +114,12 @@ export class ProxyController {
   @All(['health', 'docs'])
   proxyPublicNative(@Next() next: NextFunction) {
     return next();
+  }
+
+  @Public()
+  @All('github/*')
+  proxyGithub(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    return this.proxyMiddleware(req as any, res as any, next);
   }
 
   @All('*')

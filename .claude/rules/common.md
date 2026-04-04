@@ -1,34 +1,36 @@
-# Common Rules (All Languages)
+# Common Rules
 
 ## Mindset
-- Minimum working solution first — add complexity only when the requirement demands it
+- Minimum working solution — complexity only when the requirement demands it
 - Read before writing — never modify code you haven't understood
-- One concern per file — split when a file exceeds 300 lines of logic
+- One concern per file — split when logic exceeds 300 lines
 
 ## Code Style
 - Descriptive names: `processWorkflowStep` not `doThing`
 - Functions: max 30 lines; extract if longer
-- Nesting: max 3 levels; flatten with early returns
+- Nesting: max 3 levels; use early returns
 - No magic numbers — use named constants
-- Error messages must include enough context to debug without reading source
 
 ## Error Handling
 - Validate at system boundaries only (HTTP input, NATS messages, env vars)
-- Throw typed errors (`class WorkflowError extends Error`)
-- Never swallow errors silently (`catch (e) {}`)
+- Throw typed errors: `class WorkflowError extends Error`
+- Never swallow silently: `catch (e) {}`
 - Log error + context before re-throwing
 
 ## Dependencies
-- Check if a workspace package already provides the functionality before adding a dependency
-- Prefer stdlib/built-in solutions for simple operations
+- Check workspace packages before adding any new dependency
+- Prefer stdlib for simple operations
 
 ## Git
-- Commit after each logical unit of work — not at end of session
-- Message format: `<type>: <what changed>` (imperative, < 72 chars)
-- Never commit secrets, never commit `console.log`, never commit failing tests
+- Commit per logical unit — not at session end
+- Format: `<type>: <what changed>` (imperative, < 72 chars)
+- Never commit: secrets · `console.log` · failing tests
 
 ## Security
-- No `eval`, no `Function()` constructor with dynamic strings
+- No `eval`, no `Function()` with dynamic strings
 - Rate-limit all public endpoints
-- Log authentication failures (not credentials)
+- Log auth failures — never log credentials
 - Rotate secrets on exposure
+
+## Token Budget
+→ See `token-optimization.md` (mandatory every session)

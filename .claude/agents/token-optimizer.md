@@ -1,6 +1,7 @@
 ---
 name: token-optimizer
 description: Audits a Claude Code session or plan for token waste. Use when a session feels bloated or before a complex operation.
+model: claude-haiku-4-5-20251001
 tools: Read, Grep, Glob
 ---
 

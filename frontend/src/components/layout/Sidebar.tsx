@@ -19,6 +19,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   FolderGit2,
+  Github,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +35,7 @@ const navigation = [
   { name: 'API Keys', href: '/api-keys', icon: KeyRound },
   { name: 'Executions', href: '/executions', icon: PlayCircle },
   { name: 'Workspace', href: '/workspace', icon: FolderGit2 },
+  { name: 'GitHub', href: '/integrations/github', icon: Github },
 ];
 
 export function Sidebar() {

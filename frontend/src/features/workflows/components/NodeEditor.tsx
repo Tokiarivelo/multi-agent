@@ -559,8 +559,8 @@ export interface NodeEditorProps {
   isSaving?: boolean;
   /** Existing agents — includes their native tool IDs so we can show them as a preview */
   agents?: { id: string; name: string; tools?: string[] }[];
-  /** Existing tools for TOOL node dropdown  */
-  tools?: { id: string; name: string }[];
+  /** Existing tools for TOOL/MCP node dropdown  */
+  tools?: { id: string; name: string; category?: string }[];
   /** TS interfaces of previous node outputs passed in for Monaco autocomplete */
   availableTypings?: string;
   /** Workflow ID — required for node test feature */
@@ -1186,7 +1186,7 @@ function NodeEditorForm({
             {/* TOOL config */}
             {type === 'TOOL' && (
               <div className="space-y-2">
-                <Label>{t('workflows.node_editor.tool')}l</Label>
+                <Label>{t('workflows.node_editor.tool')}</Label>
                 {tools.length > 0 ? (
                   <Select
                     value={(config.toolId as string) ?? ''}
@@ -1196,9 +1196,9 @@ function NodeEditorForm({
                       <SelectValue placeholder={t('workflows.node_editor.selectTool')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {tools.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.name}
+                      {tools.map((tl) => (
+                        <SelectItem key={tl.id} value={tl.id}>
+                          {tl.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1212,6 +1212,42 @@ function NodeEditorForm({
                 )}
               </div>
             )}
+
+            {/* MCP config */}
+            {type === 'MCP' && (() => {
+              const mcpTools = tools.filter((tl) => tl.category === 'MCP');
+              return (
+                <div className="space-y-2">
+                  <Label>{t('workflows.node_editor.mcpTool') || 'MCP Tool'}</Label>
+                  {mcpTools.length > 0 ? (
+                    <Select
+                      value={(config.toolId as string) ?? ''}
+                      onValueChange={(v) => handleConfigChange('toolId', v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('workflows.node_editor.selectMcpTool') || 'Select MCP tool…'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {mcpTools.map((tl) => (
+                          <SelectItem key={tl.id} value={tl.id}>
+                            {tl.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border/60 py-6 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        {t('workflows.node_editor.noMcpTools') || 'No MCP tools registered yet.'}
+                      </p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">
+                        {t('workflows.node_editor.noMcpToolsHint') || 'Add one from the Integrations → GitHub page.'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* CONDITIONAL config */}
             {type === 'CONDITIONAL' && (

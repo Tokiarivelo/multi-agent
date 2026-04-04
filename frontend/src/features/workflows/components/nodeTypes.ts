@@ -3,6 +3,7 @@ import {
   Square,
   Bot,
   Wrench,
+  Cpu,
   GitFork,
   Shuffle,
   MessageSquare,
@@ -18,25 +19,10 @@ import {
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
+import { NodeTypeId } from '@/types';
+export type { NodeTypeId };
 
-export type NodeTypeId =
-  | 'START'
-  | 'END'
-  | 'AGENT'
-  | 'TOOL'
-  | 'CONDITIONAL'
-  | 'TRANSFORM'
-  | 'PROMPT'
-  | 'TEXT'
-  | 'FILE'
-  | 'LOOP'
-  | 'GITHUB'
-  | 'SLACK'
-  | 'WHATSAPP'
-  | 'SHELL'
-  | 'WORKSPACE_READ'
-  | 'WORKSPACE_WRITE'
-  | 'SUBWORKFLOW';
+
 
 export interface NodeTypeMeta {
   id: NodeTypeId;
@@ -98,6 +84,18 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     color: 'text-amber-500',
     bgColor: 'bg-amber-500/10',
     borderColor: 'border-amber-500/40',
+    defaultConfig: { toolId: '' },
+  },
+  {
+    id: 'MCP',
+    label: 'MCP Tool',
+    labelFr: 'Outil MCP',
+    description: 'Call a registered MCP tool',
+    descriptionFr: 'Appeler un outil MCP enregistré',
+    icon: Cpu,
+    color: 'text-sky-500',
+    bgColor: 'bg-sky-500/10',
+    borderColor: 'border-sky-500/40',
     defaultConfig: { toolId: '' },
   },
   {

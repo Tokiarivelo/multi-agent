@@ -1,6 +1,7 @@
 ---
 name: tdd-guide
 description: Enforces TDD workflow. Writes the failing test first, then guides implementation. Use before writing any business logic.
+model: claude-sonnet-4-6
 tools: Read, Grep, Glob, Write, Edit, Bash
 ---
 

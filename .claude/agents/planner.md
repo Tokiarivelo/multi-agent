@@ -1,6 +1,7 @@
 ---
 name: planner
 description: Breaks any task into a sequenced, minimal implementation plan. Use when a task involves 3+ files or architectural decisions. Returns a structured plan — does NOT write code.
+model: claude-opus-4-6
 tools: Read, Grep, Glob
 ---
 

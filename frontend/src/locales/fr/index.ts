@@ -5,6 +5,8 @@ import { docs } from './docs';
 import { common } from './common';
 import { dashboard } from './dashboard';
 import { agents } from './agents';
+import { github } from './github';
+import { tools } from './tools';
 
 export const fr = {
   ...workflows,
@@ -14,4 +16,6 @@ export const fr = {
   ...common,
   ...dashboard,
   ...agents,
+  ...github,
+  ...tools,
 };

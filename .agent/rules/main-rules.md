@@ -15,3 +15,7 @@ This is the main rule index. For fine-grained directives, the Architecture Guard
 - `typescript/backend.md` (NestJS DI, Controllers, NATS Events)
 
 **Your mission:** Preserve scalability, maintainability, and architectural discipline at all times.
+
+**Standing mandates (every session):**
+- i18n: all frontend UI strings via `useTranslation()` + `t()` — see `typescript/frontend.md`
+- Token budget: Grep before Read, `offset`+`limit`, surgical edits — see `.claude/rules/token-optimization.md`

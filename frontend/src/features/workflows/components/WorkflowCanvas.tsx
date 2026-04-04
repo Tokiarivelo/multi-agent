@@ -26,7 +26,9 @@ import { Workflow } from '@/types';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Settings2, Undo2, Redo2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Plus, Trash2, Settings2, Undo2, Redo2, Wrench, ChevronLeft, ChevronRight, Cpu } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { NodeEditor } from './NodeEditor';
 import { WorkflowFlowNode } from './WorkflowFlowNode';
 import { WorkflowEdge } from './WorkflowEdge';
@@ -78,7 +80,7 @@ const edgeTypes = {
 function resolveAgentExtras(
   config: Record<string, unknown>,
   agents: { id: string; name: string; tools?: string[] }[],
-  tools: { id: string; name: string }[],
+  tools: { id: string; name: string; category?: string }[],
 ): { resolvedToolNames: string[]; resolvedSubAgents: { name: string; role?: string }[] } {
   // Node-level toolIds override → use those; otherwise fall back to agent's native tools
   const explicitToolIds = (config.toolIds as string[] | undefined) ?? [];
@@ -107,7 +109,7 @@ function resolveNodeLabel(
   config: Record<string, unknown>,
   meta: ReturnType<typeof getNodeTypeMeta>,
   agents: { id: string; name: string; tools?: string[] }[],
-  tools: { id: string; name: string }[],
+  tools: { id: string; name: string; category?: string }[],
   customName?: string,
 ): { label: string; labelFr: string } {
   if (customName && customName.trim()) {
@@ -117,7 +119,7 @@ function resolveNodeLabel(
     const agent = agents.find((a) => a.id === config.agentId);
     if (agent) return { label: agent.name, labelFr: agent.name };
   }
-  if (nodeType === 'TOOL' && config?.toolId) {
+  if ((nodeType === 'TOOL' || nodeType === 'MCP') && config?.toolId) {
     const tool = tools.find((t) => t.id === config.toolId);
     if (tool) return { label: tool.name, labelFr: tool.name };
   }
@@ -127,7 +129,7 @@ function resolveNodeLabel(
 function toFlowNode(
   n: Workflow['definition']['nodes'][0],
   agents: { id: string; name: string; tools?: string[] }[],
-  tools: { id: string; name: string }[],
+  tools: { id: string; name: string; category?: string }[],
 ): FlowNode {
   const raw = n as unknown as Record<string, unknown>;
   const meta = getNodeTypeMeta(raw.type as string);
@@ -179,7 +181,7 @@ function toFlowEdge(edge: Workflow['definition']['edges'][0]): Edge {
 function makeFlowNode(
   node: AddNodePayload,
   agents: { id: string; name: string; tools?: string[] }[],
-  tools: { id: string; name: string }[],
+  tools: { id: string; name: string; category?: string }[],
 ): FlowNode {
   const meta = getNodeTypeMeta(node.type);
   const config = node.config ?? {};
@@ -231,6 +233,8 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
   const { resolvedTheme } = useTheme();
   const { t, i18n } = useTranslation();
   const { zoomIn, zoomOut, screenToFlowPosition } = useReactFlow();
+
+  const [paletteOpen, setPaletteOpen] = useState(true);
 
   /**
    * Edges deleted in the same JS tick as a node deletion are collected here.
@@ -647,6 +651,43 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
     },
   });
 
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      const raw = event.dataTransfer.getData('application/workflow-tool');
+      if (!raw) return;
+      const { toolId, toolName, category } = JSON.parse(raw) as {
+        toolId: string;
+        toolName: string;
+        category: string;
+      };
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const nodeType: NodeTypeId = category === 'MCP' ? 'MCP' : 'TOOL';
+      const node: AddNodePayload = {
+        id: uuidv4(),
+        type: nodeType,
+        customName: toolName,
+        config: { toolId },
+        position,
+      };
+      addNodeMutation.mutate(node, {
+        onSuccess: () => {
+          setNodes((prev) => [
+            ...prev,
+            makeFlowNode(node, agentsData?.data ?? [], toolsData?.data ?? []),
+          ]);
+          pushHistory({ op: 'node_added', node });
+        },
+      });
+    },
+    [screenToFlowPosition, addNodeMutation, agentsData, toolsData, setNodes, pushHistory],
+  );
+
   /* Save node from dialog */
   const handleSaveNode = (node: AddNodePayload) => {
     if (editingNodeId) {
@@ -837,6 +878,8 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
         onNodeDragStop={(_, node) => {
           if (workflow?.id && node.id) {
             const nd = node as FlowNode;
@@ -1015,6 +1058,91 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
                 <Redo2 className="h-3.5 w-3.5" />
               </Button>
             </div>
+          </div>
+        </Panel>
+
+        {/* Tools palette */}
+        <Panel position="top-left" className="mt-40!">
+          <div className="flex items-start gap-1">
+            <div
+              className={`bg-background/95 backdrop-blur-xl border border-border/30 rounded-lg shadow-sm overflow-hidden transition-all duration-200 ${paletteOpen ? 'w-52' : 'w-0 border-0'}`}
+            >
+              {paletteOpen && (
+                <>
+                  <div className="px-3 py-2 border-b border-border/30 flex items-center gap-1.5">
+                    <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">Tools</span>
+                    <Badge variant="outline" className="text-[10px] h-4 ml-auto">
+                      {toolsData?.data?.length ?? 0}
+                    </Badge>
+                  </div>
+                  <ScrollArea className="h-72">
+                    <div className="p-2 space-y-2">
+                      {(() => {
+                        const allTools = toolsData?.data ?? [];
+                        const mcpTools = allTools.filter((tl) => tl.category === 'MCP');
+                        const otherTools = allTools.filter((tl) => tl.category !== 'MCP');
+                        const renderTool = (tl: (typeof allTools)[0]) => {
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const IconComp = tl.icon ? ((LucideIcons as any)[tl.icon] ?? Wrench) : Wrench;
+                          return (
+                            <div
+                              key={tl.id}
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData(
+                                  'application/workflow-tool',
+                                  JSON.stringify({ toolId: tl.id, toolName: tl.name, category: tl.category }),
+                                );
+                                e.dataTransfer.effectAllowed = 'copy';
+                              }}
+                              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs cursor-grab hover:bg-muted/60 active:cursor-grabbing select-none transition-colors"
+                            >
+                              <div className="h-5 w-5 rounded flex items-center justify-center bg-muted/50 shrink-0">
+                                <IconComp className="h-3 w-3 text-primary" />
+                              </div>
+                              <span className="truncate flex-1 font-mono">{tl.name}</span>
+                            </div>
+                          );
+                        };
+                        return (
+                          <>
+                            {mcpTools.length > 0 && (
+                              <div>
+                                <div className="flex items-center gap-1 px-1 mb-1">
+                                  <Cpu className="h-3 w-3 text-sky-500" />
+                                  <span className="text-[10px] font-medium text-sky-500 uppercase tracking-wide">MCP</span>
+                                </div>
+                                {mcpTools.map(renderTool)}
+                              </div>
+                            )}
+                            {otherTools.length > 0 && (
+                              <div>
+                                {mcpTools.length > 0 && <div className="border-t border-border/30 my-1.5" />}
+                                <div className="flex items-center gap-1 px-1 mb-1">
+                                  <Wrench className="h-3 w-3 text-amber-500" />
+                                  <span className="text-[10px] font-medium text-amber-500 uppercase tracking-wide">Custom</span>
+                                </div>
+                                {otherTools.map(renderTool)}
+                              </div>
+                            )}
+                            {allTools.length === 0 && (
+                              <p className="text-[11px] text-muted-foreground text-center py-4">No tools registered</p>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </ScrollArea>
+                </>
+              )}
+            </div>
+            <button
+              onClick={() => setPaletteOpen((o) => !o)}
+              className="mt-1 h-6 w-5 flex items-center justify-center rounded bg-background/95 backdrop-blur-xl border border-border/30 shadow-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {paletteOpen ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
           </div>
         </Panel>
 
