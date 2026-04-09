@@ -22,8 +22,8 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Global api prefix
-  app.setGlobalPrefix('api');
+  // Global api prefix (internal/* excluded — used for service-to-service calls)
+  app.setGlobalPrefix('api', { exclude: ['internal/(.*)'] });
 
   // Global validation pipe
   app.useGlobalPipes(

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
@@ -14,12 +14,26 @@ import {
   SendHorizontal,
   Wrench,
   Bot,
+  CheckCircle,
+  XCircle,
+  History,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { workflowsApi } from '../api/workflows.api';
 import { Trash2, Settings2 } from 'lucide-react';
+import { useTokenUsage } from '@/features/analytics/hooks/useTokenUsage';
+import { AgentTokenHistoryModal } from '@/features/analytics/components/AgentTokenHistoryModal';
+import { useQueryClient } from '@tanstack/react-query';
+
+function formatRelativeTime(ts: string): string {
+  const diff = Date.now() - new Date(ts).getTime();
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
 
 export const WorkflowFlowNode = memo(
   ({ data, selected, id }: NodeProps & { data: WorkflowNodeData; selected?: boolean }) => {
@@ -29,6 +43,7 @@ export const WorkflowFlowNode = memo(
 
     const nodeStatus = useWorkflowExecutionStore((s) => s.nodeStatuses[id]);
     const activeExecutionId = useWorkflowExecutionStore((s) => s.activeExecutionId);
+    const liveTokens = useWorkflowExecutionStore((s) => s.nodeTokenProgress[id]);
     const nodeData = useWorkflowExecutionStore((s) => s.nodeData[id]) as
       | Record<string, unknown>
       | undefined;
@@ -39,6 +54,25 @@ export const WorkflowFlowNode = memo(
     const [promptInput, setPromptInput] = useState('');
     const [selectedProposals, setSelectedProposals] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
+
+    const queryClient = useQueryClient();
+    const agentIdForTokens = nodeType === 'AGENT' ? (data.config?.agentId as string | undefined) : undefined;
+
+    // Refetch token usage immediately when the node finishes (bypasses 30s staleTime)
+    useEffect(() => {
+      if ((nodeStatus === 'COMPLETED' || nodeStatus === 'FAILED') && agentIdForTokens) {
+        queryClient.invalidateQueries({ queryKey: ['token-usage'] });
+      }
+    }, [nodeStatus, agentIdForTokens, queryClient]);
+
+    const { data: tokenData } = useTokenUsage({
+      agentId: agentIdForTokens,
+      limit: 1,
+      page: 1,
+      enabled: !!agentIdForTokens,
+    });
+    const lastExecution = agentIdForTokens ? (tokenData?.data?.[0] ?? null) : null;
 
     const handleResume = async () => {
       let finalInput = promptInput;
@@ -143,6 +177,14 @@ export const WorkflowFlowNode = memo(
     return (
       // Outer wrapper extends hover zone upward to cover the action bar (pt-8)
       <div className={cn('relative group', isDeletable && !isExecuting && 'pt-8 -mt-8')}>
+        {showHistory && agentIdForTokens && (
+          <AgentTokenHistoryModal
+            agentId={agentIdForTokens}
+            agentName={typeof data.label === 'string' ? data.label : undefined}
+            open={showHistory}
+            onClose={() => setShowHistory(false)}
+          />
+        )}
         {/* Node action bar — pinned at the top of the outer wrapper */}
         {isDeletable && !isExecuting && (
           <div className="absolute top-0 left-0 right-0 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-30 px-0.5">
@@ -265,6 +307,69 @@ export const WorkflowFlowNode = memo(
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* AGENT node: live token counter during execution */}
+          {isAgent && nodeStatus === 'RUNNING' && liveTokens && (
+            <div className="mt-2 border-t border-foreground/10 pt-1.5 space-y-0.5">
+              <div className="flex items-center justify-between gap-1">
+                <div className="flex items-center gap-1 min-w-0">
+                  <Loader2 className="h-2.5 w-2.5 text-primary animate-spin shrink-0" />
+                  <span className="text-[9px] font-mono font-semibold text-primary animate-pulse shrink-0">
+                    {liveTokens.totalTokens.toLocaleString()} tok
+                  </span>
+                  <span className="text-[9px] text-muted-foreground/60 shrink-0">
+                    ↑{liveTokens.inputTokens.toLocaleString()} ↓{liveTokens.outputTokens.toLocaleString()}
+                  </span>
+                </div>
+                {liveTokens.iteration > 0 && (
+                  <span className="text-[9px] text-muted-foreground/50 shrink-0">
+                    iter {liveTokens.iteration}
+                  </span>
+                )}
+              </div>
+              <div className="w-full h-0.5 rounded-full bg-foreground/10 overflow-hidden">
+                <div className="h-full bg-primary/60 rounded-full animate-pulse" style={{ width: `${Math.min(100, (liveTokens.iteration / 5) * 100 + 20)}%` }} />
+              </div>
+            </div>
+          )}
+
+          {/* AGENT node: last execution token summary */}
+          {isAgent && lastExecution && !(nodeStatus === 'RUNNING' && liveTokens) && (
+            <div className="mt-2 border-t border-foreground/10 pt-1.5 space-y-0.5">
+              {/* row 1: status + tokens */}
+              <div className="flex items-center justify-between gap-1">
+                <div className="flex items-center gap-1 min-w-0">
+                  {lastExecution.success
+                    ? <CheckCircle className="h-2.5 w-2.5 text-emerald-500 shrink-0" />
+                    : <XCircle className="h-2.5 w-2.5 text-destructive shrink-0" />}
+                  <span className="text-[9px] font-mono font-semibold text-violet-600 shrink-0">
+                    {lastExecution.totalTokens.toLocaleString()} tok
+                  </span>
+                  <span className="text-[9px] text-muted-foreground/60 shrink-0">
+                    ↑{lastExecution.inputTokens.toLocaleString()} ↓{lastExecution.outputTokens.toLocaleString()}
+                  </span>
+                </div>
+                <button
+                  title="View token history"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); setShowHistory(true); }}
+                  className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-violet-500 transition-colors shrink-0"
+                >
+                  <History className="h-2.5 w-2.5" />
+                  History
+                </button>
+              </div>
+              {/* row 2: model + timestamp */}
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[9px] text-muted-foreground/50 truncate">
+                  {lastExecution.model.split('-').slice(0, 2).join('-')}
+                </span>
+                <span className="text-[9px] text-muted-foreground/50 shrink-0">
+                  {formatRelativeTime(lastExecution.timestamp)}
+                </span>
+              </div>
             </div>
           )}
 

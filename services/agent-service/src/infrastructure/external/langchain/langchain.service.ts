@@ -17,12 +17,16 @@ export class LangChainService implements ILangChainProvider {
     await this.currentProvider.initialize(config);
   }
 
-  async execute(messages: ConversationMessage[], tools?: any[]): Promise<LLMResponse> {
+  async execute(
+    messages: ConversationMessage[],
+    tools?: any[],
+    onProgress?: (progress: { inputTokens: number; outputTokens: number; totalTokens: number }) => void,
+  ): Promise<LLMResponse> {
     if (!this.currentProvider) {
       throw new Error('Provider not initialized. Call initialize() first.');
     }
 
-    return this.currentProvider.execute(messages, tools);
+    return this.currentProvider.execute(messages, tools, onProgress);
   }
 
   async executeStream(

@@ -14,6 +14,7 @@ import {
 import { CreateAgentUseCase } from '../../application/use-cases/create-agent.use-case';
 import { ListAgentsUseCase } from '../../application/use-cases/list-agents.use-case';
 import { ExecuteAgentUseCase } from '../../application/use-cases/execute-agent.use-case';
+import { GetTokenUsageUseCase } from '../../application/use-cases/get-token-usage.use-case';
 import { CreateAgentDto } from '../../application/dto/create-agent.dto';
 import { ExecuteAgentDto } from '../../application/dto/execute-agent.dto';
 
@@ -23,6 +24,7 @@ export class AgentController {
     private readonly createAgentUseCase: CreateAgentUseCase,
     private readonly listAgentsUseCase: ListAgentsUseCase,
     private readonly executeAgentUseCase: ExecuteAgentUseCase,
+    private readonly getTokenUsageUseCase: GetTokenUsageUseCase,
   ) {}
 
   @Post()
@@ -53,6 +55,68 @@ export class AgentController {
       modelId,
       limit: parsedLimit,
       page: page ? parseInt(page, 10) : undefined,
+    });
+  }
+
+  @Get('token-usage')
+  async getTokenUsage(
+    @Query('userId') userId: string,
+    @Query('agentId') agentId?: string,
+    @Query('model') model?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!userId) throw new UnauthorizedException('userId is required');
+    return this.getTokenUsageUseCase.execute({
+      userId,
+      agentId,
+      model,
+      fromDate: fromDate ? new Date(fromDate) : undefined,
+      toDate: toDate ? new Date(toDate) : undefined,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+    });
+  }
+
+  @Get('token-usage/chart')
+  async getTokenUsageChart(
+    @Query('userId') userId: string,
+    @Query('period') period: string,
+    @Query('agentId') agentId?: string,
+    @Query('isTest') isTest?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    if (!userId) throw new UnauthorizedException('userId is required');
+    return this.getTokenUsageUseCase.getChart({
+      userId,
+      period: (period === 'weekly' || period === 'monthly' ? period : 'daily') as any,
+      agentId,
+      isTest: isTest === 'true' ? true : isTest === 'false' ? false : undefined,
+      fromDate: fromDate ? new Date(fromDate) : undefined,
+      toDate: toDate ? new Date(toDate) : undefined,
+    });
+  }
+
+  @Get(':agentId/token-usage')
+  async getAgentTokenUsage(
+    @Param('agentId') agentId: string,
+    @Query('userId') userId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    if (!userId) throw new UnauthorizedException('userId is required');
+    return this.getTokenUsageUseCase.execute({
+      userId,
+      agentId,
+      fromDate: startDate ? new Date(startDate) : undefined,
+      toDate: endDate ? new Date(endDate) : undefined,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
     });
   }
 

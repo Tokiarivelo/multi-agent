@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { HumanMessage, SystemMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
+import { concat } from '@langchain/core/utils/stream';
 import {
   LLMConfig,
   LLMResponse,
   StreamingOptions,
+  TokenProgressPayload,
 } from '../../../../application/interfaces/langchain-provider.interface';
 import { ConversationMessage } from '../../../../domain/entities/agent.entity';
 
@@ -15,7 +17,7 @@ export class GoogleProvider {
 
   async initialize(config: LLMConfig): Promise<void> {
     this.model = new ChatGoogleGenerativeAI({
-      modelName: config.model,
+      model: config.model,
       apiKey: config.apiKey,
       temperature: config.temperature ?? 0.7,
       maxOutputTokens: config.maxTokens,
@@ -25,11 +27,19 @@ export class GoogleProvider {
     this.logger.log(`Initialized Google provider with model: ${config.model}`);
   }
 
-  async execute(messages: ConversationMessage[], tools?: any[]): Promise<LLMResponse> {
+  async execute(
+    messages: ConversationMessage[],
+    tools?: any[],
+    onProgress?: (progress: TokenProgressPayload) => void,
+  ): Promise<LLMResponse> {
+    if (onProgress) {
+      return this.executeWithProgress(messages, tools, onProgress);
+    }
+
     try {
       const langchainMessages = this.convertMessages(messages);
 
-      let response;
+      let response: Awaited<ReturnType<typeof this.model.invoke>>;
       if (tools && tools.length > 0) {
         const googleTools = tools.map((t) => {
           const fn = t.type === 'function' ? t.function : t;
@@ -47,16 +57,92 @@ export class GoogleProvider {
         response = await this.model.invoke(langchainMessages);
       }
 
-      const tokens = this.estimateTokens(response.content.toString());
+      const meta = response.response_metadata as Record<string, any>;
+      const usage = meta?.usageMetadata as Record<string, number> | undefined;
+      const inputTokens: number = usage?.promptTokenCount ?? 0;
+      const outputTokens: number = usage?.candidatesTokenCount ?? 0;
+      const tokens =
+        usage?.totalTokenCount ||
+        inputTokens + outputTokens ||
+        this.estimateTokens(response.content.toString());
 
       return {
         content: response.content.toString(),
         tokens,
-        finishReason: response.response_metadata?.finishReason,
+        inputTokens,
+        outputTokens,
+        finishReason: meta?.finishReason as string | undefined,
         toolCalls: response.tool_calls,
       };
     } catch (error) {
       this.logger.error(`Google execution error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private async executeWithProgress(
+    messages: ConversationMessage[],
+    tools: any[] | undefined,
+    onProgress: (progress: TokenProgressPayload) => void,
+  ): Promise<LLMResponse> {
+    try {
+      const streamingModel = new ChatGoogleGenerativeAI({
+        model: (this.model as any).model,
+        apiKey: this.model.apiKey,
+        temperature: this.model.temperature,
+        maxOutputTokens: this.model.maxOutputTokens,
+        streaming: true,
+      });
+
+      const langchainMessages = this.convertMessages(messages);
+
+      let boundModel: any = streamingModel;
+      if (tools && tools.length > 0) {
+        const googleTools = tools.map((t) => {
+          const fn = t.type === 'function' ? t.function : t;
+          const rawSchema = fn.parameters || fn.input_schema || fn.schema;
+          return { name: fn.name, description: fn.description || `Tool ${fn.name}`, schema: this.prepareSchema(rawSchema) };
+        });
+        boundModel = streamingModel.bindTools!(googleTools);
+      }
+
+      const stream = await boundModel.stream(langchainMessages);
+
+      let aggregated: any;
+      let chunkCount = 0;
+
+      for await (const chunk of stream) {
+        aggregated = aggregated === undefined ? chunk : concat(aggregated, chunk);
+        chunkCount++;
+        if (chunkCount % 10 === 0) {
+          const estOutput = this.estimateTokens(aggregated.content?.toString() ?? '');
+          onProgress({ inputTokens: 0, outputTokens: estOutput, totalTokens: estOutput });
+        }
+      }
+
+      if (!aggregated) {
+        return { content: '', tokens: 0, inputTokens: 0, outputTokens: 0 };
+      }
+
+      const meta = aggregated.response_metadata as Record<string, any>;
+      const usage = meta?.usageMetadata as Record<string, number> | undefined;
+      const inputTokens: number = usage?.promptTokenCount ?? 0;
+      const outputTokens: number =
+        usage?.candidatesTokenCount ?? this.estimateTokens(aggregated.content?.toString() ?? '');
+      const totalTokens = usage?.totalTokenCount || inputTokens + outputTokens;
+
+      onProgress({ inputTokens, outputTokens, totalTokens });
+
+      return {
+        content: aggregated.content?.toString() ?? '',
+        tokens: totalTokens,
+        inputTokens,
+        outputTokens,
+        finishReason: meta?.finishReason as string | undefined,
+        toolCalls: aggregated.tool_calls ?? [],
+      };
+    } catch (error) {
+      this.logger.error(`Google streaming-progress error: ${error.message}`);
       throw error;
     }
   }
@@ -68,7 +154,7 @@ export class GoogleProvider {
   ): Promise<void> {
     try {
       const streamingModel = new ChatGoogleGenerativeAI({
-        modelName: (this.model as any).model,
+        model: (this.model as any).model,
         apiKey: this.model.apiKey,
         temperature: this.model.temperature,
         maxOutputTokens: this.model.maxOutputTokens,

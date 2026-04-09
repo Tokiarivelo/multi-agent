@@ -123,6 +123,26 @@ export class WorkflowGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     });
   }
 
+  sendNodeTokenUpdate(
+    executionId: string,
+    nodeId: string,
+    tokens: {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      model: string;
+      iteration: number;
+    },
+  ) {
+    const room = `execution:${executionId}`;
+    this.server.to(room).emit('node:token-update', {
+      executionId,
+      nodeId,
+      ...tokens,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   sendError(executionId: string, error: string) {
     const room = `execution:${executionId}`;
 

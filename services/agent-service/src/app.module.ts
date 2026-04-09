@@ -8,10 +8,13 @@ import { AgentExecutionService } from './domain/services/agent-execution.service
 import { CreateAgentUseCase } from './application/use-cases/create-agent.use-case';
 import { ListAgentsUseCase } from './application/use-cases/list-agents.use-case';
 import { ExecuteAgentUseCase } from './application/use-cases/execute-agent.use-case';
+import { GetTokenUsageUseCase } from './application/use-cases/get-token-usage.use-case';
+import { TokenUsageRepository } from './infrastructure/persistence/token-usage.repository';
 import { LANGCHAIN_PROVIDER } from './application/interfaces/langchain-provider.interface';
 import { LangChainService } from './infrastructure/external/langchain/langchain.service';
 import { OpenAIProvider } from './infrastructure/external/langchain/providers/openai.provider';
 import { AnthropicProvider } from './infrastructure/external/langchain/providers/anthropic.provider';
+import { GoogleProvider } from './infrastructure/external/langchain/providers/google.provider';
 import { ProviderFactory } from './infrastructure/external/langchain/providers/provider.factory';
 import { TokenStreamHandler } from './infrastructure/external/langchain/streaming/token-stream.handler';
 import { ModelClientService } from './infrastructure/external/model-client.service';
@@ -47,12 +50,15 @@ import { AgentExecutionGateway } from './presentation/gateways/agent-execution.g
     },
     OpenAIProvider,
     AnthropicProvider,
+    GoogleProvider,
     ProviderFactory,
     TokenStreamHandler,
     ModelClientService,
     ToolClientService,
     VectorClientService,
     AgentExecutionGateway,
+    TokenUsageRepository,
+    GetTokenUsageUseCase,
   ],
 })
 export class AppModule {}

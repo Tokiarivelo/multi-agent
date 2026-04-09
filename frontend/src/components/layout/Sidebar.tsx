@@ -19,6 +19,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   FolderGit2,
+  BarChart3,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -33,6 +34,7 @@ const navigation = [
   { name: 'Models', href: '/models', icon: Layers },
   { name: 'API Keys', href: '/api-keys', icon: KeyRound },
   { name: 'Executions', href: '/executions', icon: PlayCircle },
+  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Workspace', href: '/workspace', icon: FolderGit2 },
 ];
 
