@@ -79,6 +79,7 @@ export const githubApi = {
       description: overrides?.description ?? (repo.description ?? `GitHub repository: ${repo.fullName}`),
       category: 'MCP',
       icon: 'Github',
+      repoFullName: repo.fullName,
       parameters: [
         { name: 'path', type: 'string', description: 'File or directory path', required: false },
         { name: 'branch', type: 'string', description: 'Branch name', required: false },

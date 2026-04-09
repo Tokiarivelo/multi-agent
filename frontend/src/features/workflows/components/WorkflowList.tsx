@@ -1,6 +1,6 @@
 'use client';
 
-import { useWorkflows } from '../hooks/useWorkflows';
+import { useWorkflows, useDeleteWorkflow } from '../hooks/useWorkflows';
 import { useTranslation } from 'react-i18next';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,16 +14,22 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Play, Edit } from 'lucide-react';
+import { Plus, Play, Edit, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor } from '@/lib/utils';
 import { useState } from 'react';
 import { CreateWorkflowModal } from './CreateWorkflowModal';
+import { DeleteGuardDialog } from '@/components/shared/DeleteGuardDialog';
+import { useDeleteGuard } from '@/hooks/useDeleteGuard';
+import { Workflow } from '@/types';
 
 export function WorkflowList() {
   const { t } = useTranslation();
   const { data, isLoading, error } = useWorkflows();
+  const deleteWorkflow = useDeleteWorkflow();
+  const deleteGuard = useDeleteGuard('workflow');
   const [modalOpen, setModalOpen] = useState(false);
+  const [pendingDeleteWorkflow, setPendingDeleteWorkflow] = useState<Workflow | null>(null);
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-destructive">Error loading workflows</div>;
@@ -108,6 +114,15 @@ export function WorkflowList() {
                           <Play className="h-3 w-3" />
                           {t('workflows.actions.run')}
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          disabled={deleteWorkflow.isPending}
+                          onClick={() => { setPendingDeleteWorkflow(workflow); deleteGuard.openGuard(workflow.id); }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -117,6 +132,21 @@ export function WorkflowList() {
           )}
         </CardContent>
       </Card>
+      <DeleteGuardDialog
+        open={deleteGuard.open}
+        onOpenChange={(open) => { if (!open) { deleteGuard.close(); setPendingDeleteWorkflow(null); } }}
+        entityName={pendingDeleteWorkflow?.name ?? ''}
+        entityType={t('deleteGuard.types.workflow')}
+        dependencies={deleteGuard.dependencies}
+        isChecking={deleteGuard.isChecking}
+        isDeleting={deleteWorkflow.isPending}
+        onConfirm={() => {
+          if (!pendingDeleteWorkflow) return;
+          deleteWorkflow.mutate(pendingDeleteWorkflow.id, {
+            onSuccess: () => { deleteGuard.close(); setPendingDeleteWorkflow(null); },
+          });
+        }}
+      />
     </div>
   );
 }

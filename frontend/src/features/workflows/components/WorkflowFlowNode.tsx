@@ -35,6 +35,7 @@ export const WorkflowFlowNode = memo(
     const proposals = Array.isArray(nodeData?.proposals)
       ? (nodeData.proposals as Array<string | Record<string, unknown>>)
       : [];
+    const multiSelect = nodeData?.multiSelect !== false;
 
     const [promptInput, setPromptInput] = useState('');
     const [selectedProposals, setSelectedProposals] = useState<string[]>([]);
@@ -43,7 +44,9 @@ export const WorkflowFlowNode = memo(
     const handleResume = async () => {
       let finalInput = promptInput;
       if (selectedProposals.length > 0) {
-        finalInput = JSON.stringify(selectedProposals);
+        finalInput = multiSelect
+          ? JSON.stringify(selectedProposals)
+          : selectedProposals[0];
       } else if (!promptInput.trim()) {
         return;
       }
@@ -287,7 +290,7 @@ export const WorkflowFlowNode = memo(
               {proposals.length > 0 && (
                 <div className="mb-3 space-y-2 max-h-[150px] overflow-y-auto pr-1">
                   <p className="text-[10px] text-muted-foreground font-medium">
-                    Select from proposals:
+                    {multiSelect ? 'Select one or more options:' : 'Select an option:'}
                   </p>
                   {proposals.map((proposal: string | Record<string, unknown>, i: number) => {
                     const value =
@@ -310,11 +313,16 @@ export const WorkflowFlowNode = memo(
                         )}
                       >
                         <input
-                          type="checkbox"
+                          type={multiSelect ? 'checkbox' : 'radio'}
+                          name={multiSelect ? undefined : `proposal-${id}`}
                           checked={isSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedProposals((prev) => [...prev, value]);
-                            else setSelectedProposals((prev) => prev.filter((p) => p !== value));
+                          onChange={() => {
+                            if (multiSelect) {
+                              if (isSelected) setSelectedProposals((prev) => prev.filter((p) => p !== value));
+                              else setSelectedProposals((prev) => [...prev, value]);
+                            } else {
+                              setSelectedProposals([value]);
+                            }
                           }}
                           className="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary w-3.5 h-3.5"
                         />

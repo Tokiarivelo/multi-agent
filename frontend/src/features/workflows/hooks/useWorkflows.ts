@@ -3,6 +3,17 @@ import { workflowsApi, AddNodePayload, AddEdgePayload } from '../api/workflows.a
 import { Workflow } from '@/types';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { AxiosError } from 'axios';
+
+function extractErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof AxiosError) {
+    const data = error.response?.data as { message?: string | string[] } | undefined;
+    if (data?.message) {
+      return Array.isArray(data.message) ? data.message.join(', ') : data.message;
+    }
+  }
+  return fallback;
+}
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
@@ -176,7 +187,8 @@ export function useExecuteWorkflow() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['executions'] });
     },
-    onError: () => toast.error('Failed to start execution'),
+    onError: (error) =>
+      toast.error(extractErrorMessage(error, 'Failed to start execution')),
   });
 }
 
@@ -184,6 +196,7 @@ export function useCancelExecution() {
   return useMutation({
     mutationFn: (executionId: string) => workflowsApi.cancelExecution(executionId),
     onSuccess: () => toast.success('Execution cancelled'),
-    onError: () => toast.error('Failed to cancel execution'),
+    onError: (error) =>
+      toast.error(extractErrorMessage(error, 'Failed to cancel execution')),
   });
 }

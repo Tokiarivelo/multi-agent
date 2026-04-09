@@ -4,12 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { Github, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useGitHub } from '../hooks/useGitHub';
+import { useTools } from '@/features/tools/hooks/useTools';
 import { GitHubConnectButton } from './GitHubConnectButton';
 import { GitHubRepoList } from './GitHubRepoList';
 
 export function GitHubIntegrationPage() {
   const { t } = useTranslation();
   const { connection, connect, disconnect, repos, isLoadingRepos } = useGitHub();
+  const { data: toolsPage } = useTools(1, 200);
+  const mcpTools = toolsPage?.data.filter((t) => t.category === 'MCP') ?? [];
 
   const capabilities = [
     t('github.capabilities.codeBrowsing'),
@@ -67,6 +70,7 @@ export function GitHubIntegrationPage() {
         repos={repos}
         isLoading={isLoadingRepos}
         connected={connection.connected}
+        mcpTools={mcpTools}
       />
     </div>
   );

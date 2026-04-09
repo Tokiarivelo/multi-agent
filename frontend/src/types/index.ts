@@ -135,6 +135,7 @@ export interface Tool {
   icon?: string;
   isBuiltIn: boolean;
   mcpConfig?: McpConfig;
+  repoFullName?: string;
   status?: string;
   createdAt: string;
   updatedAt: string;

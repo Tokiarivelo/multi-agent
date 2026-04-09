@@ -316,7 +316,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           (node.config.workspacePath as string | undefined) ||
           (typeof context?.variables?.cwd === 'string' ? context.variables.cwd : undefined);
 
-        const agentResult = await this.agentClient.executeAgent({
+        const agentCallConfig = {
           agentId: node.config.agentId as string,
           input,
           config: {
@@ -326,9 +326,85 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           toolIds: (node.config.toolIds as string[] | undefined) ?? [],
           subAgents: (node.config.subAgents as any[] | undefined) ?? [],
           maxTokens: node.config.maxTokens as number | undefined,
-        });
+        };
+
+        let agentResult = await this.agentClient.executeAgent(agentCallConfig);
         if (!agentResult.success) {
           throw new Error(agentResult.error || 'Agent execution failed');
+        }
+
+        // ── Ask-user: pause execution so the user can pick an option ──────────
+        // The agent signals this by ending its output with:
+        //   __ASK_USER__:{"question":"...","choices":["A","B"],"multiSelect":false}
+        if (execution && node.config.allowAskUser === true) {
+          const rawOutput: string =
+            typeof agentResult.output?.output === 'string'
+              ? agentResult.output.output
+              : typeof agentResult.output === 'string'
+                ? agentResult.output
+                : '';
+
+          const askUserMatch = rawOutput.match(/__ASK_USER__:(\{[\s\S]+\})\s*$/);
+          if (askUserMatch) {
+            let askUser: { question: string; choices: string[]; multiSelect?: boolean } | null =
+              null;
+            try {
+              askUser = JSON.parse(askUserMatch[1]) as {
+                question: string;
+                choices: string[];
+                multiSelect?: boolean;
+              };
+            } catch {
+              this.logger.warn(`AGENT node ${node.id}: failed to parse __ASK_USER__ JSON`);
+            }
+
+            if (askUser && Array.isArray(askUser.choices) && askUser.choices.length > 0) {
+              execution.waitNodeExecution(node.id);
+              await this.updateExecution(execution);
+              this.workflowGateway.sendExecutionUpdate(execution);
+              this.workflowGateway.sendNodeUpdate(
+                execution.id,
+                node.id,
+                node.customName || node.type,
+                'WAITING_INPUT',
+                {
+                  input,
+                  prompt: askUser.question,
+                  proposals: askUser.choices,
+                  multiSelect: askUser.multiSelect ?? false,
+                },
+              );
+
+              this.logger.log(`AGENT node ${node.id} waiting for user input (ask-user)`);
+              const userResponse = await new Promise<string>((resolve) => {
+                this.promptEmitter.once(`resume_${execution.id}_${node.id}`, resolve);
+              });
+
+              // Resume: re-run agent with user's answer injected into input
+              execution.startNodeExecution(node.id, node.customName || node.type, input);
+              await this.updateExecution(execution);
+              this.workflowGateway.sendNodeUpdate(
+                execution.id,
+                node.id,
+                node.customName || node.type,
+                'RUNNING',
+                { input, prompt: askUser.question, userResponse },
+              );
+
+              const retryInput =
+                typeof input === 'object' && input !== null
+                  ? { ...input, userResponse }
+                  : { originalInput: input, userResponse };
+
+              agentResult = await this.agentClient.executeAgent({
+                ...agentCallConfig,
+                input: retryInput,
+              });
+              if (!agentResult.success) {
+                throw new Error(agentResult.error || 'Agent re-execution failed');
+              }
+            }
+          }
         }
 
         // ── Execute post-processing pipeline steps ──────────────────────────
@@ -365,7 +441,8 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         return pipelineData;
       }
 
-      case NodeType.TOOL: {
+      case NodeType.TOOL:
+      case NodeType.MCP: {
         const toolResult = await this.toolClient.executeTool({
           toolId: node.config.toolId,
           input,
@@ -499,17 +576,18 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         return input;
 
       case NodeType.PROMPT: {
-        const promptTemplate = node.config?.prompt as string;
-        if (!promptTemplate) return { prompt: '' };
+        const promptTemplate = (node.config?.prompt as string) || '';
 
         // Resolve {{variables}} from input
-        const resolvedPrompt = promptTemplate.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-          const value = path
-            .trim()
-            .split('.')
-            .reduce((acc: any, key: string) => acc?.[key], input);
-          return value !== undefined ? String(value) : match;
-        });
+        const resolvedPrompt = promptTemplate
+          ? promptTemplate.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
+              const value = path
+                .trim()
+                .split('.')
+                .reduce((acc: any, key: string) => acc?.[key], input);
+              return value !== undefined ? String(value) : match;
+            })
+          : '';
 
         if (execution && execution.id) {
           execution.waitNodeExecution(node.id);

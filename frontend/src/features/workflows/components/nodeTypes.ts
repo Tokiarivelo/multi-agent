@@ -22,8 +22,6 @@ import {
 import { NodeTypeId } from '@/types';
 export type { NodeTypeId };
 
-
-
 export interface NodeTypeMeta {
   id: NodeTypeId;
   label: string;

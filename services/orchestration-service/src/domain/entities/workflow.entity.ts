@@ -23,6 +23,7 @@ export enum NodeType {
   WORKSPACE_READ = 'WORKSPACE_READ',
   WORKSPACE_WRITE = 'WORKSPACE_WRITE',
   SUBWORKFLOW = 'SUBWORKFLOW',
+  MCP = 'MCP',
 }
 
 export interface WorkflowNode {

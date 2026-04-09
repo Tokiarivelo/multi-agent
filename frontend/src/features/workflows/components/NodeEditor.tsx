@@ -47,6 +47,7 @@ import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import Editor from '@monaco-editor/react';
 import { Resizable } from 're-resizable';
+import { StructuredDataViewer } from './StructuredDataViewer';
 import { FileConfigEditor } from './FileConfigEditor';
 import { useWorkspaceStore, type FileNode } from '@/features/workspace/store/workspaceStore';
 import { SubWorkflowConfig } from './SubWorkflowConfig';
@@ -1147,6 +1148,36 @@ function NodeEditorForm({
                       <p>{'}'}</p>
                     </div>
 
+                    {/* Ask User */}
+                    <div className="flex items-center justify-between pt-2 border-t border-border/40">
+                      <div>
+                        <p className="text-xs font-medium">Allow Ask User</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Pause and prompt the user when the agent outputs{' '}
+                          <code className="font-mono bg-muted/60 px-1 rounded">__ASK_USER__:{'{...}'}</code>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        title={
+                          config.allowAskUser
+                            ? 'Ask User ON — agent can pause and prompt for user input'
+                            : 'Ask User OFF — agent runs without user prompts'
+                        }
+                        onClick={() => handleConfigChange('allowAskUser', !config.allowAskUser)}
+                        className={`flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[10px] font-semibold border transition-colors shrink-0 ${
+                          config.allowAskUser
+                            ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/25'
+                            : 'bg-muted/40 text-muted-foreground border-border/40 hover:bg-muted/80'
+                        }`}
+                      >
+                        <span
+                          className={`w-2 h-2 rounded-full ${config.allowAskUser ? 'bg-blue-500' : 'bg-muted-foreground/30'}`}
+                        />
+                        ASK USER
+                      </button>
+                    </div>
+
                     {/* Pipeline Steps */}
                     <div className="pt-2 border-t border-border/40">
                       <Collapsible>
@@ -2161,11 +2192,16 @@ function NodeEditorForm({
                             </Button>
                           )}
                         </div>
-                        <pre className="whitespace-pre-wrap break-all leading-relaxed">
-                          {testResult.error
-                            ? testResult.error
-                            : JSON.stringify(testResult.output, null, 2)}
-                        </pre>
+                        <div className={cn(
+                          'w-full',
+                          testResult.error ? 'text-destructive font-mono text-sm' : 'mt-2'
+                        )}>
+                          {testResult.error ? (
+                            <pre className="whitespace-pre-wrap break-all">{testResult.error}</pre>
+                          ) : (
+                            <StructuredDataViewer data={testResult.output} />
+                          )}
+                        </div>
                       </div>
 
                       {/* Logs */}

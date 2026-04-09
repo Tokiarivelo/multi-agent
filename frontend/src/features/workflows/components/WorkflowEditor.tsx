@@ -59,6 +59,7 @@ import {
   ArrowUpFromLine,
   Workflow as WorkflowIcon,
   ExternalLink,
+  MessageCircleQuestion,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -68,6 +69,10 @@ import { WorkflowIOPanel, WorkflowIOField } from './WorkflowIOPanel';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useExecution } from '../hooks/useWorkflows';
 import { cn } from '@/lib/utils';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { StructuredDataViewer, deepParse } from './StructuredDataViewer';
+import { AgentReplyBar } from './AgentReplyBar';
 
 interface WorkflowEditorProps {
   workflow?: Workflow;
@@ -132,6 +137,8 @@ function Section({
   );
 }
 
+
+
 // ─── Rich node execution data panel ─────────────────────────────────────────
 function NodeExecutionDataPanel({
   selectedNodeId,
@@ -167,18 +174,23 @@ function NodeExecutionDataPanel({
   }
 
   const raw = nodeData[selectedNodeId] as Record<string, unknown> | undefined;
-  const input = raw?.input as Record<string, unknown> | string | undefined;
-  const output = raw?.output as Record<string, unknown> | string | undefined;
+  const input = raw?.input;
+  const rawOutput = raw?.output;
   const consoleLogs = raw?.logs as string[] | undefined;
 
-  // Detect structured agent output
-  const agentText =
-    typeof output === 'object' && output !== null
-      ? (((output as Record<string, unknown>).output as string | undefined) ??
-        ((output as Record<string, unknown>).text as string | undefined))
-      : typeof output === 'string'
-        ? output
-        : undefined;
+  // Detect structured agent output (after deep-parsing)
+  const output = deepParse(rawOutput) as Record<string, unknown> | string | undefined;
+
+  const agentText = (() => {
+    if (typeof output === 'string') return output;
+    if (typeof output === 'object' && output !== null) {
+      const out = (output as Record<string, unknown>).output;
+      if (typeof out === 'string') return out;
+      const text = (output as Record<string, unknown>).text;
+      if (typeof text === 'string') return text;
+    }
+    return undefined;
+  })();
 
   const toolCalls =
     typeof output === 'object' && output !== null
@@ -237,9 +249,7 @@ function NodeExecutionDataPanel({
         accent="sky"
         defaultOpen={false}
       >
-        <pre className="text-[11px] font-mono overflow-auto max-h-40 text-foreground/80 mt-1 whitespace-pre-wrap break-all">
-          {input !== undefined ? JSON.stringify(input, null, 2) : 'No input recorded.'}
-        </pre>
+        <StructuredDataViewer data={input} className="mt-1 min-h-[120px]" />
       </Section>
 
       {/* Agent text output */}
@@ -249,9 +259,12 @@ function NodeExecutionDataPanel({
           icon={<MessageSquare className="h-3.5 w-3.5" />}
           accent="emerald"
         >
-          <p className="text-xs leading-relaxed text-foreground/80 mt-1 whitespace-pre-wrap">
-            {agentText}
-          </p>
+          <div className="text-sm leading-relaxed text-foreground/90 mt-2 prose prose-sm dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted/40 max-w-none break-words">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {agentText}
+            </ReactMarkdown>
+          </div>
+
         </Section>
       )}
 
@@ -316,11 +329,9 @@ function NodeExecutionDataPanel({
                   <Bot className="h-3 w-3" /> {sa.agentId}
                 </p>
                 {sa.error ? (
-                  <p className="text-[10px] text-destructive">{sa.error}</p>
+                  <p className="text-[10px] text-destructive mt-1">{sa.error}</p>
                 ) : (
-                  <pre className="text-[10px] font-mono bg-muted/40 rounded px-2 py-1 overflow-auto max-h-24 whitespace-pre-wrap break-all">
-                    {typeof sa.output === 'string' ? sa.output : JSON.stringify(sa.output, null, 2)}
-                  </pre>
+                  <StructuredDataViewer data={sa.output} className="mt-1 min-h-[80px]" />
                 )}
               </div>
             ))}
@@ -400,9 +411,11 @@ function NodeExecutionDataPanel({
           accent="neutral"
           defaultOpen
         >
-          <pre className="text-[11px] font-mono overflow-auto max-h-48 text-foreground/80 mt-1 whitespace-pre-wrap break-all">
-            {output !== undefined ? JSON.stringify(output, null, 2) : 'No output recorded.'}
-          </pre>
+          {output !== undefined ? (
+            <StructuredDataViewer data={output} className="mt-2 border-0 bg-transparent min-h-[200px]" />
+          ) : (
+            <p className="text-[11px] font-mono text-muted-foreground mt-2 italic px-2">No output recorded.</p>
+          )}
         </Section>
       )}
     </div>
@@ -654,8 +667,63 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
 
   const isSaving = createWorkflow.isPending || updateWorkflow.isPending;
 
+  // Find a node that is currently waiting for input
+  const waitingNodeEntry = Object.entries(nodeStatuses).find(([, stat]) => stat === 'WAITING_INPUT');
+  const waitingNodeId = waitingNodeEntry?.[0];
+  const waitingNodeData = waitingNodeId ? nodeData[waitingNodeId] : null;
+
+  let waitingAgentText: string | undefined;
+  let waitingProposals: string[] | undefined;
+  let waitingMultiSelect = true;
+
+  if (waitingNodeData) {
+    const rawOutput = (waitingNodeData as Record<string, unknown>).output;
+    const waitingOutput = deepParse(rawOutput) as Record<string, unknown> | string | undefined;
+
+    if (typeof waitingOutput === 'string') {
+      waitingAgentText = waitingOutput;
+    } else if (typeof waitingOutput === 'object' && waitingOutput !== null) {
+      waitingAgentText = typeof waitingOutput.output === 'string' ? waitingOutput.output :
+                         typeof waitingOutput.text === 'string' ? waitingOutput.text : undefined;
+      waitingProposals = waitingOutput.proposals as string[] | undefined;
+      if (waitingOutput.multiSelect !== undefined) {
+        waitingMultiSelect = waitingOutput.multiSelect as boolean;
+      }
+    }
+  }
+
   return (
-    <div className="flex flex-col h-full w-full pointer-events-none z-50 overflow-hidden">
+    <div className="flex flex-col h-full w-full pointer-events-none z-50 overflow-hidden relative">
+      {/* ─── Global Overlay for WAITING_INPUT ─── */}
+      {waitingNodeId && activeExecution && (
+        <div className="absolute inset-0 z-100 flex items-center justify-center bg-black/20 backdrop-blur-sm pointer-events-auto transition-opacity animate-in fade-in">
+          <Card className="w-[500px] shadow-2xl backdrop-blur-xl bg-white/90 dark:bg-black/90 border-border/50 animate-in zoom-in-95">
+            <CardHeader className="pb-2 border-b border-border/50">
+              <CardTitle className="flex items-center gap-2 text-blue-500">
+                <MessageCircleQuestion className="h-5 w-5" />
+                Input Required
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 max-h-[70vh] overflow-y-auto">
+              {waitingAgentText && (
+                <div className="text-sm leading-relaxed text-foreground/90 mb-4 prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {waitingAgentText}
+                  </ReactMarkdown>
+                </div>
+              )}
+              <AgentReplyBar
+                nodeId={waitingNodeId}
+                executionId={activeExecution.id}
+                agentText={waitingAgentText}
+                externalProposals={waitingProposals}
+                multiSelect={waitingMultiSelect}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* ─── Header ─── */}
       <div className="flex items-center justify-between gap-3 flex-wrap p-2 px-4 rounded-xl bg-white/30 dark:bg-black/40 backdrop-blur-md border border-border/50 shadow-sm pointer-events-auto shrink-0 mb-4">
         <div className="flex items-center gap-3">

@@ -12,17 +12,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Plus, Wrench, Play, Pencil, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -31,6 +20,8 @@ import { useState } from 'react';
 import { Tool } from '@/types';
 import { ExecuteToolModal } from './ExecuteToolModal';
 import { useTranslation } from 'react-i18next';
+import { DeleteGuardDialog } from '@/components/shared/DeleteGuardDialog';
+import { useDeleteGuard } from '@/hooks/useDeleteGuard';
 
 const DynamicIcon = ({ name, className }: { name?: string; className?: string }) => {
   if (!name) return <Wrench className={className} />;
@@ -45,6 +36,8 @@ export function ToolList() {
   const { data, isLoading, error } = useTools();
   const deleteTool = useDeleteTool();
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
+  const [pendingDeleteTool, setPendingDeleteTool] = useState<Tool | null>(null);
+  const deleteGuard = useDeleteGuard('tool');
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-destructive">{t('tools.error')}</div>;
@@ -139,35 +132,18 @@ export function ToolList() {
                             <Pencil className="h-3 w-3" />
                           </Button>
                         </Link>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              disabled={deleteTool.isPending}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>{t('tools.detail.deleteConfirmTitle')}</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                {t('tools.detail.deleteConfirmDescription', { name: tool.name })}
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>{t('tools.detail.deleteCancel')}</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteTool.mutate(tool.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                {t('tools.detail.deleteConfirm')}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          disabled={deleteTool.isPending}
+                          onClick={() => {
+                            setPendingDeleteTool(tool);
+                            deleteGuard.openGuard(tool.id);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -182,6 +158,22 @@ export function ToolList() {
         tool={selectedTool}
         open={!!selectedTool}
         onOpenChange={(open) => { if (!open) setSelectedTool(null); }}
+      />
+
+      <DeleteGuardDialog
+        open={deleteGuard.open}
+        onOpenChange={(open) => { if (!open) { deleteGuard.close(); setPendingDeleteTool(null); } }}
+        entityName={pendingDeleteTool?.name ?? ''}
+        entityType={t('deleteGuard.types.tool')}
+        dependencies={deleteGuard.dependencies}
+        isChecking={deleteGuard.isChecking}
+        isDeleting={deleteTool.isPending}
+        onConfirm={() => {
+          if (!pendingDeleteTool) return;
+          deleteTool.mutate(pendingDeleteTool.id, {
+            onSuccess: () => { deleteGuard.close(); setPendingDeleteTool(null); },
+          });
+        }}
       />
     </div>
   );

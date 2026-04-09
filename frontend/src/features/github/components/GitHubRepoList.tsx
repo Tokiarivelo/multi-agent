@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -33,20 +34,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { GitHubRepo } from '@/types';
+import { GitHubRepo, Tool } from '@/types';
 import { githubApi } from '../api/github.api';
 
 interface GitHubRepoListProps {
   repos: GitHubRepo[];
   isLoading: boolean;
   connected: boolean;
+  mcpTools?: Tool[];
 }
 
-export function GitHubRepoList({ repos, isLoading, connected }: GitHubRepoListProps) {
+export function GitHubRepoList({ repos, isLoading, connected, mcpTools = [] }: GitHubRepoListProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [registering, setRegistering] = useState<Set<number>>(new Set());
   const [dialogRepo, setDialogRepo] = useState<GitHubRepo | null>(null);
+  const [displayName, setDisplayName] = useState('');
   const [customName, setCustomName] = useState('');
   const [customDescription, setCustomDescription] = useState('');
 
@@ -58,6 +62,10 @@ export function GitHubRepoList({ repos, isLoading, connected }: GitHubRepoListPr
     if (days < 30) return t('github.date.daysAgo', { count: days });
     if (days < 365) return t('github.date.monthsAgo', { count: Math.floor(days / 30) });
     return t('github.date.yearsAgo', { count: Math.floor(days / 365) });
+  }
+
+  function toolCountForRepo(repo: GitHubRepo): number {
+    return mcpTools.filter((t) => t.repoFullName === repo.fullName).length;
   }
 
   const filtered = repos.filter(
@@ -93,6 +101,7 @@ export function GitHubRepoList({ repos, isLoading, connected }: GitHubRepoListPr
   }
 
   const openDialog = (repo: GitHubRepo) => {
+    setDisplayName(repo.name);
     setCustomName(`github_${repo.name.replace(/-/g, '_')}`);
     setCustomDescription(repo.description ?? `GitHub repository: ${repo.fullName}`);
     setDialogRepo(repo);
@@ -105,7 +114,8 @@ export function GitHubRepoList({ repos, isLoading, connected }: GitHubRepoListPr
     closeDialog();
     setRegistering((prev) => new Set(prev).add(dialogRepo.id));
     try {
-      await githubApi.registerRepoTool(dialogRepo, { name: customName, description: customDescription });
+      await githubApi.registerRepoTool(dialogRepo, { name: customName, description: customDescription || displayName });
+      await queryClient.invalidateQueries({ queryKey: ['tools'] });
       toast.success(t('github.repos.registerSuccess'));
     } catch (err) {
       const status = axios.isAxiosError(err) ? err.response?.status : undefined;
@@ -160,6 +170,7 @@ export function GitHubRepoList({ repos, isLoading, connected }: GitHubRepoListPr
                   <Star className="h-3.5 w-3.5 inline-block" />
                 </TableHead>
                 <TableHead>{t('github.repos.columns.updated')}</TableHead>
+                <TableHead className="text-center">{t('github.repos.columns.tools')}</TableHead>
                 <TableHead className="w-[110px]">{t('github.repos.columns.addToMcp')}</TableHead>
               </TableRow>
             </TableHeader>
@@ -211,6 +222,15 @@ export function GitHubRepoList({ repos, isLoading, connected }: GitHubRepoListPr
                   <TableCell className="text-sm text-muted-foreground">
                     {formatRelativeDate(repo.updatedAt)}
                   </TableCell>
+                  <TableCell className="text-center text-sm">
+                    {toolCountForRepo(repo) > 0 ? (
+                      <Badge variant="secondary" className="text-xs">
+                        {toolCountForRepo(repo)}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Button
                       variant="outline"
@@ -242,6 +262,26 @@ export function GitHubRepoList({ repos, isLoading, connected }: GitHubRepoListPr
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
+              <Label htmlFor="mcp-repo">{t('github.repos.registerRepoLabel')}</Label>
+              <Input
+                id="mcp-repo"
+                value={dialogRepo?.fullName ?? ''}
+                readOnly
+                disabled
+                className="font-mono text-sm bg-muted text-muted-foreground"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="mcp-display-name">{t('github.repos.registerDisplayNameLabel')}</Label>
+              <Input
+                id="mcp-display-name"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="text-sm"
+              />
+              <p className="text-xs text-muted-foreground">{t('github.repos.registerDisplayNameHint')}</p>
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="mcp-name">{t('github.repos.registerNameLabel')}</Label>
               <Input
                 id="mcp-name"
@@ -265,7 +305,7 @@ export function GitHubRepoList({ repos, isLoading, connected }: GitHubRepoListPr
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>{t('github.repos.registerCancel')}</Button>
-            <Button onClick={handleRegister} disabled={!customName.trim()}>
+            <Button onClick={handleRegister} disabled={!customName.trim() || !displayName.trim()}>
               {t('github.repos.registerConfirm')}
             </Button>
           </DialogFooter>
