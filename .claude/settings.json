@@ -1,5 +1,43 @@
 {
   "enabledPlugins": {
-    "slack@claude-plugins-official": true
+    "slack@claude-plugins-official": true,
+    "everything-claude-code@everything-claude-code": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/security/secret-scanner.js",
+            "timeout": 10
+          }
+        ],
+        "description": "Block hardcoded secrets in edited or written files"
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/security/dangerous-bash.js",
+            "timeout": 5
+          }
+        ],
+        "description": "Block dangerous bash commands (force push to main, rm -rf /, curl|bash, etc.)"
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/security/env-file-guard.js",
+            "timeout": 5
+          }
+        ],
+        "description": "Warn or block when writing to .env files containing real secrets"
+      }
+    ]
   }
 }

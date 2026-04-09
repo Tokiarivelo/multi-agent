@@ -103,8 +103,9 @@ model Tool {
   isBuiltIn   Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  icon        String?
-  mcpConfig   Json?
+  icon         String?
+  mcpConfig    Json?
+  repoFullName String?
 
   @@index([category])
   @@index([isBuiltIn])

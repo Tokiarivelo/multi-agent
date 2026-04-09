@@ -82,6 +82,24 @@ export const common = {
     'Your browser does not support local directory access. Please use Chrome or Edge.',
   'workspace.apiNotSupportedDesc':
     'The File System Access API is required for the Local Workspace feature and is currently only supported in Chromium-based browsers.',
+  deleteGuard: {
+    confirmTitle: 'Delete this item?',
+    blockedTitle: 'Cannot delete — dependencies found',
+    checking: 'Checking dependencies…',
+    confirmDescription: 'This action cannot be undone. "{{name}}" will be permanently deleted.',
+    blockedDescription:
+      '"{{name}}" is still used by the items listed below. Remove those dependencies first, then try deleting again.',
+    dependenciesLabel: 'Used by',
+    cancel: 'Cancel',
+    confirm: 'Delete',
+    deleting: 'Deleting…',
+    types: {
+      agent: 'Agent',
+      workflow: 'Workflow',
+      tool: 'Tool',
+      model: 'Model',
+    },
+  },
   auth: {
     welcomeBack: 'Welcome back',
     signInSubtitle: 'Sign in to your account to continue',

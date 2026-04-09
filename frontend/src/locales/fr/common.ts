@@ -82,6 +82,24 @@ export const common = {
     "Votre navigateur ne prend pas en charge l'accès aux dossiers locaux. Veuillez utiliser Chrome ou Edge.",
   'workspace.apiNotSupportedDesc':
     "L'API File System Access est requise pour la fonctionnalité d'Espace de travail local et n'est actuellement prise en charge que par les navigateurs basés sur Chromium.",
+  deleteGuard: {
+    confirmTitle: 'Supprimer cet élément ?',
+    blockedTitle: 'Suppression impossible — dépendances détectées',
+    checking: 'Vérification des dépendances…',
+    confirmDescription: 'Cette action est irréversible. "{{name}}" sera supprimé définitivement.',
+    blockedDescription:
+      '"{{name}}" est encore utilisé par les éléments ci-dessous. Supprimez ces dépendances d\'abord, puis réessayez.',
+    dependenciesLabel: 'Utilisé par',
+    cancel: 'Annuler',
+    confirm: 'Supprimer',
+    deleting: 'Suppression…',
+    types: {
+      agent: 'Agent',
+      workflow: 'Workflow',
+      tool: 'Outil',
+      model: 'Modèle',
+    },
+  },
   auth: {
     welcomeBack: 'Bon retour',
     signInSubtitle: 'Connectez-vous à votre compte pour continuer',

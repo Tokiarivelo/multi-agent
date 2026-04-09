@@ -29,4 +29,8 @@ export class UpdateToolDto {
   @IsOptional()
   @IsString()
   icon?: string;
+
+  @IsOptional()
+  @IsString()
+  repoFullName?: string;
 }

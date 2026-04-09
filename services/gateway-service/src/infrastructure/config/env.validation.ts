@@ -39,6 +39,10 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   FRONTEND_SERVICE_URL?: string = 'http://localhost:3001';
+
+  @IsString()
+  @IsOptional()
+  GITHUB_MCP_SERVICE_URL?: string = 'http://localhost:3010';
 }
 
 export function validate(config: Record<string, unknown>) {

@@ -78,23 +78,6 @@ services:
     networks:
       - multi-agent
 
-  # github-mcp-service:
-  #   build:
-  #     context: ./services/github-mcp-service
-  #     dockerfile: Dockerfile
-  #   container_name: github-mcp-service
-  #   ports:
-  #     - "3010:3010"
-  #   environment:
-  #     GITHUB_APP_ID: ${GITHUB_APP_ID}
-  #     GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY}
-  #     GITHUB_APP_INSTALLATION_ID: ${GITHUB_APP_INSTALLATION_ID}
-  #     GITHUB_MCP_PORT: 3010
-  #     NODE_ENV: ${NODE_ENV:-production}
-  #   restart: unless-stopped
-  #   networks:
-  #     - multi-agent
-
 volumes:
   nats-data:
     driver: local

@@ -242,7 +242,7 @@ Or use the seed script: `pnpm --filter @multi-agent/github-mcp-service seed`.
 ## 7. Environment Variables
 
 ```env
-# GitHub App credentials (required)
+# GitHub App credentials (required — agent-to-GitHub backend flow)
 GITHUB_APP_ID=123456
 GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
 GITHUB_APP_INSTALLATION_ID=78910
@@ -250,10 +250,14 @@ GITHUB_APP_INSTALLATION_ID=78910
 # Optional: file path instead of inline key
 # GITHUB_APP_PRIVATE_KEY_PATH=/run/secrets/github-app.pem
 
+# GitHub OAuth App credentials (optional — enables the /github/authorize UI flow)
+GITHUB_OAUTH_CLIENT_ID=
+GITHUB_OAUTH_CLIENT_SECRET=
+GITHUB_OAUTH_CALLBACK_URL=http://localhost:3001/api/github/callback
+
 # Service
 GITHUB_MCP_PORT=3010
 NODE_ENV=production
-LOG_LEVEL=info
 ```
 
 ---
@@ -279,7 +283,66 @@ github-mcp-service:
 
 ---
 
-## 9. Security Considerations
+## 9. GitHub OAuth App (User-Facing Authorization)
+
+The GitHub App (sections 1–8) is for **agent-to-GitHub** access using a shared installation token. The OAuth App is a separate credential that lets **end users** connect their personal GitHub account from the UI.
+
+### 9.1 Flow
+
+```
+Browser → GET /github/authorize (github-mcp-service)
+        ← { url: "https://github.com/login/oauth/authorize?..." }
+Browser opens popup → user authorizes on GitHub
+GitHub redirects → GET http://localhost:3001/api/github/callback?code=xxx (Next.js)
+Next.js → GET /github/exchange?code=xxx (github-mcp-service)
+        ← { accessToken, login, avatarUrl }
+Popup posts message to opener → stores token in frontend state
+```
+
+### 9.2 Create the OAuth App
+
+1. Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**
+2. Fill in:
+
+   | Field | Value |
+   |-------|-------|
+   | Application name | `multi-agent (local)` |
+   | Homepage URL | `http://localhost:3001` |
+   | Authorization callback URL | `http://localhost:3001/api/github/callback` |
+
+3. Click **Register application**, then **Generate a new client secret**.
+
+### 9.3 Configure the service
+
+Add to `services/github-mcp-service/.env`:
+
+```env
+GITHUB_OAUTH_CLIENT_ID=<your_client_id>
+GITHUB_OAUTH_CLIENT_SECRET=<your_client_secret>
+GITHUB_OAUTH_CALLBACK_URL=http://localhost:3001/api/github/callback
+```
+
+### 9.4 Configure the frontend
+
+Add to `frontend/.env`:
+
+```env
+NEXT_PUBLIC_GITHUB_MCP_URL=http://localhost:3010
+```
+
+### 9.5 Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/github/authorize` | Returns the GitHub OAuth authorization URL |
+| `GET` | `/github/exchange?code=xxx` | Exchanges an OAuth code for an access token |
+| `GET` | `/github/repositories` | Lists repos for the authenticated user (requires `Authorization: Bearer <token>`) |
+
+The `/github/authorize` endpoint returns `400 Bad Request` when `GITHUB_OAUTH_CLIENT_ID` is not set.
+
+---
+
+## 10. Security Considerations
 
 - **Never commit** the private key (`.pem`) or `.env` to git.
 - Mount the private key as a **Docker secret** or **Kubernetes Secret** in production.
@@ -289,7 +352,7 @@ github-mcp-service:
 
 ---
 
-## 10. Local Development
+## 11. Local Development
 
 ```bash
 # 1. Install dependencies

@@ -47,6 +47,7 @@ import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import Editor from '@monaco-editor/react';
 import { Resizable } from 're-resizable';
+import { StructuredDataViewer } from './StructuredDataViewer';
 import { FileConfigEditor } from './FileConfigEditor';
 import { useWorkspaceStore, type FileNode } from '@/features/workspace/store/workspaceStore';
 import { SubWorkflowConfig } from './SubWorkflowConfig';
@@ -561,8 +562,8 @@ export interface NodeEditorProps {
   isSaving?: boolean;
   /** Existing agents — includes their native tool IDs so we can show them as a preview */
   agents?: { id: string; name: string; tools?: string[] }[];
-  /** Existing tools for TOOL node dropdown  */
-  tools?: { id: string; name: string }[];
+  /** Existing tools for TOOL/MCP node dropdown  */
+  tools?: { id: string; name: string; category?: string }[];
   /** TS interfaces of previous node outputs passed in for Monaco autocomplete */
   availableTypings?: string;
   /** Workflow ID — required for node test feature */
@@ -1166,6 +1167,36 @@ function NodeEditorForm({
                       <p>{'}'}</p>
                     </div>
 
+                    {/* Ask User */}
+                    <div className="flex items-center justify-between pt-2 border-t border-border/40">
+                      <div>
+                        <p className="text-xs font-medium">Allow Ask User</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Pause and prompt the user when the agent outputs{' '}
+                          <code className="font-mono bg-muted/60 px-1 rounded">__ASK_USER__:{'{...}'}</code>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        title={
+                          config.allowAskUser
+                            ? 'Ask User ON — agent can pause and prompt for user input'
+                            : 'Ask User OFF — agent runs without user prompts'
+                        }
+                        onClick={() => handleConfigChange('allowAskUser', !config.allowAskUser)}
+                        className={`flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[10px] font-semibold border transition-colors shrink-0 ${
+                          config.allowAskUser
+                            ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/25'
+                            : 'bg-muted/40 text-muted-foreground border-border/40 hover:bg-muted/80'
+                        }`}
+                      >
+                        <span
+                          className={`w-2 h-2 rounded-full ${config.allowAskUser ? 'bg-blue-500' : 'bg-muted-foreground/30'}`}
+                        />
+                        ASK USER
+                      </button>
+                    </div>
+
                     {/* Pipeline Steps */}
                     <div className="pt-2 border-t border-border/40">
                       <Collapsible>
@@ -1205,7 +1236,7 @@ function NodeEditorForm({
             {/* TOOL config */}
             {type === 'TOOL' && (
               <div className="space-y-2">
-                <Label>{t('workflows.node_editor.tool')}l</Label>
+                <Label>{t('workflows.node_editor.tool')}</Label>
                 {tools.length > 0 ? (
                   <Select
                     value={(config.toolId as string) ?? ''}
@@ -1215,9 +1246,9 @@ function NodeEditorForm({
                       <SelectValue placeholder={t('workflows.node_editor.selectTool')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {tools.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.name}
+                      {tools.map((tl) => (
+                        <SelectItem key={tl.id} value={tl.id}>
+                          {tl.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1231,6 +1262,42 @@ function NodeEditorForm({
                 )}
               </div>
             )}
+
+            {/* MCP config */}
+            {type === 'MCP' && (() => {
+              const mcpTools = tools.filter((tl) => tl.category === 'MCP');
+              return (
+                <div className="space-y-2">
+                  <Label>{t('workflows.node_editor.mcpTool') || 'MCP Tool'}</Label>
+                  {mcpTools.length > 0 ? (
+                    <Select
+                      value={(config.toolId as string) ?? ''}
+                      onValueChange={(v) => handleConfigChange('toolId', v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('workflows.node_editor.selectMcpTool') || 'Select MCP tool…'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {mcpTools.map((tl) => (
+                          <SelectItem key={tl.id} value={tl.id}>
+                            {tl.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border/60 py-6 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        {t('workflows.node_editor.noMcpTools') || 'No MCP tools registered yet.'}
+                      </p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">
+                        {t('workflows.node_editor.noMcpToolsHint') || 'Add one from the Integrations → GitHub page.'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* CONDITIONAL config */}
             {type === 'CONDITIONAL' && (
@@ -2160,11 +2227,16 @@ function NodeEditorForm({
                             </Button>
                           )}
                         </div>
-                        <pre className="whitespace-pre-wrap break-all leading-relaxed">
-                          {testResult.error
-                            ? testResult.error
-                            : JSON.stringify(testResult.output, null, 2)}
-                        </pre>
+                        <div className={cn(
+                          'w-full',
+                          testResult.error ? 'text-destructive font-mono text-sm' : 'mt-2'
+                        )}>
+                          {testResult.error ? (
+                            <pre className="whitespace-pre-wrap break-all">{testResult.error}</pre>
+                          ) : (
+                            <StructuredDataViewer data={testResult.output} />
+                          )}
+                        </div>
                       </div>
 
                       {/* Logs */}

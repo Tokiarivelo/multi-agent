@@ -29,6 +29,8 @@ export class CreateToolUseCase {
       code: dto.code || null,
       icon: dto.icon || null,
       isBuiltIn: dto.isBuiltIn || false,
+      mcpConfig: dto.mcpConfig || null,
+      repoFullName: dto.repoFullName || null,
     } as any);
 
     return tool;

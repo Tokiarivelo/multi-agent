@@ -19,6 +19,12 @@ export default () => {
       privateKey,
       installationId: Number(process.env['GITHUB_APP_INSTALLATION_ID']),
     },
+    githubOAuth: {
+      clientId: process.env['GITHUB_OAUTH_CLIENT_ID'] ?? '',
+      clientSecret: process.env['GITHUB_OAUTH_CLIENT_SECRET'] ?? '',
+      callbackUrl:
+        process.env['GITHUB_OAUTH_CALLBACK_URL'] ?? 'http://localhost:3001/api/github/callback',
+    },
     port: Number(process.env['GITHUB_MCP_PORT'] ?? 3010),
     nodeEnv: process.env['NODE_ENV'] ?? 'development',
   };

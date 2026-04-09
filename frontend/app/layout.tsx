@@ -1,31 +1,14 @@
-'use client';
-
-import { useState } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './globals.css';
-import '@/lib/i18n';
-import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
-import { ThemeProvider } from '@/components/shared/ThemeProvider';
-import { Toaster } from '@/components/ui/sonner';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
+import Providers from '@/components/shared/Providers';
 
-import { SessionProvider } from 'next-auth/react';
-
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 60 * 1000,
-            retry: 1,
-          },
-        },
-      }),
-  );
+  const session = await getServerSession(authOptions);
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -34,19 +17,7 @@ export default function RootLayout({
         <meta name="description" content="Multi-agent workflow orchestration platform" />
       </head>
       <body className="antialiased bg-background text-foreground">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <SessionProvider>
-            <ErrorBoundary>
-              <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-            </ErrorBoundary>
-            <Toaster position="top-right" richColors />
-          </SessionProvider>
-        </ThemeProvider>
+        <Providers session={session}>{children}</Providers>
       </body>
     </html>
   );
