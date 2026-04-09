@@ -1,4 +1,5 @@
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   IAgentRepository,
   AGENT_REPOSITORY,
@@ -21,9 +22,14 @@ import {
 import { ModelClientService } from '../../infrastructure/external/model-client.service';
 import { ToolClientService } from '../../infrastructure/external/tool-client.service';
 import { VectorClientService } from '../../infrastructure/external/vector-client.service';
+import { TokenUsageRepository } from '../../infrastructure/persistence/token-usage.repository';
 
 @Injectable()
 export class ExecuteAgentUseCase {
+  private readonly logger = new Logger(ExecuteAgentUseCase.name);
+
+  private readonly orchestrationCallbackUrl: string | undefined;
+
   constructor(
     @Inject(AGENT_REPOSITORY)
     private readonly agentRepository: IAgentRepository,
@@ -33,7 +39,38 @@ export class ExecuteAgentUseCase {
     private readonly modelClient: ModelClientService,
     private readonly toolClient: ToolClientService,
     private readonly vectorClient: VectorClientService,
-  ) {}
+    private readonly tokenUsageRepository: TokenUsageRepository,
+    private readonly configService: ConfigService,
+  ) {
+    this.orchestrationCallbackUrl = this.configService.get<string>('ORCHESTRATION_CALLBACK_URL');
+  }
+
+  /** Fire-and-forget HTTP POST to orchestration so it can push a WebSocket token-update event. */
+  private reportTokenProgress(
+    executionId: string,
+    nodeId: string,
+    model: string,
+    inputTokens: number,
+    outputTokens: number,
+    totalTokens: number,
+    iteration: number,
+  ): void {
+    if (!this.orchestrationCallbackUrl || !executionId || !nodeId) {
+      this.logger.warn(
+        `reportTokenProgress skipped — callbackUrl=${this.orchestrationCallbackUrl ?? 'MISSING'} execId=${executionId ?? 'MISSING'} nodeId=${nodeId ?? 'MISSING'}`,
+      );
+      return;
+    }
+    this.logger.log(
+      `Reporting token progress: execId=${executionId} nodeId=${nodeId} in=${inputTokens} out=${outputTokens} total=${totalTokens} iter=${iteration}`,
+    );
+    const url = `${this.orchestrationCallbackUrl}/internal/token-progress`;
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ executionId, nodeId, model, inputTokens, outputTokens, totalTokens, iteration }),
+    }).catch((err) => this.logger.warn(`token-progress POST failed: ${err?.message}`));
+  }
 
   // ─── Compact handoff helper ──────────────────────────────────────────────
   /** Summarize a long conversation into a single compact paragraph to save tokens */
@@ -146,12 +183,50 @@ export class ExecuteAgentUseCase {
       }
 
       // ── Execute primary agent ───────────────────────────────────────────
+      const execId = nodeMetadata.executionId as string | undefined;
+      const execNodeId = nodeMetadata.nodeId as string | undefined;
+
+      let totalTokens = 0;
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
+
+      this.logger.log(
+        `[token-progress] execId=${execId ?? 'MISSING'} nodeId=${execNodeId ?? 'MISSING'} callbackUrl=${this.orchestrationCallbackUrl ?? 'MISSING'}`,
+      );
+
+      /** Build a live-streaming progress callback for a given iteration index.
+       *  Fires every ~10 LLM chunks; adds the partial output to already-accumulated totals. */
+      const makeOnProgress = (iterIndex: number) => {
+        if (!execId || !execNodeId) {
+          this.logger.warn(`makeOnProgress(${iterIndex}): skipped — execId or nodeId missing`);
+          return undefined;
+        }
+        this.logger.log(`makeOnProgress(${iterIndex}): callback registered for execId=${execId} nodeId=${execNodeId}`);
+        return (p: { inputTokens: number; outputTokens: number; totalTokens: number }) => {
+          this.reportTokenProgress(
+            execId,
+            execNodeId,
+            modelConfig.modelName,
+            totalInputTokens + p.inputTokens,
+            totalOutputTokens + p.outputTokens,
+            totalInputTokens + p.inputTokens + totalOutputTokens + p.outputTokens,
+            iterIndex,
+          );
+        };
+      };
+
       let response = await this.langchainProvider.execute(
         context.conversationHistory,
         tools.length > 0 ? tools : undefined,
+        makeOnProgress(0),
       );
 
-      let totalTokens = response.tokens ?? 0;
+      totalTokens = response.tokens ?? 0;
+      totalInputTokens = response.inputTokens ?? 0;
+      totalOutputTokens = response.outputTokens ?? 0;
+
+      // Final accurate report after iteration 0 completes
+      this.reportTokenProgress(execId!, execNodeId!, modelConfig.modelName, totalInputTokens, totalOutputTokens, totalTokens, 0);
 
       let iterations = 0;
       const MAX_ITERATIONS = 5;
@@ -192,8 +267,12 @@ export class ExecuteAgentUseCase {
         response = await this.langchainProvider.execute(
           context.conversationHistory,
           tools.length > 0 ? tools : undefined,
+          makeOnProgress(iterations),
         );
         totalTokens += response.tokens ?? 0;
+        totalInputTokens += response.inputTokens ?? 0;
+        totalOutputTokens += response.outputTokens ?? 0;
+        this.reportTokenProgress(execId!, execNodeId!, modelConfig.modelName, totalInputTokens, totalOutputTokens, totalTokens, iterations);
       }
       const subAgentResults: any[] = [];
 
@@ -280,6 +359,22 @@ export class ExecuteAgentUseCase {
         completedAt: new Date(),
       });
 
+      this.tokenUsageRepository.create({
+        userId: ragUserId || (nodeMetadata.userId as string) || 'unknown',
+        agentId: agent.id,
+        executionId: execution.id,
+        workflowId: nodeMetadata.workflowId as string | undefined,
+        nodeId: nodeMetadata.nodeId as string | undefined,
+        isTest: Boolean(nodeMetadata.isTest),
+        model: modelConfig.modelName,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        totalTokens,
+        inputPreview: dto.input.slice(0, 500),
+        outputPreview: response.content?.slice(0, 500),
+        success: true,
+      }).catch((err) => this.logger.error('Failed to save token usage', err?.message));
+
       return completedExecution;
     } catch (error) {
       await this.agentRepository.updateExecution(execution.id, {
@@ -287,6 +382,24 @@ export class ExecuteAgentUseCase {
         error: error.message,
         completedAt: new Date(),
       });
+
+      const failMeta = (dto.metadata ?? {}) as Record<string, any>;
+      this.tokenUsageRepository.create({
+        userId: failMeta.userId || 'unknown',
+        agentId: agent.id,
+        executionId: execution.id,
+        workflowId: failMeta.workflowId as string | undefined,
+        nodeId: failMeta.nodeId as string | undefined,
+        isTest: Boolean(failMeta.isTest),
+        model: 'unknown',
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        inputPreview: dto.input.slice(0, 500),
+        success: false,
+        errorMessage: error.message,
+      }).catch((err) => this.logger.error('Failed to save token usage (error path)', err?.message));
+
       throw new BadRequestException(`Agent execution failed: ${error.message}`);
     }
   }

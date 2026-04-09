@@ -51,6 +51,7 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
   const executionStatus = useWorkflowExecutionStore((s) => s.executionStatus);
   const setNodeStatus = useWorkflowExecutionStore((s) => s.setNodeStatus);
   const setNodeData = useWorkflowExecutionStore((s) => s.setNodeData);
+  const setNodeTokenProgress = useWorkflowExecutionStore((s) => s.setNodeTokenProgress);
   const clearExecution = useWorkflowExecutionStore((s) => s.clearExecution);
   const getWorkspaceById = useWorkspaceStore((s) => s.getWorkspaceById);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
@@ -108,6 +109,27 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
         message: `📡 Subscribed to execution ${eid}`,
       });
     });
+
+    socket.on(
+      'node:token-update',
+      (event: {
+        executionId: string;
+        nodeId: string;
+        inputTokens: number;
+        outputTokens: number;
+        totalTokens: number;
+        model: string;
+        iteration: number;
+      }) => {
+        setNodeTokenProgress(event.nodeId, {
+          inputTokens: event.inputTokens,
+          outputTokens: event.outputTokens,
+          totalTokens: event.totalTokens,
+          model: event.model,
+          iteration: event.iteration,
+        });
+      },
+    );
 
     socket.on('node:update', (event: NodeUpdateEvent) => {
       setNodeStatus(event.nodeId, event.status as NodeStatus);
@@ -327,6 +349,7 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
     getWorkspaceById,
     addWorkspaceEntry,
     upsertSubExecution,
+    setNodeTokenProgress,
   ]);
 
   return { logs, connected, executionStatus, clearLogs };

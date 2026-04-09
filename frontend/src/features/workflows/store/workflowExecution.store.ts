@@ -22,6 +22,14 @@ export interface SubExecutionRecord {
   status: string;
 }
 
+export interface NodeTokenProgress {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  model: string;
+  iteration: number;
+}
+
 interface WorkflowExecutionState {
   activeExecutionId: string | null;
   executionStatus: string | null;
@@ -29,6 +37,8 @@ interface WorkflowExecutionState {
   selectedNodeName: string | null;
   nodeStatuses: Record<string, NodeStatus>;
   nodeData: Record<string, unknown>;
+  /** Live token counts pushed during RUNNING state, keyed by nodeId */
+  nodeTokenProgress: Record<string, NodeTokenProgress>;
 
   /** Child (sub-workflow) executions discovered during the active run */
   subExecutions: SubExecutionRecord[];
@@ -39,6 +49,7 @@ interface WorkflowExecutionState {
   setExecutionStatus: (status: string | null) => void;
   setNodeStatus: (nodeId: string, status: NodeStatus) => void;
   setNodeData: (nodeId: string, data: unknown) => void;
+  setNodeTokenProgress: (nodeId: string, progress: NodeTokenProgress) => void;
   clearExecution: () => void;
 
   /** Register a discovered sub-workflow execution (idempotent) */
@@ -54,6 +65,7 @@ export const useWorkflowExecutionStore = create<WorkflowExecutionState>((set) =>
   selectedNodeName: null,
   nodeStatuses: {},
   nodeData: {},
+  nodeTokenProgress: {},
   subExecutions: [],
 
   setActiveExecutionId: (id) => set({ activeExecutionId: id }),
@@ -64,12 +76,15 @@ export const useWorkflowExecutionStore = create<WorkflowExecutionState>((set) =>
     set((state) => ({ nodeStatuses: { ...state.nodeStatuses, [nodeId]: status } })),
   setNodeData: (nodeId, data) =>
     set((state) => ({ nodeData: { ...state.nodeData, [nodeId]: data } })),
+  setNodeTokenProgress: (nodeId, progress) =>
+    set((state) => ({ nodeTokenProgress: { ...state.nodeTokenProgress, [nodeId]: progress } })),
   clearExecution: () =>
     set({
       activeExecutionId: null,
       executionStatus: null,
       nodeStatuses: {},
       nodeData: {},
+      nodeTokenProgress: {},
       selectedNodeId: null,
       selectedNodeName: null,
       subExecutions: [],

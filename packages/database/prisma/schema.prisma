@@ -65,6 +65,7 @@ model Agent {
   updatedAt    DateTime         @updatedAt
   metadata     Json?
   executions   AgentExecution[]
+  tokenUsage   TokenUsage[]
   model        Model            @relation(fields: [modelId], references: [id])
   user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -244,6 +245,32 @@ model VectorCollection {
   @@unique([userId, name])
   @@index([userId])
   @@map("vector_collections")
+}
+
+model TokenUsage {
+  id            String   @id @default(uuid())
+  timestamp     DateTime @default(now())
+  userId        String
+  agentId       String
+  executionId   String?
+  workflowId    String?
+  nodeId        String?
+  isTest        Boolean  @default(false)
+  model         String
+  inputTokens   Int      @default(0)
+  outputTokens  Int      @default(0)
+  totalTokens   Int      @default(0)
+  inputPreview  String?
+  outputPreview String?
+  success       Boolean  @default(true)
+  errorMessage  String?
+  agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([agentId])
+  @@index([isTest])
+  @@index([timestamp])
+  @@map("token_usage")
 }
 
 enum UserRole {

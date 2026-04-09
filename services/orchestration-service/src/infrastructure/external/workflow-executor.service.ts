@@ -1,4 +1,5 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { IWorkflowExecutor } from '../../application/interfaces/workflow-executor.interface';
 import {
@@ -316,12 +317,22 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           (node.config.workspacePath as string | undefined) ||
           (typeof context?.variables?.cwd === 'string' ? context.variables.cwd : undefined);
 
+        this.logger.log(
+          `[AGENT node] executionId=${context?.executionId ?? 'MISSING'} nodeId=${node.id} workflowId=${context?.workflowId ?? 'MISSING'}`,
+        );
+
+        const agentResult = await this.agentClient.executeAgent({
         const agentCallConfig = {
           agentId: node.config.agentId as string,
           input,
           config: {
             ...node.config,
             ...(workspacePath ? { workspacePath } : {}),
+            userId: context?.userId,
+            workflowId: context?.workflowId,
+            executionId: context?.executionId,
+            nodeId: node.id,
+            isTest: context?.isTest ?? false,
           },
           toolIds: (node.config.toolIds as string[] | undefined) ?? [],
           subAgents: (node.config.subAgents as any[] | undefined) ?? [],
@@ -1126,14 +1137,18 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         }
       }
 
+      // Always provide an executionId so token-progress reporting works even during standalone tests
+      const effectiveExecId = executionId ?? randomUUID();
+
       const output = await this.executeNodeByType(
         node,
         input,
         {
-          variables: { ...input, ...(executionId ? { executionId } : {}), workflowId, userId },
-          executionId,
+          variables: { ...input, executionId: effectiveExecId, workflowId, userId },
+          executionId: effectiveExecId,
           workflowId,
           userId,
+          isTest: true,
         },
         execution,
         logs,

@@ -12,6 +12,8 @@ export interface LLMConfig {
 export interface LLMResponse {
   content: string;
   tokens: number;
+  inputTokens?: number;
+  outputTokens?: number;
   finishReason?: string;
   toolCalls?: any[];
 }
@@ -22,9 +24,19 @@ export interface StreamingOptions {
   onError: (error: Error) => void;
 }
 
+export interface TokenProgressPayload {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 export interface ILangChainProvider {
   initialize(config: LLMConfig): Promise<void>;
-  execute(messages: ConversationMessage[], tools?: any[]): Promise<LLMResponse>;
+  execute(
+    messages: ConversationMessage[],
+    tools?: any[],
+    onProgress?: (progress: TokenProgressPayload) => void,
+  ): Promise<LLMResponse>;
   executeStream(
     messages: ConversationMessage[],
     callbacks: StreamingOptions,

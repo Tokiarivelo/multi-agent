@@ -51,6 +51,8 @@ import { StructuredDataViewer } from './StructuredDataViewer';
 import { FileConfigEditor } from './FileConfigEditor';
 import { useWorkspaceStore, type FileNode } from '@/features/workspace/store/workspaceStore';
 import { SubWorkflowConfig } from './SubWorkflowConfig';
+import { useWorkflowLogs } from '../hooks/useWorkflowLogs';
+import { useWorkflowExecutionStore } from '../store/workflowExecution.store';
 
 /** Sub-agent configuration inside an AGENT node */
 export interface SubAgentConfig {
@@ -614,6 +616,18 @@ function NodeEditorForm({
   const [copiedLogId, setCopiedLogId] = useState<string | null>(null);
   const [outputExpanded, setOutputExpanded] = useState(false);
 
+  // Generated execution ID for this test run — used to subscribe to live token updates
+  const [currentTestExecId, setCurrentTestExecId] = useState<string | null>(null);
+
+  // Subscribe to WebSocket room for the active test execution (no-op when null)
+  useWorkflowLogs({ executionId: currentTestExecId });
+
+  // Live token progress for this node during test execution
+  const testNodeId = initialNode?.id ?? null;
+  const testLiveTokens = useWorkflowExecutionStore(
+    (s) => (testNodeId ? s.nodeTokenProgress[testNodeId] : undefined),
+  );
+
   const handleCopyTestLog = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedLogId(id);
@@ -624,7 +638,11 @@ function NodeEditorForm({
     if (!workflowId) return;
     // For new (unsaved) nodes we still need an ID to route the API call.
     // The backend accepts any nodeId + type + config combination for testing.
-    const testNodeId = initialNode?.id ?? uuidv4();
+    const apiNodeId = initialNode?.id ?? uuidv4();
+    // Generate a stable execution ID for this test run so the WebSocket subscription
+    // is established before the agent starts streaming token progress.
+    const activeExecId = executionId ?? uuidv4();
+    setCurrentTestExecId(activeExecId);
     setTestRunning(true);
     setTestResult(null);
     try {
@@ -644,15 +662,15 @@ function NodeEditorForm({
 
       const result = await workflowsApi.testNode(
         workflowId,
-        testNodeId,
+        apiNodeId,
         parsedInput,
         type,
         config,
-        executionId ?? undefined,
+        activeExecId,
       );
 
       // Forward captured sandbox console.* calls to the real browser DevTools console
-      const nodeLabel = `[Node: ${initialNode?.customName ?? initialNode?.type ?? testNodeId}]`;
+      const nodeLabel = `[Node: ${initialNode?.customName ?? initialNode?.type ?? apiNodeId}]`;
       result.logs.forEach((line) => {
         if (line.startsWith('[ERROR]')) {
           console.error(nodeLabel, line.replace(/^\[ERROR\]\s*/, ''));
@@ -677,6 +695,7 @@ function NodeEditorForm({
       });
     } finally {
       setTestRunning(false);
+      setCurrentTestExecId(null);
     }
   };
 
@@ -2143,6 +2162,22 @@ function NodeEditorForm({
                       </>
                     )}
                   </Button>
+
+                  {/* Live token counter — visible while the test is streaming */}
+                  {testRunning && testLiveTokens && (
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono px-1">
+                      <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                      <span className="text-primary font-semibold">
+                        {testLiveTokens.totalTokens.toLocaleString()} tok
+                      </span>
+                      <span>
+                        ↑{testLiveTokens.inputTokens.toLocaleString()} ↓{testLiveTokens.outputTokens.toLocaleString()}
+                      </span>
+                      {testLiveTokens.iteration > 0 && (
+                        <span className="text-muted-foreground/60">iter {testLiveTokens.iteration}</span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Result */}
                   {testResult && (
