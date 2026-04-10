@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from './infrastructure/config/config.module';
 import { PrismaService } from './infrastructure/database/prisma.service';
+import { SeedService } from './infrastructure/database/seed.service';
 import { AgentRepository } from './infrastructure/persistence/agent.repository';
 import { AGENT_REPOSITORY } from './domain/repositories/agent.repository.interface';
 import { AgentExecutionService } from './domain/services/agent-execution.service';
@@ -15,6 +16,7 @@ import { LangChainService } from './infrastructure/external/langchain/langchain.
 import { OpenAIProvider } from './infrastructure/external/langchain/providers/openai.provider';
 import { AnthropicProvider } from './infrastructure/external/langchain/providers/anthropic.provider';
 import { GoogleProvider } from './infrastructure/external/langchain/providers/google.provider';
+import { OllamaProvider } from './infrastructure/external/langchain/providers/ollama.provider';
 import { ProviderFactory } from './infrastructure/external/langchain/providers/provider.factory';
 import { TokenStreamHandler } from './infrastructure/external/langchain/streaming/token-stream.handler';
 import { ModelClientService } from './infrastructure/external/model-client.service';
@@ -36,6 +38,7 @@ import { AgentExecutionGateway } from './presentation/gateways/agent-execution.g
   controllers: [AgentController, HealthController, McpController],
   providers: [
     PrismaService,
+    SeedService,
     {
       provide: AGENT_REPOSITORY,
       useClass: AgentRepository,
@@ -51,6 +54,7 @@ import { AgentExecutionGateway } from './presentation/gateways/agent-execution.g
     OpenAIProvider,
     AnthropicProvider,
     GoogleProvider,
+    OllamaProvider,
     ProviderFactory,
     TokenStreamHandler,
     ModelClientService,

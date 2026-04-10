@@ -186,6 +186,9 @@ importers:
       eslint-config-next:
         specifier: 16.1.6
         version: 16.1.6(@typescript-eslint/parser@8.56.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
+      eslint-plugin-import:
+        specifier: ^2.32.0
+        version: 2.32.0(@typescript-eslint/parser@8.56.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.2(jiti@2.6.1))
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@20.19.33)(ts-node@10.9.2(@types/node@20.19.33)(typescript@5.9.3))
@@ -310,6 +313,9 @@ importers:
       '@langchain/google-genai':
         specifier: ^2.1.26
         version: 2.1.26(@langchain/core@1.1.38(openai@4.104.0(ws@8.19.0)(zod@3.25.76)))
+      '@langchain/ollama':
+        specifier: ^1.2.6
+        version: 1.2.6(@langchain/core@1.1.38(openai@4.104.0(ws@8.19.0)(zod@3.25.76)))
       '@langchain/openai':
         specifier: ^0.0.14
         version: 0.0.14(ws@8.19.0)
@@ -2277,6 +2283,12 @@ packages:
     engines: {node: '>=20'}
     peerDependencies:
       '@langchain/core': ^1.1.33
+
+  '@langchain/ollama@1.2.6':
+    resolution: {integrity: sha512-wEfjRjyB20SMduqjriIBEalXZf1twbfaNTxxLIjKCVrufHPtKJKGy1a0tQHqa+27HwektNNXlcMre7MTuaS5Rw==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@langchain/core': ^1.0.0
 
   '@langchain/openai@0.0.14':
     resolution: {integrity: sha512-co6nRylPrLGY/C3JYxhHt6cxLq07P086O7K3QaZH7SFFErIN9wSzJonpvhZR07DEUq6eK6wKgh2ORxA/NcjSRQ==}
@@ -7527,6 +7539,9 @@ packages:
     resolution: {integrity: sha512-6gj2m8cJZ+iSW8bm0FXdGF0YhIQbKrfP4yWTNzxc31U6MOjfEmB1rHvlYvxI1B7t7BCi1F2vYTT6YhtQRG4hxw==}
     engines: {node: ^10.13.0 || >=12.0.0}
 
+  ollama@0.6.3:
+    resolution: {integrity: sha512-KEWEhIqE5wtfzEIZbDCLH51VFZ6Z3ZSa6sIOg/E/tBV8S51flyqBOXi+bRxlOYKDf8i327zG9eSTb8IJxvm3Zg==}
+
   on-finished@2.4.1:
     resolution: {integrity: sha512-oVlzkg3ENAhCk2zdv7IJwd/QUD4z2RxRwpkcGY8psCVcCYZNq4wYnVWALHM+brtuJjePWiYF/ClmuDr8Ch5+kg==}
     engines: {node: '>= 0.8'}
@@ -9063,6 +9078,9 @@ packages:
     engines: {node: '>=18'}
     deprecated: Use @exodus/bytes instead for a more spec-conformant and faster implementation
 
+  whatwg-fetch@3.6.20:
+    resolution: {integrity: sha512-EqhiFU6daOA8kpjOWTL0olhVOF3i7OrFzSYiGsEMB8GcXS+RrzauAERX65xMeNWVqxA6HXH2m69Z9LaKKdisfg==}
+
   whatwg-mimetype@4.0.0:
     resolution: {integrity: sha512-QaKxh0eNIi2mE9p2vEdzfagOKHCcj1pJ56EEHGQOVxp8r9/iszLUUV7v89x9O1p/T+NlTM5W7jW6+cz4Fq1YVg==}
     engines: {node: '>=18'}
@@ -10183,6 +10201,12 @@ snapshots:
       '@google/generative-ai': 0.24.1
       '@langchain/core': 1.1.38(openai@4.104.0(ws@8.19.0)(zod@3.25.76))
       uuid: 11.1.0
+
+  '@langchain/ollama@1.2.6(@langchain/core@1.1.38(openai@4.104.0(ws@8.19.0)(zod@3.25.76)))':
+    dependencies:
+      '@langchain/core': 1.1.38(openai@4.104.0(ws@8.19.0)(zod@3.25.76))
+      ollama: 0.6.3
+      uuid: 10.0.0
 
   '@langchain/openai@0.0.14(ws@8.19.0)':
     dependencies:
@@ -16450,6 +16474,10 @@ snapshots:
 
   oidc-token-hash@5.2.0: {}
 
+  ollama@0.6.3:
+    dependencies:
+      whatwg-fetch: 3.6.20
+
   on-finished@2.4.1:
     dependencies:
       ee-first: 1.1.1
@@ -18244,6 +18272,8 @@ snapshots:
   whatwg-encoding@3.1.1:
     dependencies:
       iconv-lite: 0.6.3
+
+  whatwg-fetch@3.6.20: {}
 
   whatwg-mimetype@4.0.0: {}
 

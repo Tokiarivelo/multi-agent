@@ -42,7 +42,7 @@ export class ModelClientService {
         modelName: model.modelId || model.modelName || model.name,
         provider: model.provider,
         apiKey: model.apiKey,
-        baseUrl: model.baseUrl,
+        baseUrl: model.baseUrl ?? model.providerSettings?.baseUrl,
         maxTokens: model.maxTokens,
         supportedFeatures: model.supportedFeatures,
       };
@@ -71,7 +71,7 @@ export class ModelClientService {
         modelName: model.modelId || model.modelName || model.name,
         provider: model.provider,
         apiKey: model.apiKey,
-        baseUrl: model.baseUrl,
+        baseUrl: model.baseUrl ?? model.providerSettings?.baseUrl,
         maxTokens: model.maxTokens,
         supportedFeatures: model.supportedFeatures,
       }));
