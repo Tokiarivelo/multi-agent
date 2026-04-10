@@ -9,6 +9,7 @@ export interface Agent {
   maxTokens?: number;
   tools?: string[];
   metadata?: Record<string, any>;
+  isSystem?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

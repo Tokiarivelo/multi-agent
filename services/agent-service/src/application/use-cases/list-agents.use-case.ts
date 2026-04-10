@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import {
   IAgentRepository,
   AGENT_REPOSITORY,
@@ -32,7 +32,7 @@ export class ListAgentsUseCase {
       throw new NotFoundException(`Agent with ID ${id} not found`);
     }
 
-    if (agent.userId !== userId) {
+    if (!agent.isSystem && agent.userId !== userId) {
       throw new UnauthorizedException('You do not have permission to access this agent');
     }
 
@@ -44,6 +44,10 @@ export class ListAgentsUseCase {
 
     if (!agent) {
       throw new NotFoundException(`Agent with ID ${id} not found`);
+    }
+
+    if (agent.isSystem) {
+      throw new ForbiddenException('System agents cannot be modified');
     }
 
     if (agent.userId !== userId) {
@@ -58,6 +62,10 @@ export class ListAgentsUseCase {
 
     if (!agent) {
       throw new NotFoundException(`Agent with ID ${id} not found`);
+    }
+
+    if (agent.isSystem) {
+      throw new ForbiddenException('System agents cannot be deleted');
     }
 
     if (agent.userId !== userId) {

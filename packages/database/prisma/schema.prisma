@@ -61,6 +61,7 @@ model Agent {
   tools        Json
   temperature  Float?           @default(0.7)
   maxTokens    Int?             @default(2000)
+  isSystem     Boolean          @default(false)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   metadata     Json?

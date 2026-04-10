@@ -28,6 +28,7 @@ export class AgentRepository implements IAgentRepository {
         maxTokens: data.maxTokens,
         tools: data.tools || [],
         metadata: data.metadata || {},
+        isSystem: data.isSystem ?? false,
       },
     });
 
@@ -50,11 +51,19 @@ export class AgentRepository implements IAgentRepository {
     const where: any = {};
 
     if (filters?.userId) {
-      where.userId = filters.userId;
+      // Return the user's own agents AND all system-level agents
+      where.OR = [{ userId: filters.userId }, { isSystem: true }];
     }
 
     if (filters?.name) {
-      where.name = { contains: filters.name, mode: 'insensitive' };
+      if (where.OR) {
+        // Wrap OR inside AND to combine with name/modelId filters
+        where.AND = [{ OR: where.OR }];
+        delete where.OR;
+        where.AND.push({ name: { contains: filters.name, mode: 'insensitive' } });
+      } else {
+        where.name = { contains: filters.name, mode: 'insensitive' };
+      }
     }
 
     if (filters?.modelId) {
