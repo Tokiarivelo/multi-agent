@@ -24,6 +24,7 @@ export enum NodeType {
   WORKSPACE_WRITE = 'WORKSPACE_WRITE',
   SUBWORKFLOW = 'SUBWORKFLOW',
   MCP = 'MCP',
+  ORCHESTRATOR = 'ORCHESTRATOR',
 }
 
 export interface WorkflowNode {

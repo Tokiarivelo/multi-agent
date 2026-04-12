@@ -43,6 +43,10 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   GITHUB_MCP_SERVICE_URL?: string = 'http://localhost:3010';
+
+  @IsString()
+  @IsOptional()
+  TRELLO_MCP_SERVICE_URL?: string = 'http://localhost:3011';
 }
 
 export function validate(config: Record<string, unknown>) {

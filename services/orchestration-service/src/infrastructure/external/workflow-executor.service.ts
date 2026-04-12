@@ -321,7 +321,6 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           `[AGENT node] executionId=${context?.executionId ?? 'MISSING'} nodeId=${node.id} workflowId=${context?.workflowId ?? 'MISSING'}`,
         );
 
-        const agentResult = await this.agentClient.executeAgent({
         const agentCallConfig = {
           agentId: node.config.agentId as string,
           input,
@@ -1009,6 +1008,193 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         };
 
         return subOutput;
+      }
+
+      case NodeType.ORCHESTRATOR: {
+        const {
+          agentId,
+          maxIterations = 10,
+          maxRetries: nodeMaxRetries = 3,
+          retryBackoffMs = 1000,
+          terminateWhen = '',
+          subAgentStrategy = 'auto',
+          continueOnSubAgentFailure = false,
+          toolIds: orchestratorToolIds = [],
+          subAgents: staticSubAgents = [],
+          maxTokens: orchestratorMaxTokens,
+        } = node.config ?? {};
+
+        if (!agentId) {
+          throw new Error('ORCHESTRATOR node requires an agentId in config');
+        }
+
+        const iterationResults: Array<{
+          iteration: number;
+          output: unknown;
+          subAgentOutputs?: unknown[];
+        }> = [];
+        let lastOutput: unknown = null;
+        let done = false;
+
+        const push = (level: string, ...args: any[]) => {
+          const line = `[${level}] ORCHESTRATOR: ${args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}`;
+          if (logSink) logSink.push(line);
+          this.logger.log(line);
+        };
+
+        const evalTerminateWhen = (output: unknown, iteration: number): boolean => {
+          if (!terminateWhen) return false;
+          try {
+            return !!new Function('output', 'iteration', 'results', 'context', terminateWhen)(
+              output,
+              iteration,
+              iterationResults,
+              context?.variables,
+            );
+          } catch (err) {
+            push(
+              'WARN',
+              `terminateWhen evaluation error: ${err instanceof Error ? err.message : String(err)}`,
+            );
+            return false;
+          }
+        };
+
+        const cap = Math.min(Number(maxIterations) || 10, 100);
+
+        for (let iteration = 0; iteration < cap && !done; iteration++) {
+          push('LOG', `starting iteration ${iteration + 1}/${cap}`);
+
+          let agentResult: Awaited<ReturnType<typeof this.agentClient.executeAgent>> | null = null;
+          let retryCount = 0;
+
+          // ── Retry loop for each iteration ─────────────────────────────────────
+          while (retryCount <= nodeMaxRetries) {
+            const iterInput =
+              typeof input === 'object' && input !== null
+                ? {
+                    ...input,
+                    _iteration: iteration,
+                    _previousOutput: lastOutput,
+                    _results: iterationResults,
+                  }
+                : {
+                    originalInput: input,
+                    _iteration: iteration,
+                    _previousOutput: lastOutput,
+                    _results: iterationResults,
+                  };
+
+            agentResult = await this.agentClient.executeAgent({
+              agentId,
+              input: iterInput,
+              toolIds: orchestratorToolIds as string[],
+              subAgents: staticSubAgents,
+              maxTokens: orchestratorMaxTokens as number | undefined,
+            });
+
+            if (agentResult.success) break;
+
+            retryCount++;
+            if (retryCount > nodeMaxRetries) {
+              throw new Error(
+                `ORCHESTRATOR agent "${agentId}" failed after ${nodeMaxRetries} retries on iteration ${iteration + 1}: ${agentResult.error}`,
+              );
+            }
+
+            const backoff = retryBackoffMs * Math.pow(2, retryCount - 1);
+            push('WARN', `agent failed (attempt ${retryCount}), retrying in ${backoff}ms…`);
+            await new Promise((r) => setTimeout(r, backoff));
+          }
+
+          const rawOutput: string =
+            typeof agentResult?.output?.output === 'string'
+              ? agentResult.output.output
+              : typeof agentResult?.output === 'string'
+                ? agentResult.output
+                : JSON.stringify(agentResult?.output ?? '');
+
+          // ── __DONE__ signal ───────────────────────────────────────────────────
+          if (rawOutput.includes('__DONE__')) {
+            push(
+              'LOG',
+              `__DONE__ signal received — terminating loop after iteration ${iteration + 1}`,
+            );
+            lastOutput = agentResult?.output;
+            iterationResults.push({ iteration, output: lastOutput });
+            done = true;
+            break;
+          }
+
+          // ── __SPAWN_SUBAGENTS__ signal ────────────────────────────────────────
+          let subAgentOutputs: unknown[] | undefined;
+          if (subAgentStrategy === 'auto') {
+            const spawnMatch = rawOutput.match(/__SPAWN_SUBAGENTS__:(\[[\s\S]*?\])(?:\s|$)/);
+            if (spawnMatch) {
+              let spawnConfigs: Array<{
+                agentId: string;
+                input: Record<string, unknown>;
+                toolIds?: string[];
+              }> = [];
+              try {
+                spawnConfigs = JSON.parse(spawnMatch[1]);
+              } catch {
+                push('WARN', `failed to parse __SPAWN_SUBAGENTS__ JSON — skipping spawn`);
+              }
+
+              if (spawnConfigs.length > 0) {
+                push('LOG', `spawning ${spawnConfigs.length} sub-agent(s) in parallel`);
+                const spawnResults = await Promise.allSettled(
+                  spawnConfigs.map((cfg) =>
+                    this.agentClient.executeAgent({
+                      agentId: cfg.agentId,
+                      input: cfg.input ?? {},
+                      toolIds: cfg.toolIds ?? [],
+                    }),
+                  ),
+                );
+
+                subAgentOutputs = spawnResults.map((r, i) => {
+                  if (r.status === 'fulfilled') {
+                    return r.value.success ? r.value.output : { error: r.value.error };
+                  }
+                  const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+                  if (!continueOnSubAgentFailure) {
+                    throw new Error(`Sub-agent ${spawnConfigs[i]?.agentId} failed: ${msg}`);
+                  }
+                  push('WARN', `sub-agent ${spawnConfigs[i]?.agentId} failed (continuing): ${msg}`);
+                  return { error: msg };
+                });
+
+                push('LOG', `all sub-agents completed — ${subAgentOutputs.length} result(s)`);
+              }
+            }
+          }
+
+          lastOutput = subAgentOutputs
+            ? { agentOutput: agentResult?.output, subAgentOutputs }
+            : agentResult?.output;
+
+          iterationResults.push({ iteration, output: lastOutput, subAgentOutputs });
+
+          // ── terminateWhen JS expression ───────────────────────────────────────
+          if (evalTerminateWhen(lastOutput, iteration)) {
+            push('LOG', `terminateWhen condition met — stopping after iteration ${iteration + 1}`);
+            done = true;
+          }
+        }
+
+        if (!done) {
+          push('LOG', `reached maxIterations (${cap}) — stopping`);
+        }
+
+        push('LOG', `completed — ${iterationResults.length} iteration(s)`);
+
+        return {
+          output: lastOutput,
+          iterations: iterationResults.length,
+          results: iterationResults,
+        };
       }
 
       default:

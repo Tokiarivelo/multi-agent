@@ -17,6 +17,7 @@ import {
   HardDriveDownload,
   HardDriveUpload,
   Workflow,
+  Network,
   type LucideIcon,
 } from 'lucide-react';
 import { NodeTypeId } from '@/types';
@@ -256,6 +257,29 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     bgColor: 'bg-blue-500/10',
     borderColor: 'border-blue-500/40',
     defaultConfig: { workflowId: '', inputMapping: {}, outputMapping: {} },
+  },
+  {
+    id: 'ORCHESTRATOR',
+    label: 'Orchestrator',
+    labelFr: 'Orchestrateur',
+    description: 'Loop an agent with auto-spawned sub-agents and retry logic',
+    descriptionFr: "Boucler un agent avec des sous-agents auto-générés et logique de réessai",
+    icon: Network,
+    color: 'text-indigo-500',
+    bgColor: 'bg-indigo-500/10',
+    borderColor: 'border-indigo-500/40',
+    defaultConfig: {
+      agentId: '',
+      maxIterations: 10,
+      maxRetries: 3,
+      retryBackoffMs: 1000,
+      terminateWhen: '',
+      subAgentStrategy: 'auto',
+      continueOnSubAgentFailure: false,
+      toolIds: [],
+      subAgents: [],
+      maxTokens: 0,
+    },
   },
 ];
 

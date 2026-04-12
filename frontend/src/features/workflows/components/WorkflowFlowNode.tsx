@@ -17,6 +17,7 @@ import {
   CheckCircle,
   XCircle,
   History,
+  RefreshCw,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
@@ -102,10 +103,11 @@ export const WorkflowFlowNode = memo(
     const isEnd = nodeType === 'END';
     const isCondition = nodeType === 'CONDITIONAL';
     const isAgent = nodeType === 'AGENT';
+    const isOrchestrator = nodeType === 'ORCHESTRATOR';
 
     // Config summary line (for non-agent nodes)
     let configSummary = '';
-    if (!isAgent && typeof config?.agentId === 'string' && config.agentId)
+    if (!isAgent && !isOrchestrator && typeof config?.agentId === 'string' && config.agentId)
       configSummary = `Agent: ${config.agentId.slice(0, 16)}`;
     else if (typeof config?.toolId === 'string' && config.toolId)
       configSummary = `Tool: ${config.toolId.slice(0, 16)}`;
@@ -373,6 +375,40 @@ export const WorkflowFlowNode = memo(
                   {formatRelativeTime(lastExecution.timestamp)}
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* ORCHESTRATOR node: loop + sub-agent badges */}
+          {isOrchestrator && (
+            <div className="mt-2 border-t border-foreground/10 pt-1.5 space-y-1">
+              <div className="flex flex-wrap gap-1">
+                <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/25 text-indigo-600 dark:text-indigo-400 font-medium leading-none">
+                  <RefreshCw className="h-2 w-2 shrink-0" />
+                  {`×${(config?.maxIterations as number) ?? 10}`}
+                </span>
+                {((config?.subAgents as { agentId: string }[]) ?? []).slice(0, 2).map((sa, i) => {
+                  const name = safeSubAgents[i]?.name ?? sa.agentId.slice(0, 10);
+                  return (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/25 text-violet-600 dark:text-violet-400 font-medium leading-none"
+                    >
+                      <Bot className="h-2 w-2 shrink-0" />
+                      {name.length > 10 ? `${name.slice(0, 10)}…` : name}
+                    </span>
+                  );
+                })}
+                {((config?.subAgents as unknown[]) ?? []).length > 2 && (
+                  <span className="text-[9px] text-muted-foreground/60 leading-none py-0.5">
+                    +{((config?.subAgents as unknown[]) ?? []).length - 2}
+                  </span>
+                )}
+              </div>
+              {nodeStatus === 'RUNNING' && (nodeData as Record<string, unknown>)?._iteration !== undefined && (
+                <p className="text-[9px] text-indigo-400 font-mono">
+                  iter {String((nodeData as Record<string, unknown>)._iteration ?? 0)}
+                </p>
+              )}
             </div>
           )}
 

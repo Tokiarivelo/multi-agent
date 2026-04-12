@@ -101,9 +101,9 @@ packages/
 
 ## Adding a New Service
 
-1. Copy structure from `tool-service`
-2. Add `Dockerfile` + entry in `docker-compose.yml`
-3. Register NATS subjects in `packages/events`
-4. Add proxy route in `gateway-service`
-5. Add Prisma models in `packages/database/prisma/schema.prisma`
-6. Run `pnpm prisma:generate && pnpm prisma:migrate`
+Use `/create-service <name> <port> "<description>"` — it scaffolds the full service with all layers, tests, and gateway integration.
+
+Manual steps after generation:
+1. Add Prisma model + run `pnpm prisma:generate && pnpm prisma:migrate`
+2. Add entry in `docker-compose.yml`
+3. Register NATS subjects in `packages/events` if needed
