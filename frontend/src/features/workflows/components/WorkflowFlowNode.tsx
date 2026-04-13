@@ -17,7 +17,6 @@ import {
   CheckCircle,
   XCircle,
   History,
-  RefreshCw,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
@@ -51,7 +50,6 @@ export const WorkflowFlowNode = memo(
     const proposals = Array.isArray(nodeData?.proposals)
       ? (nodeData.proposals as Array<string | Record<string, unknown>>)
       : [];
-    const multiSelect = nodeData?.multiSelect !== false;
 
     const [promptInput, setPromptInput] = useState('');
     const [selectedProposals, setSelectedProposals] = useState<string[]>([]);
@@ -79,9 +77,7 @@ export const WorkflowFlowNode = memo(
     const handleResume = async () => {
       let finalInput = promptInput;
       if (selectedProposals.length > 0) {
-        finalInput = multiSelect
-          ? JSON.stringify(selectedProposals)
-          : selectedProposals[0];
+        finalInput = JSON.stringify(selectedProposals);
       } else if (!promptInput.trim()) {
         return;
       }
@@ -103,11 +99,10 @@ export const WorkflowFlowNode = memo(
     const isEnd = nodeType === 'END';
     const isCondition = nodeType === 'CONDITIONAL';
     const isAgent = nodeType === 'AGENT';
-    const isOrchestrator = nodeType === 'ORCHESTRATOR';
 
     // Config summary line (for non-agent nodes)
     let configSummary = '';
-    if (!isAgent && !isOrchestrator && typeof config?.agentId === 'string' && config.agentId)
+    if (!isAgent && typeof config?.agentId === 'string' && config.agentId)
       configSummary = `Agent: ${config.agentId.slice(0, 16)}`;
     else if (typeof config?.toolId === 'string' && config.toolId)
       configSummary = `Tool: ${config.toolId.slice(0, 16)}`;
@@ -378,40 +373,6 @@ export const WorkflowFlowNode = memo(
             </div>
           )}
 
-          {/* ORCHESTRATOR node: loop + sub-agent badges */}
-          {isOrchestrator && (
-            <div className="mt-2 border-t border-foreground/10 pt-1.5 space-y-1">
-              <div className="flex flex-wrap gap-1">
-                <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/25 text-indigo-600 dark:text-indigo-400 font-medium leading-none">
-                  <RefreshCw className="h-2 w-2 shrink-0" />
-                  {`×${(config?.maxIterations as number) ?? 10}`}
-                </span>
-                {((config?.subAgents as { agentId: string }[]) ?? []).slice(0, 2).map((sa, i) => {
-                  const name = safeSubAgents[i]?.name ?? sa.agentId.slice(0, 10);
-                  return (
-                    <span
-                      key={i}
-                      className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/25 text-violet-600 dark:text-violet-400 font-medium leading-none"
-                    >
-                      <Bot className="h-2 w-2 shrink-0" />
-                      {name.length > 10 ? `${name.slice(0, 10)}…` : name}
-                    </span>
-                  );
-                })}
-                {((config?.subAgents as unknown[]) ?? []).length > 2 && (
-                  <span className="text-[9px] text-muted-foreground/60 leading-none py-0.5">
-                    +{((config?.subAgents as unknown[]) ?? []).length - 2}
-                  </span>
-                )}
-              </div>
-              {nodeStatus === 'RUNNING' && (nodeData as Record<string, unknown>)?._iteration !== undefined && (
-                <p className="text-[9px] text-indigo-400 font-mono">
-                  iter {String((nodeData as Record<string, unknown>)._iteration ?? 0)}
-                </p>
-              )}
-            </div>
-          )}
-
           {/* Output handle (bottom) — not for END */}
           {!isEnd && (
             <Handle
@@ -431,7 +392,7 @@ export const WorkflowFlowNode = memo(
               {proposals.length > 0 && (
                 <div className="mb-3 space-y-2 max-h-[150px] overflow-y-auto pr-1">
                   <p className="text-[10px] text-muted-foreground font-medium">
-                    {multiSelect ? 'Select one or more options:' : 'Select an option:'}
+                    Select from proposals:
                   </p>
                   {proposals.map((proposal: string | Record<string, unknown>, i: number) => {
                     const value =
@@ -454,16 +415,11 @@ export const WorkflowFlowNode = memo(
                         )}
                       >
                         <input
-                          type={multiSelect ? 'checkbox' : 'radio'}
-                          name={multiSelect ? undefined : `proposal-${id}`}
+                          type="checkbox"
                           checked={isSelected}
-                          onChange={() => {
-                            if (multiSelect) {
-                              if (isSelected) setSelectedProposals((prev) => prev.filter((p) => p !== value));
-                              else setSelectedProposals((prev) => [...prev, value]);
-                            } else {
-                              setSelectedProposals([value]);
-                            }
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedProposals((prev) => [...prev, value]);
+                            else setSelectedProposals((prev) => prev.filter((p) => p !== value));
                           }}
                           className="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary w-3.5 h-3.5"
                         />

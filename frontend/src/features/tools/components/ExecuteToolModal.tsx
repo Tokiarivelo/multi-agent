@@ -370,17 +370,8 @@ function ExecuteToolForm({
 
 export function ExecuteToolModal({ tool, open, onOpenChange }: ExecuteToolModalProps) {
   const [isPending, setIsPending] = useState(false);
-  const workspaces = useWorkspaceStore((s) => s.workspaces);
-  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  // '' means "follow the active workspace"; any explicit id is a user override
-  const [selectedWsId, setSelectedWsId] = useState<string>('');
-
-  const resolvedWsId =
-    selectedWsId && workspaces.some((w) => w.id === selectedWsId)
-      ? selectedWsId
-      : (activeWorkspaceId ?? workspaces[0]?.id ?? '');
-  const selectedWs = workspaces.find((w) => w.id === resolvedWsId) ?? null;
-  const cwd = selectedWs?.nativePath;
+  const getActiveWorkspace = useWorkspaceStore((s) => s.getActiveWorkspace);
+  const cwd = getActiveWorkspace()?.nativePath;
 
   const isShell = tool?.name === 'shell_execute';
 
@@ -407,33 +398,16 @@ export function ExecuteToolModal({ tool, open, onOpenChange }: ExecuteToolModalP
           {tool.description && (
             <p className="text-sm text-muted-foreground">{tool.description}</p>
           )}
-          {/* Workspace selector */}
-          {workspaces.length > 0 ? (
-            <div className="flex items-center gap-2 pt-0.5">
-              <span className="text-xs text-muted-foreground shrink-0">Workspace:</span>
-              <select
-                value={resolvedWsId}
-                onChange={(e) => setSelectedWsId(e.target.value)}
-                className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs font-mono text-foreground min-w-0 truncate"
-              >
-                {workspaces.map((ws) => (
-                  <option key={ws.id} value={ws.id}>
-                    {ws.name ?? ws.nativePath ?? ws.id}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <p className="text-xs text-amber-500">
-              No workspace open — cwd will use server default
-            </p>
-          )}
-
-          {!isShell && cwd && (
-            <p className="text-xs text-muted-foreground font-mono truncate" title={cwd}>
-              cwd: {cwd}
-            </p>
-          )}
+          {!isShell &&
+            (cwd ? (
+              <p className="text-xs text-muted-foreground font-mono truncate" title={cwd}>
+                cwd: {cwd}
+              </p>
+            ) : (
+              <p className="text-xs text-amber-500">
+                No workspace selected — cwd will use server default
+              </p>
+            ))}
         </DialogHeader>
 
         <ExecuteToolForm

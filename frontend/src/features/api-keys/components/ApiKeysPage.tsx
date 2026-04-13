@@ -26,8 +26,6 @@ import {
   Check,
 } from 'lucide-react';
 import { apiKeysApi } from '../api/api-keys.api';
-import { DeleteGuardDialog } from '@/components/shared/DeleteGuardDialog';
-import { useDeleteGuard } from '@/hooks/useDeleteGuard';
 
 const PROVIDER_STYLES: Record<string, { bg: string; text: string; border: string; icon: string }> =
   {
@@ -92,13 +90,13 @@ function formatDate(dateStr: string | undefined) {
 interface ApiKeyCardProps {
   apiKey: ApiKey;
   onEdit: (apiKey: ApiKey) => void;
-  onDeleteRequest: (apiKey: ApiKey) => void;
+  onDelete: (id: string) => void;
   onToggleActive: (id: string, isActive: boolean) => void;
   isDeleting: boolean;
   isUpdating: boolean;
 }
 
-function ApiKeyCard({ apiKey, onEdit, onDeleteRequest, onToggleActive, isDeleting, isUpdating }: ApiKeyCardProps) {
+function ApiKeyCard({ apiKey, onEdit, onDelete, onToggleActive, isDeleting, isUpdating }: ApiKeyCardProps) {
   const { t } = useTranslation();
   const style = getProviderStyle(apiKey.provider);
   const [isCopied, setIsCopied] = useState(false);
@@ -222,7 +220,11 @@ function ApiKeyCard({ apiKey, onEdit, onDeleteRequest, onToggleActive, isDeletin
               variant="destructive"
               size="sm"
               disabled={isDeleting}
-              onClick={() => onDeleteRequest(apiKey)}
+              onClick={() => {
+                if (confirm(t('apiKeys.card.confirmDelete'))) {
+                  onDelete(apiKey.id);
+                }
+              }}
               className="rounded-xl text-xs gap-1.5"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -244,8 +246,6 @@ export function ApiKeysPage() {
   const updateMutation = useUpdateApiKey(user?.id);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<ApiKey | null>(null);
-  const [pendingDeleteKey, setPendingDeleteKey] = useState<ApiKey | null>(null);
-  const deleteGuard = useDeleteGuard('apiKey');
 
   if (!user) return null;
 
@@ -384,7 +384,7 @@ export function ApiKeysPage() {
                       key={key.id}
                       apiKey={key}
                       onEdit={(key) => setEditingKey(key)}
-                      onDeleteRequest={(key) => { setPendingDeleteKey(key); deleteGuard.openGuard(key.id); }}
+                      onDelete={(id) => deleteMutation.mutate(id)}
                       onToggleActive={handleToggleActive}
                       isDeleting={deleteMutation.isPending}
                       isUpdating={updateMutation.isPending}
@@ -406,22 +406,6 @@ export function ApiKeysPage() {
           onClose={() => setEditingKey(null)}
         />
       )}
-
-      <DeleteGuardDialog
-        open={deleteGuard.open}
-        onOpenChange={(open) => { if (!open) { deleteGuard.close(); setPendingDeleteKey(null); } }}
-        entityName={pendingDeleteKey?.keyName ?? pendingDeleteKey?.provider ?? ''}
-        entityType={t('apiKeys.key')}
-        dependencies={deleteGuard.dependencies}
-        isChecking={deleteGuard.isChecking}
-        isDeleting={deleteMutation.isPending}
-        onConfirm={() => {
-          if (!pendingDeleteKey) return;
-          deleteMutation.mutate(pendingDeleteKey.id, {
-            onSuccess: () => { deleteGuard.close(); setPendingDeleteKey(null); },
-          });
-        }}
-      />
     </div>
   );
 }

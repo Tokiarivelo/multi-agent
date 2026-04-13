@@ -20,10 +20,10 @@ import { GetWorkflowUseCase } from './application/use-cases/get-workflow.use-cas
 import { ExecuteWorkflowUseCase } from './application/use-cases/execute-workflow.use-case';
 import { UpdateWorkflowUseCase } from './application/use-cases/update-workflow.use-case';
 import { DeleteWorkflowUseCase } from './application/use-cases/delete-workflow.use-case';
+import { GetWorkflowExecutionsUseCase } from './application/use-cases/get-workflow-executions.use-case';
 import { WORKFLOW_EXECUTOR } from './application/interfaces/workflow-executor.interface';
 
 // Presentation
-import { WorkflowAiController } from './presentation/controllers/workflow-ai.controller';
 import { WorkflowController } from './presentation/controllers/workflow.controller';
 import { WorkspaceController } from './presentation/controllers/workspace.controller';
 import { HealthController } from './presentation/controllers/health.controller';
@@ -44,13 +44,7 @@ import { ResourceProvisioningService } from './infrastructure/external/resource-
       inject: [ConfigService],
     }),
   ],
-  controllers: [
-    WorkflowAiController,
-    WorkflowController,
-    WorkspaceController,
-    HealthController,
-    InternalController,
-  ],
+  controllers: [WorkflowController, WorkspaceController, HealthController, InternalController],
   providers: [
     PrismaService,
     WorkflowExecutionService,
@@ -66,6 +60,7 @@ import { ResourceProvisioningService } from './infrastructure/external/resource-
     ExecuteWorkflowUseCase,
     UpdateWorkflowUseCase,
     DeleteWorkflowUseCase,
+    GetWorkflowExecutionsUseCase,
 
     // Repositories
     {

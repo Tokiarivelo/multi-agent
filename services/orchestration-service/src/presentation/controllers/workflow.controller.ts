@@ -17,6 +17,7 @@ import { GetWorkflowUseCase } from '../../application/use-cases/get-workflow.use
 import { ExecuteWorkflowUseCase } from '../../application/use-cases/execute-workflow.use-case';
 import { UpdateWorkflowUseCase } from '../../application/use-cases/update-workflow.use-case';
 import { DeleteWorkflowUseCase } from '../../application/use-cases/delete-workflow.use-case';
+import { GetWorkflowExecutionsUseCase } from '../../application/use-cases/get-workflow-executions.use-case';
 import { CreateWorkflowDto } from '../../application/dto/create-workflow.dto';
 import { UpdateWorkflowDto } from '../../application/dto/update-workflow.dto';
 import { ExecuteWorkflowDto } from '../../application/dto/execute-workflow.dto';
@@ -34,6 +35,7 @@ export class WorkflowController {
     private readonly executeWorkflowUseCase: ExecuteWorkflowUseCase,
     private readonly updateWorkflowUseCase: UpdateWorkflowUseCase,
     private readonly deleteWorkflowUseCase: DeleteWorkflowUseCase,
+    private readonly getWorkflowExecutionsUseCase: GetWorkflowExecutionsUseCase,
   ) {}
 
   // ─── Workflow CRUD ────────────────────────────────────────────────────────
@@ -97,6 +99,41 @@ export class WorkflowController {
   async remove(@Param('id') id: string) {
     this.logger.log(`Deleting workflow ${id}`);
     await this.deleteWorkflowUseCase.execute(id);
+  }
+
+  @Get(':id/executions')
+  @ApiOperation({ summary: 'Get paginated execution history for a workflow with token metrics' })
+  @ApiParam({ name: 'id', type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['createdAt', 'startedAt', 'completedAt', 'status'],
+  })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
+  @ApiResponse({ status: 200, description: 'Execution history retrieved' })
+  @ApiResponse({ status: 404, description: 'Workflow not found' })
+  async getExecutions(
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
+  ) {
+    const validSortFields = ['createdAt', 'startedAt', 'completedAt', 'status'] as const;
+    const resolvedSortBy = validSortFields.includes(sortBy as any)
+      ? (sortBy as (typeof validSortFields)[number])
+      : 'createdAt';
+    const resolvedSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
+
+    return this.getWorkflowExecutionsUseCase.execute(
+      id,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 10,
+      resolvedSortBy,
+      resolvedSortOrder,
+    );
   }
 
   // ─── Node operations ──────────────────────────────────────────────────────

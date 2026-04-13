@@ -62,14 +62,7 @@ export class ExecuteToolUseCase {
 
       if (tool.category === ToolCategory.MCP) {
         if (!tool.mcpConfig) throw new BadRequestException('MCP tool missing mcpConfig');
-        
-        let mcpParams = parameters;
-        if (tool.repoFullName && tool.repoFullName.includes('/')) {
-          const [owner, repo] = tool.repoFullName.split('/');
-          mcpParams = { ...mcpParams, owner, repo };
-        }
-        
-        result = await this.mcpExecutor.execute(tool.mcpConfig, mcpParams, timeout);
+        result = await this.mcpExecutor.execute(tool.mcpConfig, parameters, timeout);
       } else if (tool.isBuiltIn) {
         result = await this.builtInTools.execute(tool.name, parameters, timeout);
       } else if (tool.code) {

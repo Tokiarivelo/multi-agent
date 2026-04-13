@@ -5,7 +5,6 @@ import { envValidationSchema } from '@infrastructure/config/env.validation';
 import { GithubAuthService } from '@infrastructure/github/github-auth.service';
 import { GithubApiService } from '@infrastructure/github/github-api.service';
 import { McpController } from '@presentation/controllers/mcp.controller';
-import { GithubOauthController } from '@presentation/controllers/github-oauth.controller';
 import {
   SearchRepositoriesTool,
   GetFileContentsTool,
@@ -27,7 +26,7 @@ import {
       validationSchema: envValidationSchema,
     }),
   ],
-  controllers: [McpController, GithubOauthController],
+  controllers: [McpController],
   providers: [
     GithubAuthService,
     GithubApiService,

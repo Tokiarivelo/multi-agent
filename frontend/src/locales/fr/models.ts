@@ -16,9 +16,5 @@ export const models = {
   "models.create.customHint": "Utilisez CUSTOM pour les endpoints auto-hébergés ou compatibles OpenAI.",
   "models.create.customModelPlaceholder": "ex. mon-modele-personnalise",
   "models.create.apiBaseUrl": "URL de base de l'API (optionnel)",
-  "models.create.apiBaseUrlHint": "L'URL de base de l'API du modèle. Laissez vide pour les fournisseurs standards.",
-  "models.actions.edit": "Modifier",
-  "models.actions.delete": "Supprimer le modèle",
-  "models.deleteSuccess": "Modèle \"{{name}}\" supprimé avec succès.",
-  "models.deleteError": "Échec de la suppression du modèle.",
+  "models.create.apiBaseUrlHint": "L'URL de base de l'API du modèle. Laissez vide pour les fournisseurs standards."
 };

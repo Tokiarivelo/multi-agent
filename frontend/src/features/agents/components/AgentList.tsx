@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { useAgents, useDeleteAgent } from '../hooks/useAgents';
+import { useAgents } from '../hooks/useAgents';
 import { useModels } from '@/features/models/hooks/useModels';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,21 +14,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Edit, Bot, Wrench, Activity, Clock, Box, FileText, Trash2 } from 'lucide-react';
+import { Plus, Edit, Bot, Wrench, Activity, Clock, Box, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
-import { Agent } from '@/types';
-import { DeleteGuardDialog } from '@/components/shared/DeleteGuardDialog';
-import { useDeleteGuard } from '@/hooks/useDeleteGuard';
 
 export function AgentList() {
   const { t } = useTranslation();
   const { data, isLoading, error } = useAgents();
   const { data: modelsData, isLoading: modelsLoading } = useModels();
-  const deleteAgent = useDeleteAgent();
-  const deleteGuard = useDeleteGuard('agent');
-  const [pendingDeleteAgent, setPendingDeleteAgent] = useState<Agent | null>(null);
 
   if (isLoading || modelsLoading) {
     return (
@@ -182,23 +175,12 @@ export function AgentList() {
                         {formatRelativeTime(agent.updatedAt)}
                       </TableCell>
                       <TableCell className="text-right pr-6">
-                        <div className="flex items-center justify-end gap-1">
-                          <Link href={`/agents/${agent.id}`}>
-                            <Button variant="ghost" size="sm" className="gap-2 hover:bg-blue-500/10 hover:text-blue-600 transition-colors">
-                              {t('agents.actions.edit')}
-                              <Edit className="h-3.5 w-3.5" />
-                            </Button>
-                          </Link>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            disabled={deleteAgent.isPending}
-                            onClick={() => { setPendingDeleteAgent(agent); deleteGuard.openGuard(agent.id); }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
+                        <Link href={`/agents/${agent.id}`}>
+                          <Button variant="ghost" size="sm" className="gap-2 hover:bg-blue-500/10 hover:text-blue-600 transition-colors">
+                            {t('agents.actions.edit')}
+                            <Edit className="h-3.5 w-3.5" />
                           </Button>
-                        </div>
+                        </Link>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -208,22 +190,6 @@ export function AgentList() {
           )}
         </CardContent>
       </Card>
-
-      <DeleteGuardDialog
-        open={deleteGuard.open}
-        onOpenChange={(open) => { if (!open) { deleteGuard.close(); setPendingDeleteAgent(null); } }}
-        entityName={pendingDeleteAgent?.name ?? ''}
-        entityType={t('deleteGuard.types.agent')}
-        dependencies={deleteGuard.dependencies}
-        isChecking={deleteGuard.isChecking}
-        isDeleting={deleteAgent.isPending}
-        onConfirm={() => {
-          if (!pendingDeleteAgent) return;
-          deleteAgent.mutate(pendingDeleteAgent.id, {
-            onSuccess: () => { deleteGuard.close(); setPendingDeleteAgent(null); },
-          });
-        }}
-      />
     </div>
   );
 }

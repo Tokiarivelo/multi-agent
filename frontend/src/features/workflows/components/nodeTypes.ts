@@ -3,7 +3,6 @@ import {
   Square,
   Bot,
   Wrench,
-  Cpu,
   GitFork,
   Shuffle,
   MessageSquare,
@@ -17,11 +16,27 @@ import {
   HardDriveDownload,
   HardDriveUpload,
   Workflow,
-  Network,
   type LucideIcon,
 } from 'lucide-react';
-import { NodeTypeId } from '@/types';
-export type { NodeTypeId };
+
+export type NodeTypeId =
+  | 'START'
+  | 'END'
+  | 'AGENT'
+  | 'TOOL'
+  | 'CONDITIONAL'
+  | 'TRANSFORM'
+  | 'PROMPT'
+  | 'TEXT'
+  | 'FILE'
+  | 'LOOP'
+  | 'GITHUB'
+  | 'SLACK'
+  | 'WHATSAPP'
+  | 'SHELL'
+  | 'WORKSPACE_READ'
+  | 'WORKSPACE_WRITE'
+  | 'SUBWORKFLOW';
 
 export interface NodeTypeMeta {
   id: NodeTypeId;
@@ -83,18 +98,6 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     color: 'text-amber-500',
     bgColor: 'bg-amber-500/10',
     borderColor: 'border-amber-500/40',
-    defaultConfig: { toolId: '' },
-  },
-  {
-    id: 'MCP',
-    label: 'MCP Tool',
-    labelFr: 'Outil MCP',
-    description: 'Call a registered MCP tool',
-    descriptionFr: 'Appeler un outil MCP enregistré',
-    icon: Cpu,
-    color: 'text-sky-500',
-    bgColor: 'bg-sky-500/10',
-    borderColor: 'border-sky-500/40',
     defaultConfig: { toolId: '' },
   },
   {
@@ -257,29 +260,6 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     bgColor: 'bg-blue-500/10',
     borderColor: 'border-blue-500/40',
     defaultConfig: { workflowId: '', inputMapping: {}, outputMapping: {} },
-  },
-  {
-    id: 'ORCHESTRATOR',
-    label: 'Orchestrator',
-    labelFr: 'Orchestrateur',
-    description: 'Loop an agent with auto-spawned sub-agents and retry logic',
-    descriptionFr: "Boucler un agent avec des sous-agents auto-générés et logique de réessai",
-    icon: Network,
-    color: 'text-indigo-500',
-    bgColor: 'bg-indigo-500/10',
-    borderColor: 'border-indigo-500/40',
-    defaultConfig: {
-      agentId: '',
-      maxIterations: 10,
-      maxRetries: 3,
-      retryBackoffMs: 1000,
-      terminateWhen: '',
-      subAgentStrategy: 'auto',
-      continueOnSubAgentFailure: false,
-      toolIds: [],
-      subAgents: [],
-      maxTokens: 0,
-    },
   },
 ];
 

@@ -74,8 +74,4 @@ export class CreateToolDto {
   @ValidateNested()
   @Type(() => McpConfigDto)
   mcpConfig?: McpConfigDto;
-
-  @IsOptional()
-  @IsString()
-  repoFullName?: string;
 }
