@@ -23,11 +23,13 @@ import { DeleteWorkflowUseCase } from './application/use-cases/delete-workflow.u
 import { WORKFLOW_EXECUTOR } from './application/interfaces/workflow-executor.interface';
 
 // Presentation
+import { WorkflowAiController } from './presentation/controllers/workflow-ai.controller';
 import { WorkflowController } from './presentation/controllers/workflow.controller';
 import { WorkspaceController } from './presentation/controllers/workspace.controller';
 import { HealthController } from './presentation/controllers/health.controller';
 import { InternalController } from './presentation/controllers/internal.controller';
 import { WorkflowGateway } from './presentation/gateways/workflow.gateway';
+import { WorkflowAiService } from './infrastructure/external/workflow-ai.service';
 
 @Module({
   imports: [
@@ -41,12 +43,13 @@ import { WorkflowGateway } from './presentation/gateways/workflow.gateway';
       inject: [ConfigService],
     }),
   ],
-  controllers: [WorkflowController, WorkspaceController, HealthController, InternalController],
+  controllers: [WorkflowAiController, WorkflowController, WorkspaceController, HealthController, InternalController],
   providers: [
     PrismaService,
     WorkflowExecutionService,
     AgentClientService,
     ToolClientService,
+    WorkflowAiService,
     WorkflowGateway,
 
     // Use Cases

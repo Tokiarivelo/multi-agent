@@ -60,12 +60,14 @@ import {
   Workflow as WorkflowIcon,
   ExternalLink,
   MessageCircleQuestion,
+  Sparkles,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ExecutionLogsPanel } from './ExecutionLogsPanel';
 import { SubWorkflowExecutionPanel } from './SubWorkflowExecutionPanel';
 import { WorkflowIOPanel, WorkflowIOField } from './WorkflowIOPanel';
+import { WorkflowAiPanel } from './WorkflowAiPanel';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useExecution } from '../hooks/useWorkflows';
 import { cn } from '@/lib/utils';
@@ -471,6 +473,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const [status, setStatus] = useState(workflow?.status?.toUpperCase() ?? 'DRAFT');
   const [logsOpen, setLogsOpen] = useState(!!deepExecutionId);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [outputLogsToFile, setOutputLogsToFile] = useState(false);
 
   // ─── Workflow I/O Contract ─────────────────────────────────────────
@@ -845,13 +848,24 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
               </AlertDialogContent>
             </AlertDialog>
           )}
+          {/* AI Panel toggle */}
+          <Button
+            variant={aiPanelOpen ? 'secondary' : 'ghost'}
+            size="icon"
+            onClick={() => setAiPanelOpen(!aiPanelOpen)}
+            title={t('workflows.ai.togglePanel', 'AI Workflow Assistant')}
+            className="ml-1 text-violet-500 hover:text-violet-600"
+          >
+            <Sparkles className="h-4 w-4" />
+          </Button>
+
           {/* Toggle Panel */}
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setPanelOpen(!panelOpen)}
             title="Toggle Details Panel"
-            className="ml-2 text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground"
           >
             {panelOpen ? (
               <PanelRightClose className="h-5 w-5" />
@@ -862,8 +876,35 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
         </div>
       </div>
 
-      {/* ─── Main Content Area (Right Panel floating) ─── */}
-      <div className="flex-1 relative flex justify-end w-full overflow-hidden">
+      {/* ─── Main Content Area (Right Panels floating) ─── */}
+      <div className="flex-1 relative flex justify-end w-full overflow-hidden gap-2">
+        {/* AI Assistant Panel */}
+        <WorkflowAiPanel
+          workflow={workflow}
+          isOpen={aiPanelOpen}
+          onClose={() => setAiPanelOpen(false)}
+          onApplyDefinition={(definition, name, description) => {
+            if (!workflow?.id) return;
+            updateWorkflow.mutate(
+              {
+                id: workflow.id,
+                workflow: {
+                  definition,
+                  ...(name && { name }),
+                  ...(description && { description }),
+                },
+              },
+              {
+                onSuccess: () => {
+                  if (name) setName(name);
+                  if (description) setDescription(description);
+                  toast.success(t('workflows.ai.applied', 'AI changes applied to workflow'));
+                },
+              },
+            );
+          }}
+        />
+
         {panelOpen && (
           <div className="w-[400px] h-full flex flex-col gap-4 overflow-y-auto pointer-events-auto pb-4 pr-1">
             {/* ─── Details ─── */}

@@ -1,6 +1,32 @@
 import { apiClient } from '@/lib/api-client';
 import { Workflow, PaginatedResponse, NodeTypeId } from '@/types';
 
+// ─── AI types ─────────────────────────────────────────────────────────────────
+
+export interface AiMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export interface AiSession {
+  id: string;
+  workflowId?: string;
+  modelId: string;
+  messages: AiMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiWorkflowResult {
+  sessionId: string;
+  message: string;
+  definition?: Workflow['definition'];
+  name?: string;
+  description?: string;
+  history: AiMessage[];
+}
+
 export interface WorkflowExecution {
   id: string;
   workflowId: string;
@@ -150,6 +176,37 @@ export const workflowsApi = {
       executionId,
     });
     return data;
+  },
+
+  // ─── AI Generation ───────────────────────────────────────────────
+
+  generateWithAi: async (opts: {
+    prompt: string;
+    modelId: string;
+    sessionId?: string;
+  }): Promise<AiWorkflowResult> => {
+    const { data } = await apiClient.post<AiWorkflowResult>('/api/workflows/ai/generate', opts);
+    return data;
+  },
+
+  editWithAi: async (
+    workflowId: string,
+    opts: { prompt: string; modelId: string; sessionId?: string },
+  ): Promise<AiWorkflowResult> => {
+    const { data } = await apiClient.post<AiWorkflowResult>(
+      `/api/workflows/ai/${workflowId}/edit`,
+      opts,
+    );
+    return data;
+  },
+
+  getAiSession: async (sessionId: string): Promise<AiSession> => {
+    const { data } = await apiClient.get<AiSession>(`/api/workflows/ai/sessions/${sessionId}`);
+    return data;
+  },
+
+  deleteAiSession: async (sessionId: string): Promise<void> => {
+    await apiClient.delete(`/api/workflows/ai/sessions/${sessionId}`);
   },
 
   // ─── Files ────────────────────────────────────────────────────────
