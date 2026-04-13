@@ -43,7 +43,13 @@ import { WorkflowAiService } from './infrastructure/external/workflow-ai.service
       inject: [ConfigService],
     }),
   ],
-  controllers: [WorkflowAiController, WorkflowController, WorkspaceController, HealthController, InternalController],
+  controllers: [
+    WorkflowAiController,
+    WorkflowController,
+    WorkspaceController,
+    HealthController,
+    InternalController,
+  ],
   providers: [
     PrismaService,
     WorkflowExecutionService,

@@ -58,3 +58,22 @@ export function downloadJson(data: unknown, filename: string): void {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+export function isJSON(str: string): boolean {
+  if (typeof str !== 'string') return false;
+  try {
+    const result = JSON.parse(str);
+    return typeof result === 'object' && result !== null;
+  } catch (e) {
+    return false;
+  }
+}
+
+export function tryParseJSON(str: string): unknown {
+  if (typeof str !== 'string') return str;
+  try {
+    return JSON.parse(str);
+  } catch (e) {
+    return str;
+  }
+}

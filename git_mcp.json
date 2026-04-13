@@ -1,0 +1,77 @@
+{
+  "name": "git_mcp",
+  "description": "mcp for git",
+  "definition": {
+    "nodes": [
+      {
+        "id": "a4c4e012-ef79-464f-b900-34bf1baf1eeb",
+        "type": "START",
+        "config": {
+          "agentId": ""
+        },
+        "position": {
+          "x": 597.8405083216754,
+          "y": -1.9770525751006378
+        }
+      },
+      {
+        "id": "25c0a636-f4ff-4c08-82b5-6b3d3430d5af",
+        "type": "END",
+        "config": {
+          "agentId": ""
+        },
+        "position": {
+          "x": 1070.3632165347412,
+          "y": 253.091340154799
+        }
+      },
+      {
+        "id": "b6275e69-6094-4ad4-a80c-7410dc78f382",
+        "type": "AGENT",
+        "config": {
+          "agentId": "5f9f1e95-45fc-46f8-accc-d3eaf6ec7f52",
+          "toolIds": [
+            "7a2f6814-498d-4a15-94b1-a748fc7048b4"
+          ]
+        },
+        "position": {
+          "x": 921.4305741756755,
+          "y": 101.71271547273227
+        }
+      },
+      {
+        "id": "0030548c-fe66-4865-95f0-8d34b3e26b2a",
+        "type": "PROMPT",
+        "config": {
+          "agentId": ""
+        },
+        "position": {
+          "x": 759.6355412486755,
+          "y": 49.867831448815814
+        },
+        "customName": "prompt for git"
+      }
+    ],
+    "edges": [
+      {
+        "id": "64d03d1b-af69-466a-9121-f66c554b7279",
+        "source": "b6275e69-6094-4ad4-a80c-7410dc78f382",
+        "target": "25c0a636-f4ff-4c08-82b5-6b3d3430d5af"
+      },
+      {
+        "id": "df9824ff-c35d-4488-b09c-82432991a24c",
+        "source": "a4c4e012-ef79-464f-b900-34bf1baf1eeb",
+        "target": "0030548c-fe66-4865-95f0-8d34b3e26b2a"
+      },
+      {
+        "id": "23605839-6819-45bb-be73-cb4081d6f202",
+        "source": "0030548c-fe66-4865-95f0-8d34b3e26b2a",
+        "target": "b6275e69-6094-4ad4-a80c-7410dc78f382"
+      }
+    ],
+    "version": 1,
+    "inputSchema": [],
+    "outputSchema": []
+  },
+  "status": "ACTIVE"
+}

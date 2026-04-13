@@ -343,76 +343,141 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           throw new Error(agentResult.error || 'Agent execution failed');
         }
 
-        // ── Ask-user: pause execution so the user can pick an option ──────────
-        // The agent signals this by ending its output with:
-        //   __ASK_USER__:{"question":"...","choices":["A","B"],"multiSelect":false}
-        if (execution && node.config.allowAskUser === true) {
-          const rawOutput: string =
-            typeof agentResult.output?.output === 'string'
-              ? agentResult.output.output
-              : typeof agentResult.output === 'string'
-                ? agentResult.output
-                : '';
+        console.log('agentResult :>> ', JSON.stringify(agentResult, null, 2));
 
-          const askUserMatch = rawOutput.match(/__ASK_USER__:(\{[\s\S]+\})\s*$/);
-          if (askUserMatch) {
-            let askUser: { question: string; choices: string[]; multiSelect?: boolean } | null =
-              null;
+        // ── Smart Ask-user: auto-detect __ASK_USER__ sentinel ──────────────
+        //
+        // The agent-service stores its output as a JSON-encoded STRING inside
+        //   agentResult.output.output  (a nested stringified JSON).
+        //
+        // The global system instruction (injected in execute-agent.use-case.ts)
+        // tells every agent to end its response with:
+        //   __ASK_USER__:{"question":"...","type":"...","choices":["..."]}
+        //
+        // Detection is automatic — no node config flag required.
+        if (execution) {
+          interface AskUserPayload {
+            question: string;
+            type: 'single_choice' | 'multiple_choice' | 'danger_choice' | 'custom';
+            choices?: string[];
+          }
+
+          let askUser: AskUserPayload | null = null;
+
+          // ── Step 1: resolve the agent's plain-text response ──────────────
+          // agentResult.output  → object { output: "<json-string>", tokens, … }
+          // agentResult.output.output → stringified JSON: { output: "<text>", … }
+          const outerObj = agentResult.output as Record<string, unknown> | null | undefined;
+
+          // Try to deep-parse the nested stringified JSON
+          let innerObj: Record<string, unknown> | null = null;
+          if (typeof outerObj?.output === 'string') {
             try {
-              askUser = JSON.parse(askUserMatch[1]) as {
-                question: string;
-                choices: string[];
-                multiSelect?: boolean;
-              };
-            } catch {
-              this.logger.warn(`AGENT node ${node.id}: failed to parse __ASK_USER__ JSON`);
-            }
-
-            if (askUser && Array.isArray(askUser.choices) && askUser.choices.length > 0) {
-              execution.waitNodeExecution(node.id);
-              await this.updateExecution(execution);
-              this.workflowGateway.sendExecutionUpdate(execution);
-              this.workflowGateway.sendNodeUpdate(
-                execution.id,
-                node.id,
-                node.customName || node.type,
-                'WAITING_INPUT',
-                {
-                  input,
-                  prompt: askUser.question,
-                  proposals: askUser.choices,
-                  multiSelect: askUser.multiSelect ?? false,
-                },
-              );
-
-              this.logger.log(`AGENT node ${node.id} waiting for user input (ask-user)`);
-              const userResponse = await new Promise<string>((resolve) => {
-                this.promptEmitter.once(`resume_${execution.id}_${node.id}`, resolve);
-              });
-
-              // Resume: re-run agent with user's answer injected into input
-              execution.startNodeExecution(node.id, node.customName || node.type, input);
-              await this.updateExecution(execution);
-              this.workflowGateway.sendNodeUpdate(
-                execution.id,
-                node.id,
-                node.customName || node.type,
-                'RUNNING',
-                { input, prompt: askUser.question, userResponse },
-              );
-
-              const retryInput =
-                typeof input === 'object' && input !== null
-                  ? { ...input, userResponse }
-                  : { originalInput: input, userResponse };
-
-              agentResult = await this.agentClient.executeAgent({
-                ...agentCallConfig,
-                input: retryInput,
-              });
-              if (!agentResult.success) {
-                throw new Error(agentResult.error || 'Agent re-execution failed');
+              const parsed = JSON.parse(outerObj.output as string);
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                innerObj = parsed as Record<string, unknown>;
               }
+            } catch {
+              // outerObj.output is literal text, not a JSON string – that's fine
+            }
+          }
+
+          // The plain text the agent actually wrote
+          const agentText: string =
+            typeof innerObj?.output === 'string'
+              ? innerObj.output
+              : typeof outerObj?.output === 'string'
+                ? outerObj.output
+                : typeof outerObj === 'string'
+                  ? (outerObj as unknown as string)
+                  : '';
+
+          this.logger.debug(
+            `[ASK_USER] node=${node.id} agentText preview: ${agentText.slice(0, 200)}`,
+          );
+
+          // ── Step 2: scan for the sentinel ────────────────────────────────
+          // Match __ASK_USER__:{...} – greedy, allowing multi-line JSON
+          const sentinelMatch = agentText.match(/__ASK_USER__:(\{[\s\S]*\})\s*$/);
+          if (sentinelMatch) {
+            try {
+              const parsed = JSON.parse(sentinelMatch[1]) as Record<string, unknown>;
+              if (typeof parsed.question === 'string') {
+                askUser = {
+                  question: parsed.question,
+                  type:
+                    (parsed.type as AskUserPayload['type']) ??
+                    (Array.isArray(parsed.choices) && (parsed.choices as unknown[]).length > 0
+                      ? 'single_choice'
+                      : 'custom'),
+                  choices: Array.isArray(parsed.choices) ? (parsed.choices as string[]) : undefined,
+                };
+                this.logger.log(
+                  `[ASK_USER] node=${node.id} detected question type=${askUser.type} choices=${askUser.choices?.length ?? 0}`,
+                );
+              }
+            } catch {
+              this.logger.warn(
+                `AGENT node ${node.id}: failed to parse __ASK_USER__ sentinel JSON — value: ${sentinelMatch[1]}`,
+              );
+            }
+          }
+
+          if (askUser) {
+            const questionType = askUser.type ?? 'single_choice';
+            const choices = askUser.choices ?? [];
+
+            // Strip sentinel from the visible text so the UI shows only the human message
+            const visibleText = agentText.replace(/__ASK_USER__:\{[\s\S]*\}\s*$/, '').trimEnd();
+
+            execution.waitNodeExecution(node.id);
+            await this.updateExecution(execution);
+            this.workflowGateway.sendExecutionUpdate(execution);
+            this.workflowGateway.sendNodeUpdate(
+              execution.id,
+              node.id,
+              node.customName || node.type,
+              'WAITING_INPUT',
+              {
+                input,
+                output: agentResult.output, // keep original for UI display
+                prompt: askUser.question,
+                agentMessage: visibleText, // clean text without sentinel
+                proposals: choices,
+                questionType,
+                multiSelect: questionType === 'multiple_choice',
+              },
+            );
+
+            this.logger.log(
+              `AGENT node ${node.id} paused — waiting for user input (type: ${questionType})`,
+            );
+            const userResponse = await new Promise<string>((resolve) => {
+              this.promptEmitter.once(`resume_${execution.id}_${node.id}`, resolve);
+            });
+
+            // Resume: re-run agent with user's answer injected
+            execution.startNodeExecution(node.id, node.customName || node.type, input);
+            await this.updateExecution(execution);
+            this.workflowGateway.sendNodeUpdate(
+              execution.id,
+              node.id,
+              node.customName || node.type,
+              'RUNNING',
+              { input, prompt: askUser.question, userResponse, questionType },
+            );
+
+            const retryInput =
+              typeof input === 'object' && input !== null
+                ? { ...input, userResponse, questionType }
+                : { originalInput: input, userResponse, questionType };
+
+            agentResult = await this.agentClient.executeAgent({
+              ...agentCallConfig,
+              input: retryInput,
+            });
+            if (!agentResult.success) {
+              throw new Error(agentResult.error || 'Agent re-execution after user input failed');
             }
           }
         }

@@ -1,5 +1,6 @@
 import { Injectable, Inject, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { loadPrompt } from '../utils/prompt-loader.util';
 import {
   IAgentRepository,
   AGENT_REPOSITORY,
@@ -152,18 +153,19 @@ export class ExecuteAgentUseCase {
       messages.push({ role: 'user', content: userContent });
 
       const workspaceContextBlock = workspacePath
-        ? `\n\n[WORKSPACE CONTEXT]\n` +
-          `Active workspace path: ${workspacePath}\n` +
-          `Rules:\n` +
-          `- When calling file_read, pdf_read, or shell_execute, ALWAYS include cwd: "${workspacePath}"\n` +
-          `- Do NOT ask the user to confirm the path or file name — use the path above directly\n` +
-          `- Do NOT ask for permission before calling a tool — execute immediately when requested\n` +
-          `- If a file is not found, report the error; do not ask for an alternative path`
+        ? '\n\n[WORKSPACE CONTEXT]\n' +
+          loadPrompt('workspace-context.md', { workspacePath })
         : '';
+
+      // ── Global: mandatory interactive-question protocol ─────────────────
+      // Loaded from prompts/ask-user-protocol.md — appended unconditionally
+      // so any agent/model knows how to signal that it needs user input.
+      const askUserRulesBlock = '\n\n[INTERACTIVE QUESTION PROTOCOL — MANDATORY]\n' +
+        loadPrompt('ask-user-protocol.md');
 
       const context = this.agentExecutionService.buildContext(
         messages,
-        (agent.systemPrompt ?? '') + workspaceContextBlock,
+        (agent.systemPrompt ?? '') + workspaceContextBlock + askUserRulesBlock,
       );
       this.agentExecutionService.validateTokenLimit(
         context.conversationHistory,

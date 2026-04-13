@@ -32,9 +32,7 @@ export class WorkflowAiController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Generate a new workflow from a natural-language prompt' })
   @ApiResponse({ status: 200, description: 'Generated workflow definition with session context' })
-  async generate(
-    @Body() body: { prompt: string; modelId: string; sessionId?: string },
-  ) {
+  async generate(@Body() body: { prompt: string; modelId: string; sessionId?: string }) {
     if (!body.prompt?.trim()) throw new BadRequestException('prompt is required');
     if (!body.modelId?.trim()) throw new BadRequestException('modelId is required');
 

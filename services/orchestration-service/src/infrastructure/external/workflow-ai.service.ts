@@ -244,9 +244,7 @@ export class WorkflowAiService {
     return session;
   }
 
-  private buildApiMessages(
-    session: AiSession,
-  ): Array<{ role: string; content: string }> {
+  private buildApiMessages(session: AiSession): Array<{ role: string; content: string }> {
     return [
       { role: 'system', content: WORKFLOW_SYSTEM_PROMPT },
       ...session.messages.map((m) => ({ role: m.role, content: m.content })),

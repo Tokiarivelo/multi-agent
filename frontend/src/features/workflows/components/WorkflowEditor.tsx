@@ -70,11 +70,11 @@ import { WorkflowIOPanel, WorkflowIOField } from './WorkflowIOPanel';
 import { WorkflowAiPanel } from './WorkflowAiPanel';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useExecution } from '../hooks/useWorkflows';
-import { cn } from '@/lib/utils';
+import { cn, isJSON, tryParseJSON } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { StructuredDataViewer, deepParse } from './StructuredDataViewer';
-import { AgentReplyBar } from './AgentReplyBar';
+import { AgentReplyBar, type QuestionType } from './AgentReplyBar';
 
 interface WorkflowEditorProps {
   workflow?: Workflow;
@@ -261,12 +261,15 @@ function NodeExecutionDataPanel({
           icon={<MessageSquare className="h-3.5 w-3.5" />}
           accent="emerald"
         >
-          <div className="text-sm leading-relaxed text-foreground/90 mt-2 prose prose-sm dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted/40 max-w-none break-words">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {agentText}
-            </ReactMarkdown>
-          </div>
-
+          {isJSON(agentText) ? (
+            <StructuredDataViewer data={tryParseJSON(agentText)} className="mt-2 min-h-[120px]" />
+          ) : (
+            <div className="text-sm leading-relaxed text-foreground/90 mt-2 prose prose-sm dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted/40 max-w-none break-words">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {agentText}
+              </ReactMarkdown>
+            </div>
+          )}
         </Section>
       )}
 
@@ -675,22 +678,41 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const waitingNodeId = waitingNodeEntry?.[0];
   const waitingNodeData = waitingNodeId ? nodeData[waitingNodeId] : null;
 
-  let waitingAgentText: string | undefined;
+  let waitingAgentText: string | undefined;   // clean body shown above the input bar
+  let waitingPrompt: string | undefined;        // short question used as header
   let waitingProposals: string[] | undefined;
-  let waitingMultiSelect = true;
+  let waitingQuestionType: QuestionType | undefined;
 
   if (waitingNodeData) {
-    const rawOutput = (waitingNodeData as Record<string, unknown>).output;
-    const waitingOutput = deepParse(rawOutput) as Record<string, unknown> | string | undefined;
+    const raw = waitingNodeData as Record<string, unknown>;
 
-    if (typeof waitingOutput === 'string') {
-      waitingAgentText = waitingOutput;
-    } else if (typeof waitingOutput === 'object' && waitingOutput !== null) {
-      waitingAgentText = typeof waitingOutput.output === 'string' ? waitingOutput.output :
-                         typeof waitingOutput.text === 'string' ? waitingOutput.text : undefined;
-      waitingProposals = waitingOutput.proposals as string[] | undefined;
-      if (waitingOutput.multiSelect !== undefined) {
-        waitingMultiSelect = waitingOutput.multiSelect as boolean;
+    // Backend sends these directly at the top-level node-update payload
+    if (typeof raw.agentMessage === 'string') waitingAgentText = raw.agentMessage; // clean body text
+    if (typeof raw.prompt === 'string') waitingPrompt = raw.prompt;               // short question
+    if (Array.isArray(raw.proposals)) waitingProposals = raw.proposals as string[];
+    if (typeof raw.questionType === 'string') waitingQuestionType = raw.questionType as QuestionType;
+
+    // If agentMessage was not sent, fall back to prompt as body text
+    if (!waitingAgentText && waitingPrompt) waitingAgentText = waitingPrompt;
+
+    // Fallback: extract from output field (older format)
+    if (!waitingAgentText) {
+      const rawOutput = raw.output;
+      const waitingOutput = deepParse(rawOutput) as Record<string, unknown> | string | undefined;
+
+      if (typeof waitingOutput === 'string') {
+        waitingAgentText = waitingOutput;
+      } else if (typeof waitingOutput === 'object' && waitingOutput !== null) {
+        waitingAgentText =
+          typeof waitingOutput.output === 'string'
+            ? waitingOutput.output
+            : typeof waitingOutput.text === 'string'
+              ? waitingOutput.text
+              : undefined;
+        if (!waitingProposals && Array.isArray(waitingOutput.proposals))
+          waitingProposals = waitingOutput.proposals as string[];
+        if (!waitingQuestionType && typeof waitingOutput.questionType === 'string')
+          waitingQuestionType = waitingOutput.questionType as QuestionType;
       }
     }
   }
@@ -700,27 +722,55 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
       {/* ─── Global Overlay for WAITING_INPUT ─── */}
       {waitingNodeId && activeExecution && (
         <div className="absolute inset-0 z-100 flex items-center justify-center bg-black/20 backdrop-blur-sm pointer-events-auto transition-opacity animate-in fade-in">
-          <Card className="w-[500px] shadow-2xl backdrop-blur-xl bg-white/90 dark:bg-black/90 border-border/50 animate-in zoom-in-95">
+          <Card
+            className={cn(
+              'w-[560px] shadow-2xl backdrop-blur-xl border-border/50 animate-in zoom-in-95',
+              waitingQuestionType === 'danger_choice'
+                ? 'bg-white/95 dark:bg-black/95 border-red-500/30'
+                : 'bg-white/90 dark:bg-black/90',
+            )}
+          >
             <CardHeader className="pb-2 border-b border-border/50">
-              <CardTitle className="flex items-center gap-2 text-blue-500">
-                <MessageCircleQuestion className="h-5 w-5" />
-                Input Required
+              <CardTitle
+                className={cn(
+                  'flex items-center gap-2 text-sm',
+                  waitingQuestionType === 'danger_choice' ? 'text-red-500' : 'text-blue-500',
+                )}
+              >
+                <MessageCircleQuestion className="h-4 w-4 shrink-0" />
+                {waitingQuestionType === 'danger_choice'
+                  ? 'Dangerous Action — Confirmation Required'
+                  : 'Agent Needs Your Input'}
               </CardTitle>
+              {/* Short question as subtitle */}
+              {waitingPrompt && (
+                <p className={cn(
+                  'text-sm font-semibold mt-1 leading-snug',
+                  waitingQuestionType === 'danger_choice' ? 'text-red-600 dark:text-red-400' : 'text-foreground',
+                )}>
+                  {waitingPrompt}
+                </p>
+              )}
             </CardHeader>
-            <CardContent className="pt-4 max-h-[70vh] overflow-y-auto">
-              {waitingAgentText && (
-                <div className="text-sm leading-relaxed text-foreground/90 mb-4 prose prose-sm dark:prose-invert max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {waitingAgentText}
-                  </ReactMarkdown>
-                </div>
+            <CardContent className="pt-4 max-h-[70vh] overflow-y-auto space-y-3">
+              {/* Agent body text (explanation above the question) */}
+              {waitingAgentText && waitingAgentText !== waitingPrompt && (
+                isJSON(waitingAgentText) ? (
+                  <StructuredDataViewer data={tryParseJSON(waitingAgentText)} className="min-h-[80px]" />
+                ) : (
+                  <div className="text-sm leading-relaxed text-foreground/80 prose prose-sm dark:prose-invert max-w-none border-l-2 border-border/60 pl-3">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {waitingAgentText}
+                    </ReactMarkdown>
+                  </div>
+                )
               )}
               <AgentReplyBar
                 nodeId={waitingNodeId}
                 executionId={activeExecution.id}
                 agentText={waitingAgentText}
                 externalProposals={waitingProposals}
-                multiSelect={waitingMultiSelect}
+                questionType={waitingQuestionType}
               />
             </CardContent>
           </Card>
