@@ -34,7 +34,7 @@ const EMPTY_SESSION: LocalSession = {
 
 // ─── Message bubble ────────────────────────────────────────────────────────
 
-function MessageBubble({ msg, isLast }: { msg: AiMessage; isLast: boolean }) {
+function MessageBubble({ msg }: { msg: AiMessage }) {
   const isUser = msg.role === 'user';
   const [defOpen, setDefOpen] = useState(false);
 
@@ -309,7 +309,7 @@ export function WorkflowAiPanel({
             </div>
           ) : (
             session.messages.map((msg, i) => (
-              <MessageBubble key={i} msg={msg} isLast={i === session.messages.length - 1} />
+              <MessageBubble key={i} msg={msg} />
             ))
           )}
 

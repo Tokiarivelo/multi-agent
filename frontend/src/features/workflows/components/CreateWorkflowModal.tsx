@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bot, Pencil, Send, RefreshCw, Sparkles, CheckCheck } from 'lucide-react';
+import { Pencil, Send, RefreshCw, Sparkles, CheckCheck } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
