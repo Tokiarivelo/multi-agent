@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Send, RefreshCw, Sparkles, CheckCheck } from 'lucide-react';
+import { Pencil, Send, RefreshCw, Sparkles, CheckCheck, Bot, Wrench } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -112,8 +112,10 @@ function AiTab({
   const [prompt, setPrompt] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingPhase, setLoadingPhase] = useState<'designing' | 'provisioning'>('designing');
   const [result, setResult] = useState<AiWorkflowResult | null>(null);
   const [messages, setMessages] = useState<Array<{ role: string; content: string; timestamp: string }>>([]);
+
 
   const suggestions = [
     'Automated code review and testing pipeline',
@@ -128,10 +130,14 @@ function AiTab({
     const userPrompt = prompt.trim();
     setPrompt('');
     setIsLoading(true);
+    setLoadingPhase('designing');
     setMessages((prev) => [
       ...prev,
       { role: 'user', content: userPrompt, timestamp: new Date().toISOString() },
     ]);
+
+    // Switch to provisioning phase after a brief delay to indicate the 2nd step
+    const phaseTimer = setTimeout(() => setLoadingPhase('provisioning'), 4000);
 
     try {
       const res = await workflowsApi.generateWithAi({
@@ -142,11 +148,24 @@ function AiTab({
       setSessionId(res.sessionId);
       setResult(res);
       setMessages(res.history);
+
+      // Surface provisioning summary as a toast
+      const agentCount = res.provisionedResources?.agents?.length ?? 0;
+      const toolCount = res.provisionedResources?.tools?.length ?? 0;
+      if (agentCount > 0 || toolCount > 0) {
+        const parts = [
+          agentCount > 0 && `${agentCount} agent${agentCount > 1 ? 's' : ''}`,
+          toolCount > 0 && `${toolCount} tool${toolCount > 1 ? 's' : ''}`,
+        ].filter(Boolean).join(' & ');
+        toast.success(t('workflows.ai.provisionedToast', `Auto-created ${parts} for this workflow`));
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('workflows.ai.error', 'Generation failed'));
       setMessages((prev) => prev.slice(0, -1)); // remove optimistic user message
     } finally {
+      clearTimeout(phaseTimer);
       setIsLoading(false);
+      setLoadingPhase('designing');
     }
   }, [prompt, modelId, sessionId, isLoading, t]);
 
@@ -199,7 +218,11 @@ function AiTab({
           {isLoading && (
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <RefreshCw className="h-3 w-3 animate-spin" />
-              <span className="text-xs">{t('workflows.ai.thinking', 'Thinking…')}</span>
+              <span className="text-xs">
+                {loadingPhase === 'provisioning'
+                  ? t('workflows.ai.provisioning', 'Provisioning agents & tools…')
+                  : t('workflows.ai.thinking', 'Designing workflow…')}
+              </span>
             </div>
           )}
         </div>
@@ -218,6 +241,34 @@ function AiTab({
           </div>
           {result.description && (
             <p className="text-xs text-muted-foreground">{result.description}</p>
+          )}
+
+          {/* Provisioning summary */}
+          {((result.provisionedResources?.agents?.length ?? 0) > 0 ||
+            (result.provisionedResources?.tools?.length ?? 0) > 0) && (
+            <div className="mt-1 pt-2 border-t border-violet-500/20 space-y-1.5">
+              <p className="text-[11px] font-semibold text-violet-500 uppercase tracking-wide">
+                {t('workflows.ai.autoCreated', 'Auto-created resources')}
+              </p>
+              {result.provisionedResources?.agents?.map((a) => (
+                <div key={a.id} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <Bot className="h-3 w-3 text-violet-400 shrink-0" />
+                  <span className="truncate">{a.name}</span>
+                  <span className="ml-auto text-[10px] text-violet-400/60 font-mono shrink-0">
+                    {t('workflows.ai.agent', 'Agent')}
+                  </span>
+                </div>
+              ))}
+              {result.provisionedResources?.tools?.map((tool) => (
+                <div key={tool.id} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <Wrench className="h-3 w-3 text-amber-400 shrink-0" />
+                  <span className="truncate">{tool.name}</span>
+                  <span className="ml-auto text-[10px] text-amber-400/60 font-mono shrink-0">
+                    {t('workflows.ai.tool', 'Tool')}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

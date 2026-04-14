@@ -133,9 +133,17 @@ function toFlowNode(
 ): FlowNode {
   const raw = n as unknown as Record<string, unknown>;
   const meta = getNodeTypeMeta(raw.type as string);
-  const config =
-    (raw.config as Record<string, unknown>) ?? (raw.data as Record<string, unknown>) ?? {};
-  const customName = raw.customName as string | undefined;
+
+  // Support two node shapes:
+  //   1. Manually-added: { id, type, config, customName, position }
+  //   2. AI-generated:   { id, type, data: { config, customName }, position }
+  const dataField = raw.data as Record<string, unknown> | undefined;
+  const config: Record<string, unknown> =
+    (raw.config as Record<string, unknown> | undefined) ??
+    (dataField?.config as Record<string, unknown> | undefined) ??
+    (typeof dataField === 'object' && dataField !== null ? dataField : {});
+  const customName: string | undefined =
+    (raw.customName as string | undefined) ?? (dataField?.customName as string | undefined);
   const { label, labelFr } = resolveNodeLabel(
     raw.type as string,
     config,

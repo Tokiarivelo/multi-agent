@@ -25,6 +25,11 @@ export interface AiWorkflowResult {
   name?: string;
   description?: string;
   history: AiMessage[];
+  /** Resources auto-created during AI generation */
+  provisionedResources?: {
+    agents: Array<{ name: string; id: string }>;
+    tools: Array<{ name: string; id: string }>;
+  };
 }
 
 export interface WorkflowExecution {

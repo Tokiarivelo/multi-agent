@@ -32,7 +32,10 @@ export class WorkflowAiController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Generate a new workflow from a natural-language prompt' })
   @ApiResponse({ status: 200, description: 'Generated workflow definition with session context' })
-  async generate(@Body() body: { prompt: string; modelId: string; sessionId?: string }) {
+  async generate(
+    @Body() body: { prompt: string; modelId: string; sessionId?: string },
+    @Query('userId') userId?: string,
+  ) {
     if (!body.prompt?.trim()) throw new BadRequestException('prompt is required');
     if (!body.modelId?.trim()) throw new BadRequestException('modelId is required');
 
@@ -41,6 +44,7 @@ export class WorkflowAiController {
       prompt: body.prompt,
       modelId: body.modelId,
       sessionId: body.sessionId,
+      userId: userId ?? 'system',
     });
   }
 
@@ -54,6 +58,7 @@ export class WorkflowAiController {
   async edit(
     @Param('workflowId') workflowId: string,
     @Body() body: { prompt: string; modelId: string; sessionId?: string },
+    @Query('userId') userId?: string,
   ) {
     if (!body.prompt?.trim()) throw new BadRequestException('prompt is required');
     if (!body.modelId?.trim()) throw new BadRequestException('modelId is required');
@@ -68,6 +73,7 @@ export class WorkflowAiController {
       modelId: body.modelId,
       sessionId: body.sessionId,
       currentDefinition: workflow.definition,
+      userId: userId ?? 'system',
     });
   }
 

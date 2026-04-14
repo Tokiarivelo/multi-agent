@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
+import { ResourceProvisioningService } from './resource-provisioning.service';
 
 export interface AiMessage {
   role: 'user' | 'assistant';
@@ -41,6 +42,11 @@ export interface WorkflowAiResult {
   name?: string;
   description?: string;
   history: AiMessage[];
+  /** Resources that were automatically created during provisioning */
+  provisionedResources?: {
+    agents: Array<{ name: string; id: string }>;
+    tools: Array<{ name: string; id: string }>;
+  };
 }
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
@@ -63,14 +69,21 @@ A workflow definition has this structure:
 Available node types:
 - START: Entry point (exactly 1 required, no config needed)
 - END: Exit point (at least 1 required, no config needed)
-- AGENT: Run an AI agent — config: { agentId: "", prompt: "optional prompt template using {{input.field}}" }
+- AGENT: Run an AI agent — config: { agentName: "Descriptive Agent Name", prompt: "optional prompt template using {{input.field}}" }
+  → Use agentName (a human-readable name describing what the agent does), NOT agentId
 - PROMPT: Transform/template input — config: { template: "Hello {{input.name}}, process: {{input.data}}" }
 - TEXT: Inject static text — config: { text: "your static content here" }
 - CONDITIONAL: Branch logic — config: { condition: "output.score > 0.5" } (JS boolean expression)
 - TRANSFORM: Data transformation — config: { transform: "return { result: input.data, count: input.items.length }" } (JS function body)
 - LOOP: Repeat steps — config: { maxIterations: 5, condition: "output.done !== true" }
-- TOOL: Execute a tool — config: { toolId: "" }
+- TOOL: Execute a tool — config: { toolName: "Descriptive Tool Name", description: "What this tool does" }
+  → Use toolName (a human-readable name), NOT toolId
 - SUBWORKFLOW: Run another workflow — config: { workflowId: "" }
+
+IMPORTANT for AGENT and TOOL nodes:
+- NEVER use agentId or toolId — always use agentName and toolName respectively
+- Choose descriptive, action-oriented names (e.g. "Code Review Agent", "Email Sender Tool")
+- Each unique agent or tool in the workflow MUST have a unique, specific name
 
 WorkflowNode schema:
 {
@@ -92,10 +105,12 @@ WorkflowEdge schema:
 }
 
 Layout rules:
-- Place START at position (0, 0)
-- Space nodes 250px apart horizontally for linear flows
-- For branching, offset branches ±150px vertically
-- END nodes go last, furthest right
+- Place START at position (100, 0)
+- Space nodes 200px apart VERTICALLY for linear flows (increase y by 200 each step)
+- Keep x centered around 300 for the main branch
+- For branching (CONDITIONAL), offset child branches ±250px horizontally while still descending vertically
+- END nodes go last at the bottom (largest y value)
+- Example main chain positions: START(100,0) → Node1(100,200) → Node2(100,400) → END(100,600)
 
 Validation rules (CRITICAL):
 - Exactly 1 START node required
@@ -120,6 +135,7 @@ export class WorkflowAiService {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly provisioningService: ResourceProvisioningService,
   ) {
     this.agentServiceUrl = this.configService.get<string>('AGENT_SERVICE_URL')!;
   }
@@ -130,6 +146,7 @@ export class WorkflowAiService {
     prompt: string;
     modelId: string;
     sessionId?: string;
+    userId?: string;
   }): Promise<WorkflowAiResult> {
     const session = this.getOrCreateSession(opts.sessionId, undefined, opts.modelId);
 
@@ -151,13 +168,23 @@ export class WorkflowAiService {
     });
     session.updatedAt = new Date().toISOString();
 
+    const rawDefinition = parsed?.definition as GeneratedDefinition | undefined;
+    let provisionedDefinition: GeneratedDefinition | undefined;
+    let provisionedResources: WorkflowAiResult['provisionedResources'];
+    if (rawDefinition) {
+      const provisioned = await this.provisionResources(rawDefinition, opts.modelId, opts.userId ?? 'system');
+      provisionedDefinition = provisioned.definition;
+      provisionedResources = provisioned.provisionedResources;
+    }
+
     return {
       sessionId: session.id,
       message: parsed?.message ?? 'Workflow generated successfully',
-      definition: parsed?.definition as GeneratedDefinition | undefined,
+      definition: provisionedDefinition,
       name: parsed?.name,
       description: parsed?.description,
       history: session.messages,
+      provisionedResources,
     };
   }
 
@@ -169,6 +196,7 @@ export class WorkflowAiService {
     modelId: string;
     sessionId?: string;
     currentDefinition: unknown;
+    userId?: string;
   }): Promise<WorkflowAiResult> {
     const session = this.getOrCreateSession(opts.sessionId, opts.workflowId, opts.modelId);
 
@@ -195,13 +223,23 @@ export class WorkflowAiService {
     });
     session.updatedAt = new Date().toISOString();
 
+    const rawDefinition = parsed?.definition as GeneratedDefinition | undefined;
+    let provisionedDefinition: GeneratedDefinition | undefined;
+    let provisionedResources: WorkflowAiResult['provisionedResources'];
+    if (rawDefinition) {
+      const provisioned = await this.provisionResources(rawDefinition, opts.modelId, opts.userId ?? 'system');
+      provisionedDefinition = provisioned.definition;
+      provisionedResources = provisioned.provisionedResources;
+    }
+
     return {
       sessionId: session.id,
       message: parsed?.message ?? 'Workflow updated successfully',
-      definition: parsed?.definition as GeneratedDefinition | undefined,
+      definition: provisionedDefinition,
       name: parsed?.name,
       description: parsed?.description,
       history: session.messages,
+      provisionedResources,
     };
   }
 
@@ -218,6 +256,94 @@ export class WorkflowAiService {
 
   deleteSession(sessionId: string): void {
     this.sessions.delete(sessionId);
+  }
+
+  // ─── Resource provisioning ───────────────────────────────────────────────
+
+  /**
+   * Scans all AGENT and TOOL nodes in the definition.
+   * For each one that has agentName / toolName (but no real agentId / toolId),
+   * it calls the provisioning service to find-or-create the resource and
+   * patches the node config with the real ID.
+   *
+   * The modelId used for the workflow generation is reused as the default
+   * model for auto-created agents.
+   */
+  private async provisionResources(
+    definition: GeneratedDefinition,
+    modelId: string,
+    userId: string,
+  ): Promise<{
+    definition: GeneratedDefinition;
+    provisionedResources: {
+      agents: Array<{ name: string; id: string }>;
+      tools: Array<{ name: string; id: string }>;
+    };
+  }> {
+    const provisionedResources = { agents: [] as Array<{ name: string; id: string }>, tools: [] as Array<{ name: string; id: string }> };
+
+    if (!definition.nodes || definition.nodes.length === 0) {
+      return { definition, provisionedResources };
+    }
+
+    const patchedNodes = await Promise.all(
+      definition.nodes.map(async (node: any) => {
+        const raw = node as Record<string, unknown>;
+        const data = (raw.data as Record<string, unknown>) ?? {};
+        const config = (raw.config as Record<string, unknown>) ??
+          (data.config as Record<string, unknown>) ?? {};
+        const type = raw.type as string;
+
+        if (type === 'AGENT') {
+          const agentName = (config.agentName as string | undefined) ||
+            (raw.customName as string | undefined) ||
+            (data.customName as string | undefined);
+
+          if (agentName && !config.agentId) {
+            const agentId = await this.provisioningService.findOrCreateAgent({
+              name: agentName,
+              description: `Agent for workflow step: ${agentName}`,
+              modelId,
+              systemPrompt: config.systemPrompt as string | undefined,
+              userId,
+            });
+
+            provisionedResources.agents.push({ name: agentName, id: agentId });
+            const newConfig = { ...config, agentId, agentName: undefined };
+            // Support both flat-config and nested-data formats
+            if (raw.config !== undefined) {
+              return { ...raw, config: newConfig };
+            }
+            return { ...raw, data: { ...data, config: newConfig } };
+          }
+        }
+
+        if (type === 'TOOL' || type === 'MCP') {
+          const toolName = (config.toolName as string | undefined) ||
+            (raw.customName as string | undefined) ||
+            (data.customName as string | undefined);
+
+          if (toolName && !config.toolId) {
+            const toolId = await this.provisioningService.findOrCreateTool({
+              name: toolName,
+              description: config.description as string | undefined,
+              category: type === 'MCP' ? 'MCP' : 'CUSTOM',
+            });
+
+            provisionedResources.tools.push({ name: toolName, id: toolId });
+            const newConfig = { ...config, toolId, toolName: undefined };
+            if (raw.config !== undefined) {
+              return { ...raw, config: newConfig };
+            }
+            return { ...raw, data: { ...data, config: newConfig } };
+          }
+        }
+
+        return node;
+      }),
+    );
+
+    return { definition: { ...definition, nodes: patchedNodes }, provisionedResources };
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────

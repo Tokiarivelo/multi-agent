@@ -30,6 +30,7 @@ import { HealthController } from './presentation/controllers/health.controller';
 import { InternalController } from './presentation/controllers/internal.controller';
 import { WorkflowGateway } from './presentation/gateways/workflow.gateway';
 import { WorkflowAiService } from './infrastructure/external/workflow-ai.service';
+import { ResourceProvisioningService } from './infrastructure/external/resource-provisioning.service';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { WorkflowAiService } from './infrastructure/external/workflow-ai.service
     AgentClientService,
     ToolClientService,
     WorkflowAiService,
+    ResourceProvisioningService,
     WorkflowGateway,
 
     // Use Cases
