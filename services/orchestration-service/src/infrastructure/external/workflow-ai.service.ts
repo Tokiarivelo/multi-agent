@@ -172,7 +172,11 @@ export class WorkflowAiService {
     let provisionedDefinition: GeneratedDefinition | undefined;
     let provisionedResources: WorkflowAiResult['provisionedResources'];
     if (rawDefinition) {
-      const provisioned = await this.provisionResources(rawDefinition, opts.modelId, opts.userId ?? 'system');
+      const provisioned = await this.provisionResources(
+        rawDefinition,
+        opts.modelId,
+        opts.userId ?? 'system',
+      );
       provisionedDefinition = provisioned.definition;
       provisionedResources = provisioned.provisionedResources;
     }
@@ -227,7 +231,11 @@ export class WorkflowAiService {
     let provisionedDefinition: GeneratedDefinition | undefined;
     let provisionedResources: WorkflowAiResult['provisionedResources'];
     if (rawDefinition) {
-      const provisioned = await this.provisionResources(rawDefinition, opts.modelId, opts.userId ?? 'system');
+      const provisioned = await this.provisionResources(
+        rawDefinition,
+        opts.modelId,
+        opts.userId ?? 'system',
+      );
       provisionedDefinition = provisioned.definition;
       provisionedResources = provisioned.provisionedResources;
     }
@@ -280,7 +288,10 @@ export class WorkflowAiService {
       tools: Array<{ name: string; id: string }>;
     };
   }> {
-    const provisionedResources = { agents: [] as Array<{ name: string; id: string }>, tools: [] as Array<{ name: string; id: string }> };
+    const provisionedResources = {
+      agents: [] as Array<{ name: string; id: string }>,
+      tools: [] as Array<{ name: string; id: string }>,
+    };
 
     if (!definition.nodes || definition.nodes.length === 0) {
       return { definition, provisionedResources };
@@ -290,12 +301,13 @@ export class WorkflowAiService {
       definition.nodes.map(async (node: any) => {
         const raw = node as Record<string, unknown>;
         const data = (raw.data as Record<string, unknown>) ?? {};
-        const config = (raw.config as Record<string, unknown>) ??
-          (data.config as Record<string, unknown>) ?? {};
+        const config =
+          (raw.config as Record<string, unknown>) ?? (data.config as Record<string, unknown>) ?? {};
         const type = raw.type as string;
 
         if (type === 'AGENT') {
-          const agentName = (config.agentName as string | undefined) ||
+          const agentName =
+            (config.agentName as string | undefined) ||
             (raw.customName as string | undefined) ||
             (data.customName as string | undefined);
 
@@ -319,7 +331,8 @@ export class WorkflowAiService {
         }
 
         if (type === 'TOOL' || type === 'MCP') {
-          const toolName = (config.toolName as string | undefined) ||
+          const toolName =
+            (config.toolName as string | undefined) ||
             (raw.customName as string | undefined) ||
             (data.customName as string | undefined);
 
