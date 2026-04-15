@@ -131,6 +131,7 @@ export interface Tool {
   isBuiltIn: boolean;
   mcpConfig?: McpConfig;
   status?: string;
+  repoFullName?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -149,6 +150,28 @@ export interface ToolExecutionResult {
   error?: string;
   executionTime: number;
   memoryUsed?: number;
+}
+
+// GitHub Types
+export interface GitHubRepo {
+  id: number;
+  name: string;
+  fullName: string;
+  description: string | null;
+  private: boolean;
+  htmlUrl: string;
+  language: string | null;
+  stargazersCount: number;
+  updatedAt: string;
+  defaultBranch: string;
+  fork: boolean;
+}
+
+export interface GitHubConnection {
+  connected: boolean;
+  accessToken?: string;
+  login?: string;
+  avatarUrl?: string;
 }
 
 // End Tool Types

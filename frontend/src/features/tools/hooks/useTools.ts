@@ -27,6 +27,29 @@ export function useCreateTool() {
   });
 }
 
+export function useUpdateTool() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Partial<import('@/types').Tool> }) =>
+      toolsApi.update(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tools'] });
+    },
+  });
+}
+
+export function useDeleteTool() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => toolsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tools'] });
+    },
+  });
+}
+
 export function useExecuteTool() {
   return useMutation({
     mutationFn: ({

@@ -60,7 +60,6 @@ import {
   Workflow as WorkflowIcon,
   ExternalLink,
   MessageCircleQuestion,
-  Sparkles,
   User,
   GitCommitHorizontal,
 } from 'lucide-react';
@@ -74,7 +73,7 @@ import { useExecution } from '../hooks/useWorkflows';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { AgentReplyBar } from './AgentReplyBar';
+import { AgentReplyBar, QuestionType } from './AgentReplyBar';
 import { StructuredDataViewer, deepParse } from './StructuredDataViewer';
 
 function isJSON(value: string): boolean {
@@ -728,7 +727,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const waitingPrompt = (waitingNodeRaw?.prompt as string | undefined) ?? null;
   const waitingAgentText = (waitingNodeRaw?.agentMessage as string | undefined) ?? null;
   const waitingProposals = (waitingNodeRaw?.proposals as string[] | undefined) ?? [];
-  const waitingQuestionType = (waitingNodeRaw?.questionType as string | undefined) ?? 'custom';
+  const waitingQuestionType = (waitingNodeRaw?.questionType as QuestionType | undefined) ?? 'custom';
 
   const [activeExecution, setActiveExecution] = useState<WorkflowExecution | null>(null);
 
@@ -958,9 +957,9 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
                 )
               )}
               <AgentReplyBar
-                nodeId={waitingNodeId}
+                nodeId={waitingNodeId ?? undefined}
                 executionId={activeExecution?.id ?? activeExecutionId}
-                agentText={waitingAgentText}
+                agentText={waitingAgentText ?? undefined}
                 externalProposals={waitingProposals}
                 questionType={waitingQuestionType}
               />

@@ -29,6 +29,7 @@ import { WorkspaceController } from './presentation/controllers/workspace.contro
 import { HealthController } from './presentation/controllers/health.controller';
 import { InternalController } from './presentation/controllers/internal.controller';
 import { WorkflowGateway } from './presentation/gateways/workflow.gateway';
+import { WorkflowAiController } from './presentation/controllers/workflow-ai.controller';
 import { WorkflowAiService } from './infrastructure/external/workflow-ai.service';
 import { ResourceProvisioningService } from './infrastructure/external/resource-provisioning.service';
 
@@ -44,7 +45,13 @@ import { ResourceProvisioningService } from './infrastructure/external/resource-
       inject: [ConfigService],
     }),
   ],
-  controllers: [WorkflowController, WorkspaceController, HealthController, InternalController],
+  controllers: [
+    WorkflowController,
+    WorkflowAiController,
+    WorkspaceController,
+    HealthController,
+    InternalController,
+  ],
   providers: [
     PrismaService,
     WorkflowExecutionService,

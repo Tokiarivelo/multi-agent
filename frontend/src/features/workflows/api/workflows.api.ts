@@ -246,6 +246,21 @@ export const workflowsApi = {
     return data;
   },
 
+  editWithAi: async (
+    workflowId: string,
+    payload: { prompt: string; modelId: string; sessionId?: string },
+  ): Promise<AiWorkflowResult> => {
+    const { data } = await apiClient.post<AiWorkflowResult>(
+      `/api/workflows/${workflowId}/ai/edit`,
+      payload,
+    );
+    return data;
+  },
+
+  deleteAiSession: async (sessionId: string): Promise<void> => {
+    await apiClient.delete(`/api/workflows/ai/sessions/${sessionId}`);
+  },
+
   // ─── Files ────────────────────────────────────────────────────────
 
   uploadFile: async (
