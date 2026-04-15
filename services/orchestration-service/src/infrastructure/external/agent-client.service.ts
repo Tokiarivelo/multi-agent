@@ -44,15 +44,19 @@ export class AgentClientService {
       this.logger.log(`Executing agent ${request.agentId}`);
 
       const response = await firstValueFrom(
-        this.httpService.post(`${this.baseUrl}/api/agents/${request.agentId}/execute`, {
-          input: typeof request.input === 'string' ? request.input : JSON.stringify(request.input),
-          metadata: {
-            ...request.config,
-            toolIds: request.toolIds ?? [],
-            subAgents: request.subAgents ?? [],
-            maxTokens: request.maxTokens,
+        this.httpService.post(
+          `${this.baseUrl}/api/agents/${request.agentId}/execute`,
+          {
+            input: typeof request.input === 'string' ? request.input : JSON.stringify(request.input),
+            metadata: {
+              ...request.config,
+              toolIds: request.toolIds ?? [],
+              subAgents: request.subAgents ?? [],
+              maxTokens: request.maxTokens,
+            },
           },
-        }),
+          { timeout: 600_000 }, // 10 min — agent runs can involve multi-step LLM + tool calls
+        ),
       );
 
       this.logger.log(`Agent ${request.agentId} executed successfully`);
