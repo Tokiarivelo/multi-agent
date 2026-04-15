@@ -30,6 +30,15 @@ export interface NodeTokenProgress {
   iteration: number;
 }
 
+/** One snapshot captured from a single node:update WS event */
+export interface NodeTurn {
+  status: NodeStatus | string;
+  /** ISO timestamp from the WS event */
+  timestamp: string;
+  /** Raw event data payload (input, output, prompt, agentMessage, userResponse, etc.) */
+  data: unknown;
+}
+
 interface WorkflowExecutionState {
   activeExecutionId: string | null;
   executionStatus: string | null;
@@ -37,6 +46,8 @@ interface WorkflowExecutionState {
   selectedNodeName: string | null;
   nodeStatuses: Record<string, NodeStatus>;
   nodeData: Record<string, unknown>;
+  /** Ordered list of every WS event received for each node this execution */
+  nodeTurns: Record<string, NodeTurn[]>;
   /** Live token counts pushed during RUNNING state, keyed by nodeId */
   nodeTokenProgress: Record<string, NodeTokenProgress>;
 
@@ -49,6 +60,7 @@ interface WorkflowExecutionState {
   setExecutionStatus: (status: string | null) => void;
   setNodeStatus: (nodeId: string, status: NodeStatus) => void;
   setNodeData: (nodeId: string, data: unknown) => void;
+  appendNodeTurn: (nodeId: string, turn: NodeTurn) => void;
   setNodeTokenProgress: (nodeId: string, progress: NodeTokenProgress) => void;
   clearExecution: () => void;
 
@@ -65,6 +77,7 @@ export const useWorkflowExecutionStore = create<WorkflowExecutionState>((set) =>
   selectedNodeName: null,
   nodeStatuses: {},
   nodeData: {},
+  nodeTurns: {},
   nodeTokenProgress: {},
   subExecutions: [],
 
@@ -76,6 +89,13 @@ export const useWorkflowExecutionStore = create<WorkflowExecutionState>((set) =>
     set((state) => ({ nodeStatuses: { ...state.nodeStatuses, [nodeId]: status } })),
   setNodeData: (nodeId, data) =>
     set((state) => ({ nodeData: { ...state.nodeData, [nodeId]: data } })),
+  appendNodeTurn: (nodeId, turn) =>
+    set((state) => ({
+      nodeTurns: {
+        ...state.nodeTurns,
+        [nodeId]: [...(state.nodeTurns[nodeId] ?? []), turn],
+      },
+    })),
   setNodeTokenProgress: (nodeId, progress) =>
     set((state) => ({ nodeTokenProgress: { ...state.nodeTokenProgress, [nodeId]: progress } })),
   clearExecution: () =>
@@ -84,6 +104,7 @@ export const useWorkflowExecutionStore = create<WorkflowExecutionState>((set) =>
       executionStatus: null,
       nodeStatuses: {},
       nodeData: {},
+      nodeTurns: {},
       nodeTokenProgress: {},
       selectedNodeId: null,
       selectedNodeName: null,

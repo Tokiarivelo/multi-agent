@@ -347,12 +347,12 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
         // ── Smart Ask-user: auto-detect __ASK_USER__ sentinel ──────────────
         //
-        // The agent-service stores its output as a JSON-encoded STRING inside
-        //   agentResult.output.output  (a nested stringified JSON).
+        // The agent embeds the sentinel ANYWHERE in its response text:
+        //   __ASK_USER__:{"question":"...","type":"...","choices":[...]}
         //
-        // The global system instruction (injected in execute-agent.use-case.ts)
-        // tells every agent to end its response with:
-        //   __ASK_USER__:{"question":"...","type":"...","choices":["..."]}
+        // Because the agent-service wraps output in multiple layers of
+        // JSON.stringify, we must deep-scan EVERY string value in the
+        // agentResult.output tree — not just the top-level fields.
         //
         // Detection is automatic — no node config flag required.
         if (execution) {
@@ -362,46 +362,58 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
             choices?: string[];
           }
 
-          let askUser: AskUserPayload | null = null;
-
-          // ── Step 1: resolve the agent's plain-text response ──────────────
-          // agentResult.output  → object { output: "<json-string>", tokens, … }
-          // agentResult.output.output → stringified JSON: { output: "<text>", … }
-          const outerObj = agentResult.output as Record<string, unknown> | null | undefined;
-
-          // Try to deep-parse the nested stringified JSON
-          let innerObj: Record<string, unknown> | null = null;
-          if (typeof outerObj?.output === 'string') {
-            try {
-              const parsed = JSON.parse(outerObj.output as string);
-              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                innerObj = parsed as Record<string, unknown>;
+          // ── Deep-scan helper ─────────────────────────────────────────────
+          // Recursively collects all strings reachable from `value`.
+          // If a string is valid JSON it is also recursed into.
+          const collectStrings = (value: unknown, depth = 0): string[] => {
+            if (depth > 8) return []; // guard against pathological nesting
+            if (typeof value === 'string') {
+              const strings: string[] = [value];
+              try {
+                const parsed: unknown = JSON.parse(value);
+                strings.push(...collectStrings(parsed, depth + 1));
+              } catch {
+                /* not JSON – ignore */
               }
-            } catch {
-              // outerObj.output is literal text, not a JSON string – that's fine
+              return strings;
             }
-          }
+            if (Array.isArray(value)) {
+              return value.flatMap((v) => collectStrings(v, depth + 1));
+            }
+            if (value !== null && typeof value === 'object') {
+              return Object.values(value as Record<string, unknown>).flatMap((v) =>
+                collectStrings(v, depth + 1),
+              );
+            }
+            return [];
+          };
 
-          // The plain text the agent actually wrote
-          const agentText: string =
-            typeof innerObj?.output === 'string'
-              ? innerObj.output
-              : typeof outerObj?.output === 'string'
-                ? outerObj.output
-                : typeof outerObj === 'string'
-                  ? (outerObj as unknown as string)
-                  : '';
+          // ── Step 1: Collect all text candidates ──────────────────────────
+          const allStrings = collectStrings(agentResult.output);
 
-          this.logger.debug(
-            `[ASK_USER] node=${node.id} agentText preview: ${agentText.slice(0, 200)}`,
-          );
+          this.logger.debug(`[ASK_USER] node=${node.id} scanning ${allStrings.length} string(s)`);
 
-          // ── Step 2: scan for the sentinel ────────────────────────────────
-          // Match __ASK_USER__:{...} – greedy, allowing multi-line JSON
-          const sentinelMatch = agentText.match(/__ASK_USER__:(\{[\s\S]*\})\s*$/);
-          if (sentinelMatch) {
+          // ── Step 2: Find the sentinel in any candidate string ────────────
+          // Lenient: sentinel can appear anywhere in the text (not just end).
+          // We pick the LAST occurrence in the deepest matching string so that
+          // a model that accidentally prints it twice still works correctly.
+          const SENTINEL_RE = /__ASK_USER__:(\{[\s\S]*?\})/g;
+
+          let askUser: AskUserPayload | null = null;
+          let sentinelSourceText = '';
+
+          for (const candidate of allStrings) {
+            let match: RegExpExecArray | null;
+            let lastMatch: RegExpExecArray | null = null;
+            // Reset regex per candidate
+            const re = new RegExp(SENTINEL_RE.source, 'g');
+            while ((match = re.exec(candidate)) !== null) {
+              lastMatch = match;
+            }
+            if (!lastMatch) continue;
+
             try {
-              const parsed = JSON.parse(sentinelMatch[1]) as Record<string, unknown>;
+              const parsed = JSON.parse(lastMatch[1]) as Record<string, unknown>;
               if (typeof parsed.question === 'string') {
                 askUser = {
                   question: parsed.question,
@@ -412,23 +424,77 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
                       : 'custom'),
                   choices: Array.isArray(parsed.choices) ? (parsed.choices as string[]) : undefined,
                 };
+                sentinelSourceText = candidate;
                 this.logger.log(
-                  `[ASK_USER] node=${node.id} detected question type=${askUser.type} choices=${askUser.choices?.length ?? 0}`,
+                  `[ASK_USER] node=${node.id} detected — type=${askUser.type} ` +
+                    `choices=${askUser.choices?.length ?? 0}`,
                 );
+                break; // use first matching candidate
               }
             } catch {
               this.logger.warn(
-                `AGENT node ${node.id}: failed to parse __ASK_USER__ sentinel JSON — value: ${sentinelMatch[1]}`,
+                `AGENT node ${node.id}: failed to parse __ASK_USER__ JSON — raw: ${lastMatch[1]}`,
               );
             }
           }
 
+          // ── Step 3: Heuristic fallback — bare question without sentinel ───
+          // Models sometimes ask a question in plain text without the sentinel.
+          // If no sentinel was found, resolve the deepest plain-text response
+          // and check whether it ends with a question (last non-empty line ends
+          // in '?').  If so, treat it as a `custom` question so the user can reply.
+          if (!askUser) {
+            // Resolve the actual plain-text agent output through the nesting layers:
+            //   agentResult.output  →  { output: "<json-string>", ... }  OR  "<json-string>"
+            //   inner parsed         →  { output: "<plain-text>", ... }
+            const resolveAgentText = (value: unknown): string => {
+              if (typeof value === 'string') {
+                try {
+                  return resolveAgentText(JSON.parse(value));
+                } catch {
+                  return value;
+                }
+              }
+              if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                const obj = value as Record<string, unknown>;
+                if (typeof obj.output === 'string') return resolveAgentText(obj.output);
+                if (typeof obj.text === 'string') return resolveAgentText(obj.text);
+                if (typeof obj.content === 'string') return resolveAgentText(obj.content);
+              }
+              return '';
+            };
+
+            const plainText = resolveAgentText(agentResult.output).trim();
+
+            if (plainText) {
+              // Extract the last non-empty line and check if it ends with '?'
+              const lines = plainText
+                .split('\n')
+                .map((l) => l.trim())
+                .filter(Boolean);
+              const lastLine = lines[lines.length - 1] ?? '';
+
+              if (lastLine.endsWith('?')) {
+                // Use the last question sentence as the question text
+                askUser = {
+                  question: lastLine,
+                  type: 'custom',
+                  choices: undefined,
+                };
+                sentinelSourceText = plainText;
+                this.logger.log(
+                  `[ASK_USER] node=${node.id} heuristic: bare question detected — ` +
+                    `"${lastLine.slice(0, 80)}"`,
+                );
+              }
+            }
+          }
           if (askUser) {
             const questionType = askUser.type ?? 'single_choice';
             const choices = askUser.choices ?? [];
 
-            // Strip sentinel from the visible text so the UI shows only the human message
-            const visibleText = agentText.replace(/__ASK_USER__:\{[\s\S]*\}\s*$/, '').trimEnd();
+            // Strip sentinel from the visible agent message
+            const visibleText = sentinelSourceText.replace(/__ASK_USER__:\{[\s\S]*?\}/g, '').trim();
 
             execution.waitNodeExecution(node.id);
             await this.updateExecution(execution);
@@ -440,9 +506,9 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
               'WAITING_INPUT',
               {
                 input,
-                output: agentResult.output, // keep original for UI display
+                output: agentResult.output,
                 prompt: askUser.question,
-                agentMessage: visibleText, // clean text without sentinel
+                agentMessage: visibleText,
                 proposals: choices,
                 questionType,
                 multiSelect: questionType === 'multiple_choice',
@@ -452,6 +518,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
             this.logger.log(
               `AGENT node ${node.id} paused — waiting for user input (type: ${questionType})`,
             );
+
             const userResponse = await new Promise<string>((resolve) => {
               this.promptEmitter.once(`resume_${execution.id}_${node.id}`, resolve);
             });

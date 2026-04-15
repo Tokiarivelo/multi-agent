@@ -3,7 +3,11 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
-import { ResourceProvisioningService } from './resource-provisioning.service';
+import {
+  ResourceProvisioningService,
+  AgentRecord,
+  ToolRecord,
+} from './resource-provisioning.service';
 
 export interface AiMessage {
   role: 'user' | 'assistant';
@@ -149,10 +153,19 @@ export class WorkflowAiService {
     userId?: string;
   }): Promise<WorkflowAiResult> {
     const session = this.getOrCreateSession(opts.sessionId, undefined, opts.modelId);
+    const userId = opts.userId ?? 'system';
 
+    // ── 1. Fetch existing catalog in parallel so the AI can reuse resources ──
+    const [existingAgents, existingTools] = await Promise.all([
+      this.provisioningService.listAllAgents(userId),
+      this.provisioningService.listAllTools(),
+    ]);
+
+    // ── 2. Compose user message with catalog context ──────────────────────────
+    const catalogContext = this.buildCatalogContext(existingAgents, existingTools);
     const userMessage: AiMessage = {
       role: 'user',
-      content: opts.prompt,
+      content: `${catalogContext}\n\nUser request: ${opts.prompt}`,
       timestamp: new Date().toISOString(),
     };
     session.messages.push(userMessage);
@@ -175,7 +188,9 @@ export class WorkflowAiService {
       const provisioned = await this.provisionResources(
         rawDefinition,
         opts.modelId,
-        opts.userId ?? 'system',
+        userId,
+        existingAgents,
+        existingTools,
       );
       provisionedDefinition = provisioned.definition;
       provisionedResources = provisioned.provisionedResources;
@@ -203,10 +218,20 @@ export class WorkflowAiService {
     userId?: string;
   }): Promise<WorkflowAiResult> {
     const session = this.getOrCreateSession(opts.sessionId, opts.workflowId, opts.modelId);
+    const userId = opts.userId ?? 'system';
 
+    // ── 1. Fetch existing catalog ──────────────────────────────────────────────
+    const [existingAgents, existingTools] = await Promise.all([
+      this.provisioningService.listAllAgents(userId),
+      this.provisioningService.listAllTools(),
+    ]);
+
+    // ── 2. Compose user message ──────────────────────────────────────────────
+    const catalogContext = this.buildCatalogContext(existingAgents, existingTools);
     const userContent =
       `Current workflow definition:\n` +
       JSON.stringify(opts.currentDefinition, null, 2) +
+      `\n\n${catalogContext}` +
       `\n\nUser request: ${opts.prompt}\n\n` +
       `Please apply the requested changes and return the complete updated workflow JSON.`;
 
@@ -234,7 +259,9 @@ export class WorkflowAiService {
       const provisioned = await this.provisionResources(
         rawDefinition,
         opts.modelId,
-        opts.userId ?? 'system',
+        userId,
+        existingAgents,
+        existingTools,
       );
       provisionedDefinition = provisioned.definition;
       provisionedResources = provisioned.provisionedResources;
@@ -281,6 +308,10 @@ export class WorkflowAiService {
     definition: GeneratedDefinition,
     modelId: string,
     userId: string,
+    /** Pre-fetched agent catalog — prevents redundant HTTP calls */
+    agentCatalog?: AgentRecord[],
+    /** Pre-fetched tool catalog */
+    toolCatalog?: ToolRecord[],
   ): Promise<{
     definition: GeneratedDefinition;
     provisionedResources: {
@@ -312,17 +343,22 @@ export class WorkflowAiService {
             (data.customName as string | undefined);
 
           if (agentName && !config.agentId) {
-            const agentId = await this.provisioningService.findOrCreateAgent({
-              name: agentName,
-              description: `Agent for workflow step: ${agentName}`,
-              modelId,
-              systemPrompt: config.systemPrompt as string | undefined,
-              userId,
-            });
+            const { id: agentId, wasCreated } = await this.provisioningService.resolveOrCreateAgent(
+              {
+                name: agentName,
+                description: `Agent for workflow step: ${agentName}`,
+                modelId,
+                systemPrompt: config.systemPrompt as string | undefined,
+                userId,
+                existingCatalog: agentCatalog,
+              },
+            );
 
-            provisionedResources.agents.push({ name: agentName, id: agentId });
+            // Only surface newly-created resources in the provisioning summary
+            if (wasCreated) {
+              provisionedResources.agents.push({ name: agentName, id: agentId });
+            }
             const newConfig = { ...config, agentId, agentName: undefined };
-            // Support both flat-config and nested-data formats
             if (raw.config !== undefined) {
               return { ...raw, config: newConfig };
             }
@@ -337,13 +373,16 @@ export class WorkflowAiService {
             (data.customName as string | undefined);
 
           if (toolName && !config.toolId) {
-            const toolId = await this.provisioningService.findOrCreateTool({
+            const { id: toolId, wasCreated } = await this.provisioningService.resolveOrCreateTool({
               name: toolName,
               description: config.description as string | undefined,
               category: type === 'MCP' ? 'MCP' : 'CUSTOM',
+              existingCatalog: toolCatalog,
             });
 
-            provisionedResources.tools.push({ name: toolName, id: toolId });
+            if (wasCreated) {
+              provisionedResources.tools.push({ name: toolName, id: toolId });
+            }
             const newConfig = { ...config, toolId, toolName: undefined };
             if (raw.config !== undefined) {
               return { ...raw, config: newConfig };
@@ -357,6 +396,47 @@ export class WorkflowAiService {
     );
 
     return { definition: { ...definition, nodes: patchedNodes }, provisionedResources };
+  }
+
+  // ─── Catalog context builder ───────────────────────────────────────────────
+
+  /**
+   * Formats the existing agent and tool catalogs into a compact block that
+   * is prepended to the user prompt so the AI prefers existing resources.
+   *
+   * When both catalogs are empty (first use / clean installation) nothing is
+   * injected so the prompt remains unchanged.
+   */
+  private buildCatalogContext(agents: AgentRecord[], tools: ToolRecord[]): string {
+    if (agents.length === 0 && tools.length === 0) return '';
+
+    const lines: string[] = ['EXISTING RESOURCES (prefer these over inventing new names):'];
+
+    if (agents.length > 0) {
+      lines.push('');
+      lines.push('Available Agents (use agentName exactly as listed):');
+      agents.forEach((a) => {
+        const desc = a.description ? ` — ${a.description}` : '';
+        lines.push(`  • "${a.name}"${desc}`);
+      });
+    }
+
+    if (tools.length > 0) {
+      lines.push('');
+      lines.push('Available Tools (use toolName exactly as listed):');
+      tools.forEach((t) => {
+        const desc = t.description ? ` — ${t.description}` : '';
+        lines.push(`  • "${t.name}"${desc}`);
+      });
+    }
+
+    lines.push('');
+    lines.push(
+      'RULE: For every AGENT/TOOL node, first check the lists above. ' +
+        'Only use a name NOT in the list if none of the existing resources fits the task.',
+    );
+
+    return lines.join('\n');
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────

@@ -1,7 +1,8 @@
 # Interactive Question Protocol — MANDATORY
 
-If you need the user to make a choice or provide information before you can proceed, you MUST follow
-this protocol exactly.
+> **CRITICAL**: If you need user input before proceeding, you MUST use the sentinel below.
+> Writing a plain question like "Would you like me to...?" is **NOT enough** — the system
+> will not pause and the user will never see your question. Use the sentinel or nothing happens.
 
 ## Steps
 
@@ -29,6 +30,19 @@ __ASK_USER__:{"question":"<your concise question>","type":"<type>","choices":["<
 - The sentinel **MUST** be the very last line of your response — nothing after it.
 - `"question"` must be **short and unambiguous** (one sentence).
 - Do **NOT** ask multiple questions at once — pick the single most critical one.
+
+## ❌ WRONG — This will be IGNORED (plain question, no sentinel)
+
+```
+Would you like me to check out the branch or create a new one?
+```
+
+## ✅ CORRECT — This WILL pause and show the user a reply bar
+
+```
+I can either check out an existing branch or create a new one for you.
+__ASK_USER__:{"question":"What should I do with the branch?","type":"single_choice","choices":["Check out existing","Create new branch"]}
+```
 
 ## Examples
 

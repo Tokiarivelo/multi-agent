@@ -5,14 +5,17 @@ import { firstValueFrom } from 'rxjs';
 
 // ─── Shared entity shapes (minimal) ─────────────────────────────────────────
 
-interface AgentRecord {
+export interface AgentRecord {
   id: string;
   name: string;
+  description?: string;
 }
 
-interface ToolRecord {
+export interface ToolRecord {
   id: string;
   name: string;
+  description?: string;
+  category?: string;
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -31,12 +34,149 @@ export class ResourceProvisioningService {
     this.toolServiceUrl = this.configService.get<string>('TOOL_SERVICE_URL')!;
   }
 
-  // ─── Public API ─────────────────────────────────────────────────────────────
+  // ─── Catalog fetchers (used by the AI to pick existing resources) ─────────
 
   /**
-   * Given an agent name, find its ID or create a placeholder agent.
-   * Returns the real agent ID.
+   * Returns all agents visible to `userId` (own + system agents).
+   * Used to build the context that is injected into the AI prompt.
    */
+  async listAllAgents(userId: string): Promise<AgentRecord[]> {
+    try {
+      const { data } = await firstValueFrom(
+        this.httpService.get<{ data: AgentRecord[] }>(
+          `${this.agentServiceUrl}/api/agents?userId=${encodeURIComponent(userId)}&pageSize=200`,
+        ),
+      );
+      return data?.data ?? (data as any) ?? [];
+    } catch (err) {
+      this.logger.warn(
+        `Could not list agents: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Returns all tools available in the system.
+   * Used to build the context that is injected into the AI prompt.
+   */
+  async listAllTools(): Promise<ToolRecord[]> {
+    try {
+      const { data } = await firstValueFrom(
+        this.httpService.get<{ data: ToolRecord[] }>(
+          `${this.toolServiceUrl}/api/tools?pageSize=200`,
+        ),
+      );
+      return data?.data ?? (data as any) ?? [];
+    } catch (err) {
+      this.logger.warn(`Could not list tools: ${err instanceof Error ? err.message : String(err)}`);
+      return [];
+    }
+  }
+
+  // ─── Resolution (find best match, create only if truly nothing exists) ────
+
+  /**
+   * Given an agent name from the workflow, resolve it to an existing agent ID.
+   *
+   * Resolution order:
+   *   1. Exact name match (case-insensitive)
+   *   2. Partial name match (the workflow name is a substring of an existing name or vice-versa)
+   *   3. If existingCatalog is supplied and still no match → create a new agent as a last resort
+   */
+  async resolveOrCreateAgent(opts: {
+    name: string;
+    description?: string;
+    modelId: string;
+    systemPrompt?: string;
+    userId: string;
+    /** Pre-fetched catalog — avoids extra HTTP call when caller already has it */
+    existingCatalog?: AgentRecord[];
+  }): Promise<{ id: string; wasCreated: boolean }> {
+    try {
+      const catalog = opts.existingCatalog ?? (await this.listAllAgents(opts.userId));
+
+      // 1. Exact match
+      const exact = catalog.find((a) => a.name.toLowerCase() === opts.name.toLowerCase());
+      if (exact) {
+        this.logger.log(`[agent] Exact match: "${opts.name}" → ${exact.id}`);
+        return { id: exact.id, wasCreated: false };
+      }
+
+      // 2. Partial / fuzzy match
+      const partial = this.findPartialMatch(opts.name, catalog);
+      if (partial) {
+        this.logger.log(
+          `[agent] Partial match: "${opts.name}" → "${partial.name}" (${partial.id})`,
+        );
+        return { id: partial.id, wasCreated: false };
+      }
+
+      // 3. Nothing found — create
+      const created = await this.createAgent(opts);
+      this.logger.log(`[agent] Created: "${opts.name}" (${created.id})`);
+      return { id: created.id, wasCreated: true };
+    } catch (err) {
+      this.logger.error(
+        `Failed to resolve agent "${opts.name}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return {
+        id: `__unresolved_agent_${opts.name.toLowerCase().replace(/\s+/g, '_')}`,
+        wasCreated: false,
+      };
+    }
+  }
+
+  /**
+   * Given a tool name from the workflow, resolve it to an existing tool ID.
+   *
+   * Resolution order:
+   *   1. Exact name match (case-insensitive)
+   *   2. Partial name match
+   *   3. Create as a last resort
+   */
+  async resolveOrCreateTool(opts: {
+    name: string;
+    description?: string;
+    category?: string;
+    /** Pre-fetched catalog */
+    existingCatalog?: ToolRecord[];
+  }): Promise<{ id: string; wasCreated: boolean }> {
+    try {
+      const catalog = opts.existingCatalog ?? (await this.listAllTools());
+
+      // 1. Exact match
+      const exact = catalog.find((t) => t.name.toLowerCase() === opts.name.toLowerCase());
+      if (exact) {
+        this.logger.log(`[tool] Exact match: "${opts.name}" → ${exact.id}`);
+        return { id: exact.id, wasCreated: false };
+      }
+
+      // 2. Partial / fuzzy match
+      const partial = this.findPartialMatch(opts.name, catalog);
+      if (partial) {
+        this.logger.log(`[tool] Partial match: "${opts.name}" → "${partial.name}" (${partial.id})`);
+        return { id: partial.id, wasCreated: false };
+      }
+
+      // 3. Nothing found — create
+      const created = await this.createTool(opts);
+      this.logger.log(`[tool] Created: "${opts.name}" (${created.id})`);
+      return { id: created.id, wasCreated: true };
+    } catch (err) {
+      this.logger.error(
+        `Failed to resolve tool "${opts.name}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return {
+        id: `__unresolved_tool_${opts.name.toLowerCase().replace(/\s+/g, '_')}`,
+        wasCreated: false,
+      };
+    }
+  }
+
+  // ─── Legacy compatibility shims (kept for backward-compat) ───────────────
+
+  /** @deprecated Use resolveOrCreateAgent instead */
   async findOrCreateAgent(opts: {
     name: string;
     description?: string;
@@ -44,71 +184,76 @@ export class ResourceProvisioningService {
     systemPrompt?: string;
     userId: string;
   }): Promise<string> {
-    try {
-      // 1. Search existing agents by name
-      const existing = await this.findAgentByName(opts.name, opts.userId);
-      if (existing) {
-        this.logger.log(`Reusing existing agent "${opts.name}" (${existing.id})`);
-        return existing.id;
-      }
-
-      // 2. Create new agent
-      const created = await this.createAgent(opts);
-      this.logger.log(`Auto-created agent "${opts.name}" (${created.id})`);
-      return created.id;
-    } catch (err) {
-      this.logger.error(
-        `Failed to find/create agent "${opts.name}": ${err instanceof Error ? err.message : String(err)}`,
-      );
-      // Return a placeholder so the workflow is still persisted; user can fix later
-      return `__unresolved_agent_${opts.name.toLowerCase().replace(/\s+/g, '_')}`;
-    }
+    const result = await this.resolveOrCreateAgent(opts);
+    return result.id;
   }
 
-  /**
-   * Given a tool name, find its ID or create a placeholder CUSTOM tool.
-   * Returns the real tool ID.
-   */
+  /** @deprecated Use resolveOrCreateTool instead */
   async findOrCreateTool(opts: {
     name: string;
     description?: string;
     category?: string;
   }): Promise<string> {
-    try {
-      // 1. Search existing tools by name
-      const existing = await this.findToolByName(opts.name);
-      if (existing) {
-        this.logger.log(`Reusing existing tool "${opts.name}" (${existing.id})`);
-        return existing.id;
-      }
-
-      // 2. Create new placeholder tool
-      const created = await this.createTool(opts);
-      this.logger.log(`Auto-created tool "${opts.name}" (${created.id})`);
-      return created.id;
-    } catch (err) {
-      this.logger.error(
-        `Failed to find/create tool "${opts.name}": ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return `__unresolved_tool_${opts.name.toLowerCase().replace(/\s+/g, '_')}`;
-    }
+    const result = await this.resolveOrCreateTool(opts);
+    return result.id;
   }
 
   // ─── Private helpers ─────────────────────────────────────────────────────────
 
-  private async findAgentByName(name: string, userId: string): Promise<AgentRecord | null> {
-    try {
-      const { data } = await firstValueFrom(
-        this.httpService.get<{ data: AgentRecord[] }>(
-          `${this.agentServiceUrl}/api/agents?userId=${encodeURIComponent(userId)}&name=${encodeURIComponent(name)}&pageSize=10`,
-        ),
-      );
-      const agents: AgentRecord[] = data?.data ?? (data as any) ?? [];
-      // Exact-match; the repo does contains/insensitive so we narrow here
-      return agents.find((a) => a.name.toLowerCase() === name.toLowerCase()) ?? null;
-    } catch {
-      return null;
+  /**
+   * Finds the best partial-name match from the catalog.
+   * A match is accepted when the searched name tokens (words) mostly appear
+   * in the candidate name or vice versa.
+   */
+  private findPartialMatch<T extends { name: string }>(searchName: string, catalog: T[]): T | null {
+    const searchTokens = this.tokenize(searchName);
+    if (searchTokens.length === 0) return null;
+
+    let bestMatch: T | null = null;
+    let bestScore = 0;
+
+    for (const candidate of catalog) {
+      const candidateTokens = this.tokenize(candidate.name);
+      const score = this.jaccardSimilarity(searchTokens, candidateTokens);
+      // Only accept if the similarity is strong enough to be meaningful
+      if (score > 0.5 && score > bestScore) {
+        bestScore = score;
+        bestMatch = candidate;
+      }
     }
+
+    return bestMatch;
+  }
+
+  /** Splits a name into lowercase words, ignoring common stop-words */
+  private tokenize(name: string): string[] {
+    const STOP_WORDS = new Set([
+      'the',
+      'a',
+      'an',
+      'for',
+      'to',
+      'of',
+      'and',
+      'or',
+      'in',
+      'on',
+      'at',
+      'by',
+    ]);
+    return name
+      .toLowerCase()
+      .split(/[\s\-_]+/)
+      .filter((w) => w.length > 1 && !STOP_WORDS.has(w));
+  }
+
+  /** Jaccard similarity between two token sets */
+  private jaccardSimilarity(a: string[], b: string[]): number {
+    const setA = new Set(a);
+    const setB = new Set(b);
+    const intersection = [...setA].filter((t) => setB.has(t)).length;
+    const union = new Set([...setA, ...setB]).size;
+    return union === 0 ? 0 : intersection / union;
   }
 
   private async createAgent(opts: {
@@ -137,28 +282,13 @@ export class ResourceProvisioningService {
       );
       return data;
     } catch (err: any) {
-      // 409 Conflict (name taken) — re-fetch and return the existing agent
+      // 409 Conflict (name taken by a concurrent request) — re-fetch
       if (err?.response?.status === 409) {
-        const existing = await this.findAgentByName(opts.name, opts.userId);
+        const catalog = await this.listAllAgents(opts.userId);
+        const existing = catalog.find((a) => a.name.toLowerCase() === opts.name.toLowerCase());
         if (existing) return existing;
       }
       throw err;
-    }
-  }
-
-  private async findToolByName(name: string): Promise<ToolRecord | null> {
-    try {
-      // Use the search endpoint for a case-insensitive contains match, then
-      // narrow to an exact match client-side to avoid false positives.
-      const { data } = await firstValueFrom(
-        this.httpService.get<{ data: ToolRecord[] }>(
-          `${this.toolServiceUrl}/api/tools?search=${encodeURIComponent(name)}&pageSize=20`,
-        ),
-      );
-      const tools: ToolRecord[] = data?.data ?? (data as any) ?? [];
-      return tools.find((t) => t.name.toLowerCase() === name.toLowerCase()) ?? null;
-    } catch {
-      return null;
     }
   }
 
@@ -175,15 +305,15 @@ export class ResourceProvisioningService {
           category: opts.category ?? 'CUSTOM',
           parameters: [],
           isBuiltIn: false,
-          // Stub code — user will fill in the real implementation
           code: `// TODO: implement ${opts.name}\nasync function run(input) {\n  return { result: 'Not yet implemented' };\n}`,
         }),
       );
       return data;
     } catch (err: any) {
-      // 409 Conflict = name already exists (race condition) — re-fetch it
+      // 409 Conflict (race condition) — re-fetch
       if (err?.response?.status === 409) {
-        const existing = await this.findToolByName(opts.name);
+        const catalog = await this.listAllTools();
+        const existing = catalog.find((t) => t.name.toLowerCase() === opts.name.toLowerCase());
         if (existing) return existing;
       }
       throw err;

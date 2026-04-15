@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { useCreateWorkflow } from '../hooks/useWorkflows';
 import { workflowsApi, AiWorkflowResult } from '../api/workflows.api';
 import { ModelSelector } from './ModelSelector';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface CreateWorkflowModalProps {
   open: boolean;
@@ -248,7 +249,7 @@ function AiTab({
             (result.provisionedResources?.tools?.length ?? 0) > 0) && (
             <div className="mt-1 pt-2 border-t border-violet-500/20 space-y-1.5">
               <p className="text-[11px] font-semibold text-violet-500 uppercase tracking-wide">
-                {t('workflows.ai.autoCreated', 'Auto-created resources')}
+                {t('workflows.ai.newResources', 'New resources created')}
               </p>
               {result.provisionedResources?.agents?.map((a) => (
                 <div key={a.id} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -360,6 +361,7 @@ function AiTab({
 export function CreateWorkflowModal({ open, onOpenChange }: CreateWorkflowModalProps) {
   const { t } = useTranslation();
   const createWorkflow = useCreateWorkflow();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<'manual' | 'ai'>('manual');
 
   const handleClose = () => onOpenChange(false);
@@ -373,7 +375,13 @@ export function CreateWorkflowModal({ open, onOpenChange }: CreateWorkflowModalP
         definition: result.definition,
       },
       {
-        onSuccess: () => onOpenChange(false),
+        onSuccess: () => {
+          // Invalidate agents & tools so newly-provisioned resources show up
+          // immediately in the NodeEditor dropdowns without a page refresh.
+          queryClient.invalidateQueries({ queryKey: ['agents'] });
+          queryClient.invalidateQueries({ queryKey: ['tools'] });
+          onOpenChange(false);
+        },
         onError: (err) => {
           toast.error(err instanceof Error ? err.message : 'Failed to create workflow');
         },

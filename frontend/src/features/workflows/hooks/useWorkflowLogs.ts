@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useWorkflowExecutionStore, NodeStatus, SubExecutionRecord } from '../store/workflowExecution.store';
+import { useWorkflowExecutionStore, NodeStatus, SubExecutionRecord, NodeTurn } from '../store/workflowExecution.store';
 import { useWorkspaceStore } from '@/features/workspace/store/workspaceStore';
 import { workflowsApi } from '../api/workflows.api';
 import { readFileAtPath, writeFileAtPath } from '@/features/workspace/hooks/useWorkspace';
@@ -51,6 +51,7 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
   const executionStatus = useWorkflowExecutionStore((s) => s.executionStatus);
   const setNodeStatus = useWorkflowExecutionStore((s) => s.setNodeStatus);
   const setNodeData = useWorkflowExecutionStore((s) => s.setNodeData);
+  const appendNodeTurn = useWorkflowExecutionStore((s) => s.appendNodeTurn);
   const setNodeTokenProgress = useWorkflowExecutionStore((s) => s.setNodeTokenProgress);
   const clearExecution = useWorkflowExecutionStore((s) => s.clearExecution);
   const getWorkspaceById = useWorkspaceStore((s) => s.getWorkspaceById);
@@ -136,6 +137,12 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
       if (event.data !== undefined) {
         setNodeData(event.nodeId, event.data);
       }
+      // Append every status change as a distinct turn for the timeline UI
+      appendNodeTurn(event.nodeId, {
+        status: event.status,
+        timestamp: event.timestamp,
+        data: event.data,
+      } as NodeTurn);
       const emoji =
         event.status === 'COMPLETED'
           ? '✅'
@@ -345,6 +352,7 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
     setNodeStatus,
     setExecutionStatus,
     setNodeData,
+    appendNodeTurn,
     workspaces,
     getWorkspaceById,
     addWorkspaceEntry,

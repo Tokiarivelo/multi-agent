@@ -13,7 +13,7 @@ import {
 import { useWorkflowLogs } from '../hooks/useWorkflowLogs';
 import { Workflow, WorkflowNode } from '@/types';
 import { WorkflowExecution, NodeExecution } from '../api/workflows.api';
-import { useWorkflowExecutionStore, NodeStatus } from '../store/workflowExecution.store';
+import { useWorkflowExecutionStore, NodeStatus, NodeTurn } from '../store/workflowExecution.store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -61,6 +61,8 @@ import {
   ExternalLink,
   MessageCircleQuestion,
   Sparkles,
+  User,
+  GitCommitHorizontal,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -147,11 +149,13 @@ function NodeExecutionDataPanel({
   selectedNodeName,
   nodeStatuses,
   nodeData,
+  nodeTurns,
 }: {
   selectedNodeId: string | null;
   selectedNodeName: string | null;
   nodeStatuses: Record<string, string>;
   nodeData: Record<string, unknown>;
+  nodeTurns: Record<string, NodeTurn[]>;
 }) {
   const { t } = useTranslation();
 
@@ -175,6 +179,222 @@ function NodeExecutionDataPanel({
     );
   }
 
+  const turns = nodeTurns[selectedNodeId] ?? [];
+  const hasInteraction = turns.some((t) => t.status === 'WAITING_INPUT');
+
+  // ── Multi-turn timeline view (when node had at least one WAITING_INPUT) ──
+  if (hasInteraction && turns.length > 1) {
+    const nodeStatus = nodeStatuses[selectedNodeId];
+    return (
+      <div className="flex flex-col gap-2 p-4">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-1">
+          <span className="font-semibold text-sm">
+            Node:{' '}
+            <code className="text-xs bg-muted px-1.5 py-0.5 rounded mr-1">
+              {selectedNodeName || 'Unknown'}
+            </code>
+            <span className="text-muted-foreground text-xs font-normal">[{selectedNodeId}]</span>
+          </span>
+          <Badge
+            variant={
+              nodeStatus === 'COMPLETED'
+                ? 'success'
+                : nodeStatus === 'FAILED'
+                  ? 'destructive'
+                  : 'secondary'
+            }
+          >
+            {nodeStatus}
+          </Badge>
+        </div>
+
+        {/* Timeline */}
+        <div className="relative flex flex-col gap-0">
+          {turns
+            // Skip RUNNING turns that come right after WAITING_INPUT (just "resuming…" noise)
+            // but keep the RUNNING turn that comes from user reply (it carries userResponse)
+            .filter((turn, idx) => {
+              if (turn.status === 'RUNNING') {
+                const prev = turns[idx - 1];
+                // Keep only the RUNNING that follows a WAITING_INPUT (user reply context)
+                return prev?.status === 'WAITING_INPUT';
+              }
+              return true;
+            })
+            .map((turn, idx, filtered) => {
+              const raw = turn.data as Record<string, unknown> | undefined;
+              const isWaiting = turn.status === 'WAITING_INPUT';
+              const isResume = turn.status === 'RUNNING' && idx > 0;
+              const isCompleted = turn.status === 'COMPLETED';
+              const isFailed = turn.status === 'FAILED';
+              const isLast = idx === filtered.length - 1;
+
+              return (
+                <div key={idx} className="flex gap-3">
+                  {/* Timeline spine */}
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={cn(
+                        'w-7 h-7 rounded-full flex items-center justify-center shrink-0 z-10 border-2',
+                        isWaiting
+                          ? 'bg-blue-500/10 border-blue-500/40 text-blue-500'
+                          : isResume
+                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+                            : isCompleted
+                              ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+                              : isFailed
+                                ? 'bg-red-500/10 border-red-500/40 text-red-500'
+                                : 'bg-muted border-border/60 text-muted-foreground',
+                      )}
+                    >
+                      {isWaiting ? (
+                        <MessageCircleQuestion className="h-3.5 w-3.5" />
+                      ) : isResume ? (
+                        <User className="h-3.5 w-3.5" />
+                      ) : isCompleted || isFailed ? (
+                        <Bot className="h-3.5 w-3.5" />
+                      ) : (
+                        <GitCommitHorizontal className="h-3.5 w-3.5" />
+                      )}
+                    </div>
+                    {!isLast && (
+                      <div className="w-px flex-1 bg-border/50 my-1" style={{ minHeight: 16 }} />
+                    )}
+                  </div>
+
+                  {/* Turn card */}
+                  <div className="flex-1 pb-3">
+                    <div
+                      className={cn(
+                        'rounded-xl border p-3 space-y-2 text-sm',
+                        isWaiting
+                          ? 'border-blue-500/25 bg-blue-500/5'
+                          : isResume
+                            ? 'border-emerald-500/20 bg-emerald-500/5'
+                            : isCompleted
+                              ? 'border-border/50 bg-muted/20'
+                              : isFailed
+                                ? 'border-red-500/20 bg-red-500/5'
+                                : 'border-border/40 bg-background',
+                      )}
+                    >
+                      {/* Turn label + timestamp */}
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={cn(
+                            'text-[10px] font-semibold uppercase tracking-wide',
+                            isWaiting
+                              ? 'text-blue-500'
+                              : isResume
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : isCompleted
+                                  ? 'text-muted-foreground'
+                                  : isFailed
+                                    ? 'text-red-500'
+                                    : 'text-muted-foreground',
+                          )}
+                        >
+                          {isWaiting
+                            ? '💬 Agent asked'
+                            : isResume
+                              ? '👤 User replied'
+                              : isCompleted
+                                ? '✅ Final response'
+                                : isFailed
+                                  ? '❌ Failed'
+                                  : turn.status}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/60 font-mono">
+                          {new Date(turn.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+
+                      {/* WAITING_INPUT: show agent message + question */}
+                      {isWaiting && (() => {
+                        const agentMsg = raw?.agentMessage as string | undefined;
+                        const question = raw?.prompt as string | undefined;
+                        const proposals = raw?.proposals as string[] | undefined;
+                        return (
+                          <>
+                            {agentMsg && (
+                              <div className="text-xs leading-relaxed text-foreground/80 prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{agentMsg}</ReactMarkdown>
+                              </div>
+                            )}
+                            {question && (
+                              <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 border-l-2 border-blue-400 pl-2">
+                                {question}
+                              </p>
+                            )}
+                            {proposals && proposals.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {proposals.map((p, pi) => (
+                                  <span key={pi} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-300">
+                                    {p}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+
+                      {/* RUNNING after WAITING: show user response */}
+                      {isResume && (() => {
+                        const userResponse = raw?.userResponse as string | undefined;
+                        const question = raw?.prompt as string | undefined;
+                        return (
+                          <>
+                            {question && (
+                              <p className="text-[10px] text-muted-foreground italic">Re: {question}</p>
+                            )}
+                            {userResponse && (
+                              <p className="text-xs font-medium text-foreground bg-emerald-500/10 rounded px-2 py-1 border border-emerald-500/20">
+                                {userResponse}
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
+
+                      {/* COMPLETED: show final agent response */}
+                      {(isCompleted || isFailed) && (() => {
+                        const output = deepParse(raw?.output) as Record<string, unknown> | string | undefined;
+                        const agentText = (() => {
+                          if (typeof output === 'string') return output;
+                          if (typeof output === 'object' && output !== null) {
+                            const o = (output as Record<string, unknown>).output;
+                            if (typeof o === 'string') return o;
+                          }
+                          return undefined;
+                        })();
+                        const err = raw?.error as string | undefined;
+                        return (
+                          <>
+                            {err && <p className="text-xs text-destructive">{err}</p>}
+                            {agentText && (
+                              <div className="text-xs leading-relaxed text-foreground/80 prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{agentText}</ReactMarkdown>
+                              </div>
+                            )}
+                            {!agentText && !err && (
+                              <StructuredDataViewer data={raw?.output} className="min-h-[60px]" />
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Single-turn view (no interruption) — existing layout ─────────────────
   const raw = nodeData[selectedNodeId] as Record<string, unknown> | undefined;
   const input = raw?.input;
   const rawOutput = raw?.output;
@@ -488,9 +708,11 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   );
 
   const setActiveExecutionId = useWorkflowExecutionStore((s) => s.setActiveExecutionId);
+  const activeExecutionId = useWorkflowExecutionStore((s) => s.activeExecutionId);
   const selectedNodeId = useWorkflowExecutionStore((s) => s.selectedNodeId);
   const selectedNodeName = useWorkflowExecutionStore((s) => s.selectedNodeName);
   const nodeData = useWorkflowExecutionStore((s) => s.nodeData);
+  const nodeTurns = useWorkflowExecutionStore((s) => s.nodeTurns);
   const nodeStatuses = useWorkflowExecutionStore((s) => s.nodeStatuses);
   const subExecutions = useWorkflowExecutionStore((s) => s.subExecutions);
 
@@ -720,7 +942,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   return (
     <div className="flex flex-col h-full w-full pointer-events-none z-50 overflow-hidden relative">
       {/* ─── Global Overlay for WAITING_INPUT ─── */}
-      {waitingNodeId && activeExecution && (
+      {waitingNodeId && (activeExecution || activeExecutionId) && (
         <div className="absolute inset-0 z-100 flex items-center justify-center bg-black/20 backdrop-blur-sm pointer-events-auto transition-opacity animate-in fade-in">
           <Card
             className={cn(
@@ -767,7 +989,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
               )}
               <AgentReplyBar
                 nodeId={waitingNodeId}
-                executionId={activeExecution.id}
+                executionId={activeExecution?.id ?? activeExecutionId}
                 agentText={waitingAgentText}
                 externalProposals={waitingProposals}
                 questionType={waitingQuestionType}
@@ -1105,6 +1327,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
                   selectedNodeName={selectedNodeName}
                   nodeStatuses={nodeStatuses}
                   nodeData={nodeData}
+                  nodeTurns={nodeTurns}
                 />
               </ScrollArea>
             </TabsContent>
