@@ -20,15 +20,16 @@ import { GetWorkflowUseCase } from './application/use-cases/get-workflow.use-cas
 import { ExecuteWorkflowUseCase } from './application/use-cases/execute-workflow.use-case';
 import { UpdateWorkflowUseCase } from './application/use-cases/update-workflow.use-case';
 import { DeleteWorkflowUseCase } from './application/use-cases/delete-workflow.use-case';
+import { GetWorkflowExecutionsUseCase } from './application/use-cases/get-workflow-executions.use-case';
 import { WORKFLOW_EXECUTOR } from './application/interfaces/workflow-executor.interface';
 
 // Presentation
-import { WorkflowAiController } from './presentation/controllers/workflow-ai.controller';
 import { WorkflowController } from './presentation/controllers/workflow.controller';
 import { WorkspaceController } from './presentation/controllers/workspace.controller';
 import { HealthController } from './presentation/controllers/health.controller';
 import { InternalController } from './presentation/controllers/internal.controller';
 import { WorkflowGateway } from './presentation/gateways/workflow.gateway';
+import { WorkflowAiController } from './presentation/controllers/workflow-ai.controller';
 import { WorkflowAiService } from './infrastructure/external/workflow-ai.service';
 import { ResourceProvisioningService } from './infrastructure/external/resource-provisioning.service';
 
@@ -38,15 +39,15 @@ import { ResourceProvisioningService } from './infrastructure/external/resource-
     HttpModule.registerAsync({
       imports: [NestConfigModule],
       useFactory: async () => ({
-        timeout: 30000,
+        timeout: 10000,
         maxRedirects: 5,
       }),
       inject: [ConfigService],
     }),
   ],
   controllers: [
-    WorkflowAiController,
     WorkflowController,
+    WorkflowAiController,
     WorkspaceController,
     HealthController,
     InternalController,
@@ -66,6 +67,7 @@ import { ResourceProvisioningService } from './infrastructure/external/resource-
     ExecuteWorkflowUseCase,
     UpdateWorkflowUseCase,
     DeleteWorkflowUseCase,
+    GetWorkflowExecutionsUseCase,
 
     // Repositories
     {

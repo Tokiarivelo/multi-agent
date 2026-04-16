@@ -13,28 +13,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
 import { useCreateWorkflow } from '../hooks/useWorkflows';
 import { workflowsApi, AiWorkflowResult } from '../api/workflows.api';
 import { ModelSelector } from './ModelSelector';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface CreateWorkflowModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-// ─── Manual tab ───────────────────────────────────────────────────────────────
+// ─── Manual creation tab ───────────────────────────────────────────────────────
 
-function ManualTab({
-  onCreated,
-  onCancel,
-}: {
-  onCreated: () => void;
-  onCancel: () => void;
-}) {
+function ManualTab({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
   const { t } = useTranslation();
   const createWorkflow = useCreateWorkflow();
   const [name, setName] = useState('');
@@ -116,7 +109,6 @@ function AiTab({
   const [loadingPhase, setLoadingPhase] = useState<'designing' | 'provisioning'>('designing');
   const [result, setResult] = useState<AiWorkflowResult | null>(null);
   const [messages, setMessages] = useState<Array<{ role: string; content: string; timestamp: string }>>([]);
-
 
   const suggestions = [
     'Automated code review and testing pipeline',
@@ -390,32 +382,33 @@ export function CreateWorkflowModal({ open, onOpenChange }: CreateWorkflowModalP
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !createWorkflow.isPending && onOpenChange(isOpen)}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('workflows.create.title')}</DialogTitle>
         </DialogHeader>
-
-        <Tabs value={tab} onValueChange={(v) => setTab(v as 'manual' | 'ai')}>
-          <TabsList className="grid grid-cols-2 w-full">
-            <TabsTrigger value="manual" className="gap-2">
-              <Pencil className="h-3.5 w-3.5" />
-              {t('workflows.create.tabManual', 'Manual')}
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="gap-2">
-              <Sparkles className="h-3.5 w-3.5" />
-              {t('workflows.create.tabAi', 'Generate with AI')}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="manual">
-            <ManualTab onCreated={handleClose} onCancel={handleClose} />
-          </TabsContent>
-
-          <TabsContent value="ai">
-            <AiTab onApply={handleAiApply} onCancel={handleClose} />
-          </TabsContent>
-        </Tabs>
+        <div className="flex gap-1 border-b border-border/50 pb-2 mb-1">
+          <Button
+            size="sm"
+            variant={tab === 'manual' ? 'default' : 'ghost'}
+            className="gap-1.5 h-7 text-xs"
+            onClick={() => setTab('manual')}
+          >
+            <Pencil className="h-3 w-3" />
+            {t('workflows.create.manual', 'Manual')}
+          </Button>
+          <Button
+            size="sm"
+            variant={tab === 'ai' ? 'default' : 'ghost'}
+            className="gap-1.5 h-7 text-xs"
+            onClick={() => setTab('ai')}
+          >
+            <Sparkles className="h-3 w-3" />
+            {t('workflows.create.ai', 'AI Generate')}
+          </Button>
+        </div>
+        {tab === 'manual' && <ManualTab onCreated={handleClose} onCancel={handleClose} />}
+        {tab === 'ai' && <AiTab onApply={handleAiApply} onCancel={handleClose} />}
       </DialogContent>
     </Dialog>
   );

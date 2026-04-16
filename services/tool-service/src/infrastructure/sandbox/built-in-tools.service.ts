@@ -49,10 +49,6 @@ export class BuiltInToolsService {
         return this.pdfRead(parameters as any);
       case 'file_write':
         return this.fileWrite(parameters as any);
-      case 'workspace_read':
-        return this.workspaceRead(parameters as any);
-      case 'workspace_write':
-        return this.workspaceWrite(parameters as any);
       case 'github_api':
         return this.githubApi(parameters as any);
       case 'slack_post_message':
@@ -236,23 +232,6 @@ export class BuiltInToolsService {
     } catch (error) {
       throw new Error(`File write failed: ${error.message}`);
     }
-  }
-
-  private async workspaceRead(params: {
-    filePath: string;
-    workspaceId?: string;
-  }): Promise<{ success: boolean; content: string; path: string }> {
-    return this.fileRead({ path: params.filePath });
-  }
-
-  private async workspaceWrite(params: {
-    filePath: string;
-    content: string;
-    workspaceId?: string;
-  }): Promise<{ success: boolean; path: string }> {
-    const resolvedPath = this.resolvePath(params.filePath);
-    await this.fileWrite({ path: resolvedPath, content: params.content });
-    return { success: true, path: resolvedPath };
   }
 
   private isAllowedDomain(url: string): boolean {

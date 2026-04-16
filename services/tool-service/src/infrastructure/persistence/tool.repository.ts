@@ -17,8 +17,6 @@ export class PrismaToolRepository implements ToolRepository {
         code: tool.code,
         icon: tool.icon,
         isBuiltIn: tool.isBuiltIn,
-        mcpConfig: (tool as any).mcpConfig ?? undefined,
-        repoFullName: (tool as any).repoFullName ?? null,
       },
     });
 
@@ -86,7 +84,6 @@ export class PrismaToolRepository implements ToolRepository {
         ...(updates.parameters && { parameters: updates.parameters as any }),
         ...(updates.code !== undefined && { code: updates.code }),
         ...(updates.icon !== undefined && { icon: updates.icon }),
-        ...(updates.repoFullName !== undefined && { repoFullName: updates.repoFullName }),
       },
     });
 

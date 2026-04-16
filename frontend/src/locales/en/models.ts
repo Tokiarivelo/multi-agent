@@ -16,9 +16,5 @@ export const models = {
   "models.create.customHint": "Use CUSTOM for self-hosted or OpenAI-compatible endpoints.",
   "models.create.customModelPlaceholder": "e.g. my-fine-tuned-model",
   "models.create.apiBaseUrl": "API Base URL (optional)",
-  "models.create.apiBaseUrlHint": "The base URL for the model API. Leave empty for standard providers.",
-  "models.actions.edit": "Edit Profile",
-  "models.actions.delete": "Delete Model",
-  "models.deleteSuccess": "Model \"{{name}}\" deleted successfully.",
-  "models.deleteError": "Failed to delete model.",
+  "models.create.apiBaseUrlHint": "The base URL for the model API. Leave empty for standard providers."
 };

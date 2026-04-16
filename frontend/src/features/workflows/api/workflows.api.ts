@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-import { Workflow, PaginatedResponse, NodeTypeId } from '@/types';
+import { Workflow, PaginatedResponse } from '@/types';
 
 // ─── AI types ─────────────────────────────────────────────────────────────────
 
@@ -59,9 +59,47 @@ export interface NodeExecution {
   retryCount: number;
 }
 
+export interface WorkflowExecutionSummary {
+  executionId: string;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  startedAt: string | null;
+  completedAt: string | null;
+  duration: number | null;
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  nodeExecutions: unknown;
+  error: string | null;
+  createdAt: string;
+}
+
+export interface PaginatedExecutionSummaries {
+  data: WorkflowExecutionSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface AddNodePayload {
   id: string;
-  type: NodeTypeId;
+  type:
+    | 'AGENT'
+    | 'TOOL'
+    | 'CONDITIONAL'
+    | 'TRANSFORM'
+    | 'START'
+    | 'END'
+    | 'PROMPT'
+    | 'TEXT'
+    | 'FILE'
+    | 'LOOP'
+    | 'GITHUB'
+    | 'SLACK'
+    | 'WHATSAPP'
+    | 'SHELL'
+    | 'WORKSPACE_READ'
+    | 'WORKSPACE_WRITE'
+    | 'SUBWORKFLOW';
   customName?: string;
   config?: Record<string, unknown>;
   position?: { x: number; y: number };
@@ -183,30 +221,39 @@ export const workflowsApi = {
     return data;
   },
 
-  // ─── AI Generation ───────────────────────────────────────────────
+  getExecutions: async (
+    workflowId: string,
+    page = 1,
+    limit = 10,
+    sortBy = 'createdAt',
+    sortOrder: 'asc' | 'desc' = 'desc',
+  ): Promise<PaginatedExecutionSummaries> => {
+    const { data } = await apiClient.get<PaginatedExecutionSummaries>(
+      `/api/workflows/${workflowId}/executions`,
+      { params: { page, limit, sortBy, sortOrder } },
+    );
+    return data;
+  },
 
-  generateWithAi: async (opts: {
+  // ─── AI generation ────────────────────────────────────────────────
+
+  generateWithAi: async (payload: {
     prompt: string;
     modelId: string;
     sessionId?: string;
   }): Promise<AiWorkflowResult> => {
-    const { data } = await apiClient.post<AiWorkflowResult>('/api/workflows/ai/generate', opts);
+    const { data } = await apiClient.post<AiWorkflowResult>('/api/workflows/ai/generate', payload);
     return data;
   },
 
   editWithAi: async (
     workflowId: string,
-    opts: { prompt: string; modelId: string; sessionId?: string },
+    payload: { prompt: string; modelId: string; sessionId?: string },
   ): Promise<AiWorkflowResult> => {
     const { data } = await apiClient.post<AiWorkflowResult>(
-      `/api/workflows/ai/${workflowId}/edit`,
-      opts,
+      `/api/workflows/${workflowId}/ai/edit`,
+      payload,
     );
-    return data;
-  },
-
-  getAiSession: async (sessionId: string): Promise<AiSession> => {
-    const { data } = await apiClient.get<AiSession>(`/api/workflows/ai/sessions/${sessionId}`);
     return data;
   },
 

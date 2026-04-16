@@ -60,7 +60,6 @@ import {
   Workflow as WorkflowIcon,
   ExternalLink,
   MessageCircleQuestion,
-  Sparkles,
   User,
   GitCommitHorizontal,
 } from 'lucide-react';
@@ -69,14 +68,29 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ExecutionLogsPanel } from './ExecutionLogsPanel';
 import { SubWorkflowExecutionPanel } from './SubWorkflowExecutionPanel';
 import { WorkflowIOPanel, WorkflowIOField } from './WorkflowIOPanel';
-import { WorkflowAiPanel } from './WorkflowAiPanel';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useExecution } from '../hooks/useWorkflows';
-import { cn, isJSON, tryParseJSON } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { AgentReplyBar, QuestionType } from './AgentReplyBar';
 import { StructuredDataViewer, deepParse } from './StructuredDataViewer';
-import { AgentReplyBar, type QuestionType } from './AgentReplyBar';
+
+function isJSON(value: string): boolean {
+  const trimmed = value.trim();
+  return (
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
+  );
+}
+
+function tryParseJSON(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
 
 interface WorkflowEditorProps {
   workflow?: Workflow;
@@ -140,8 +154,6 @@ function Section({
     </div>
   );
 }
-
-
 
 // ─── Rich node execution data panel ─────────────────────────────────────────
 function NodeExecutionDataPanel({
@@ -396,23 +408,18 @@ function NodeExecutionDataPanel({
 
   // ── Single-turn view (no interruption) — existing layout ─────────────────
   const raw = nodeData[selectedNodeId] as Record<string, unknown> | undefined;
-  const input = raw?.input;
-  const rawOutput = raw?.output;
+  const input = raw?.input as Record<string, unknown> | string | undefined;
+  const output = raw?.output as Record<string, unknown> | string | undefined;
   const consoleLogs = raw?.logs as string[] | undefined;
 
-  // Detect structured agent output (after deep-parsing)
-  const output = deepParse(rawOutput) as Record<string, unknown> | string | undefined;
-
-  const agentText = (() => {
-    if (typeof output === 'string') return output;
-    if (typeof output === 'object' && output !== null) {
-      const out = (output as Record<string, unknown>).output;
-      if (typeof out === 'string') return out;
-      const text = (output as Record<string, unknown>).text;
-      if (typeof text === 'string') return text;
-    }
-    return undefined;
-  })();
+  // Detect structured agent output
+  const agentText =
+    typeof output === 'object' && output !== null
+      ? (((output as Record<string, unknown>).output as string | undefined) ??
+        ((output as Record<string, unknown>).text as string | undefined))
+      : typeof output === 'string'
+        ? output
+        : undefined;
 
   const toolCalls =
     typeof output === 'object' && output !== null
@@ -471,7 +478,9 @@ function NodeExecutionDataPanel({
         accent="sky"
         defaultOpen={false}
       >
-        <StructuredDataViewer data={input} className="mt-1 min-h-[120px]" />
+        <pre className="text-[11px] font-mono overflow-auto max-h-40 text-foreground/80 mt-1 whitespace-pre-wrap break-all">
+          {input !== undefined ? JSON.stringify(input, null, 2) : 'No input recorded.'}
+        </pre>
       </Section>
 
       {/* Agent text output */}
@@ -481,15 +490,9 @@ function NodeExecutionDataPanel({
           icon={<MessageSquare className="h-3.5 w-3.5" />}
           accent="emerald"
         >
-          {isJSON(agentText) ? (
-            <StructuredDataViewer data={tryParseJSON(agentText)} className="mt-2 min-h-[120px]" />
-          ) : (
-            <div className="text-sm leading-relaxed text-foreground/90 mt-2 prose prose-sm dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted/40 max-w-none break-words">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {agentText}
-              </ReactMarkdown>
-            </div>
-          )}
+          <p className="text-xs leading-relaxed text-foreground/80 mt-1 whitespace-pre-wrap">
+            {agentText}
+          </p>
         </Section>
       )}
 
@@ -554,9 +557,11 @@ function NodeExecutionDataPanel({
                   <Bot className="h-3 w-3" /> {sa.agentId}
                 </p>
                 {sa.error ? (
-                  <p className="text-[10px] text-destructive mt-1">{sa.error}</p>
+                  <p className="text-[10px] text-destructive">{sa.error}</p>
                 ) : (
-                  <StructuredDataViewer data={sa.output} className="mt-1 min-h-[80px]" />
+                  <pre className="text-[10px] font-mono bg-muted/40 rounded px-2 py-1 overflow-auto max-h-24 whitespace-pre-wrap break-all">
+                    {typeof sa.output === 'string' ? sa.output : JSON.stringify(sa.output, null, 2)}
+                  </pre>
                 )}
               </div>
             ))}
@@ -636,11 +641,9 @@ function NodeExecutionDataPanel({
           accent="neutral"
           defaultOpen
         >
-          {output !== undefined ? (
-            <StructuredDataViewer data={output} className="mt-2 border-0 bg-transparent min-h-[200px]" />
-          ) : (
-            <p className="text-[11px] font-mono text-muted-foreground mt-2 italic px-2">No output recorded.</p>
-          )}
+          <pre className="text-[11px] font-mono overflow-auto max-h-48 text-foreground/80 mt-1 whitespace-pre-wrap break-all">
+            {output !== undefined ? JSON.stringify(output, null, 2) : 'No output recorded.'}
+          </pre>
         </Section>
       )}
     </div>
@@ -696,7 +699,6 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const [status, setStatus] = useState(workflow?.status?.toUpperCase() ?? 'DRAFT');
   const [logsOpen, setLogsOpen] = useState(!!deepExecutionId);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [outputLogsToFile, setOutputLogsToFile] = useState(false);
 
   // ─── Workflow I/O Contract ─────────────────────────────────────────
@@ -715,6 +717,17 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const nodeTurns = useWorkflowExecutionStore((s) => s.nodeTurns);
   const nodeStatuses = useWorkflowExecutionStore((s) => s.nodeStatuses);
   const subExecutions = useWorkflowExecutionStore((s) => s.subExecutions);
+
+  // ─── Derived: waiting-input node ──────────────────────────────────
+  const waitingNodeId =
+    Object.keys(nodeStatuses).find((id) => nodeStatuses[id] === 'WAITING_INPUT') ?? null;
+  const waitingNodeRaw = waitingNodeId
+    ? (nodeData[waitingNodeId] as Record<string, unknown> | undefined)
+    : undefined;
+  const waitingPrompt = (waitingNodeRaw?.prompt as string | undefined) ?? null;
+  const waitingAgentText = (waitingNodeRaw?.agentMessage as string | undefined) ?? null;
+  const waitingProposals = (waitingNodeRaw?.proposals as string[] | undefined) ?? [];
+  const waitingQuestionType = (waitingNodeRaw?.questionType as QuestionType | undefined) ?? 'custom';
 
   const [activeExecution, setActiveExecution] = useState<WorkflowExecution | null>(null);
 
@@ -895,50 +908,6 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
 
   const isSaving = createWorkflow.isPending || updateWorkflow.isPending;
 
-  // Find a node that is currently waiting for input
-  const waitingNodeEntry = Object.entries(nodeStatuses).find(([, stat]) => stat === 'WAITING_INPUT');
-  const waitingNodeId = waitingNodeEntry?.[0];
-  const waitingNodeData = waitingNodeId ? nodeData[waitingNodeId] : null;
-
-  let waitingAgentText: string | undefined;   // clean body shown above the input bar
-  let waitingPrompt: string | undefined;        // short question used as header
-  let waitingProposals: string[] | undefined;
-  let waitingQuestionType: QuestionType | undefined;
-
-  if (waitingNodeData) {
-    const raw = waitingNodeData as Record<string, unknown>;
-
-    // Backend sends these directly at the top-level node-update payload
-    if (typeof raw.agentMessage === 'string') waitingAgentText = raw.agentMessage; // clean body text
-    if (typeof raw.prompt === 'string') waitingPrompt = raw.prompt;               // short question
-    if (Array.isArray(raw.proposals)) waitingProposals = raw.proposals as string[];
-    if (typeof raw.questionType === 'string') waitingQuestionType = raw.questionType as QuestionType;
-
-    // If agentMessage was not sent, fall back to prompt as body text
-    if (!waitingAgentText && waitingPrompt) waitingAgentText = waitingPrompt;
-
-    // Fallback: extract from output field (older format)
-    if (!waitingAgentText) {
-      const rawOutput = raw.output;
-      const waitingOutput = deepParse(rawOutput) as Record<string, unknown> | string | undefined;
-
-      if (typeof waitingOutput === 'string') {
-        waitingAgentText = waitingOutput;
-      } else if (typeof waitingOutput === 'object' && waitingOutput !== null) {
-        waitingAgentText =
-          typeof waitingOutput.output === 'string'
-            ? waitingOutput.output
-            : typeof waitingOutput.text === 'string'
-              ? waitingOutput.text
-              : undefined;
-        if (!waitingProposals && Array.isArray(waitingOutput.proposals))
-          waitingProposals = waitingOutput.proposals as string[];
-        if (!waitingQuestionType && typeof waitingOutput.questionType === 'string')
-          waitingQuestionType = waitingOutput.questionType as QuestionType;
-      }
-    }
-  }
-
   return (
     <div className="flex flex-col h-full w-full pointer-events-none z-50 overflow-hidden relative">
       {/* ─── Global Overlay for WAITING_INPUT ─── */}
@@ -988,9 +957,9 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
                 )
               )}
               <AgentReplyBar
-                nodeId={waitingNodeId}
+                nodeId={waitingNodeId ?? undefined}
                 executionId={activeExecution?.id ?? activeExecutionId}
-                agentText={waitingAgentText}
+                agentText={waitingAgentText ?? undefined}
                 externalProposals={waitingProposals}
                 questionType={waitingQuestionType}
               />
@@ -1120,24 +1089,13 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
               </AlertDialogContent>
             </AlertDialog>
           )}
-          {/* AI Panel toggle */}
-          <Button
-            variant={aiPanelOpen ? 'secondary' : 'ghost'}
-            size="icon"
-            onClick={() => setAiPanelOpen(!aiPanelOpen)}
-            title={t('workflows.ai.togglePanel', 'AI Workflow Assistant')}
-            className="ml-1 text-violet-500 hover:text-violet-600"
-          >
-            <Sparkles className="h-4 w-4" />
-          </Button>
-
           {/* Toggle Panel */}
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setPanelOpen(!panelOpen)}
             title="Toggle Details Panel"
-            className="text-muted-foreground hover:text-foreground"
+            className="ml-2 text-muted-foreground hover:text-foreground"
           >
             {panelOpen ? (
               <PanelRightClose className="h-5 w-5" />
@@ -1148,35 +1106,8 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
         </div>
       </div>
 
-      {/* ─── Main Content Area (Right Panels floating) ─── */}
-      <div className="flex-1 relative flex justify-end w-full overflow-hidden gap-2">
-        {/* AI Assistant Panel */}
-        <WorkflowAiPanel
-          workflow={workflow}
-          isOpen={aiPanelOpen}
-          onClose={() => setAiPanelOpen(false)}
-          onApplyDefinition={(definition, name, description) => {
-            if (!workflow?.id) return;
-            updateWorkflow.mutate(
-              {
-                id: workflow.id,
-                workflow: {
-                  definition,
-                  ...(name && { name }),
-                  ...(description && { description }),
-                },
-              },
-              {
-                onSuccess: () => {
-                  if (name) setName(name);
-                  if (description) setDescription(description);
-                  toast.success(t('workflows.ai.applied', 'AI changes applied to workflow'));
-                },
-              },
-            );
-          }}
-        />
-
+      {/* ─── Main Content Area (Right Panel floating) ─── */}
+      <div className="flex-1 relative flex justify-end w-full overflow-hidden">
         {panelOpen && (
           <div className="w-[400px] h-full flex flex-col gap-4 overflow-y-auto pointer-events-auto pb-4 pr-1">
             {/* ─── Details ─── */}

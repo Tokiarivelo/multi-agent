@@ -23,9 +23,9 @@ import { ModelClientService } from './infrastructure/external/model-client.servi
 import { ToolClientService } from './infrastructure/external/tool-client.service';
 import { VectorClientService } from './infrastructure/external/vector-client.service';
 import { AgentController } from './presentation/controllers/agent.controller';
-import { CompletionController } from './presentation/controllers/completion.controller';
 import { HealthController } from './presentation/controllers/health.controller';
 import { McpController } from './presentation/controllers/mcp.controller';
+import { CompletionController } from './presentation/controllers/completion.controller';
 import { CompletionUseCase } from './application/use-cases/completion.use-case';
 import { AgentExecutionGateway } from './presentation/gateways/agent-execution.gateway';
 
@@ -37,7 +37,7 @@ import { AgentExecutionGateway } from './presentation/gateways/agent-execution.g
       maxRedirects: 5,
     }),
   ],
-  controllers: [AgentController, CompletionController, HealthController, McpController],
+  controllers: [AgentController, HealthController, McpController, CompletionController],
   providers: [
     PrismaService,
     SeedService,

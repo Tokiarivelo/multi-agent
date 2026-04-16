@@ -3,7 +3,6 @@ import {
   Get,
   Post,
   Put,
-  Patch,
   Delete,
   Body,
   Param,
@@ -55,7 +54,6 @@ export class ToolController {
   }
 
   @Put(':id')
-  @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateToolDto) {
     return this.updateToolUseCase.execute(id, dto);
   }

@@ -1,19 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { workflowsApi, AddNodePayload, AddEdgePayload } from '../api/workflows.api';
+import type { PaginatedExecutionSummaries } from '../api/workflows.api';
 import { Workflow } from '@/types';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { AxiosError } from 'axios';
-
-function extractErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof AxiosError) {
-    const data = error.response?.data as { message?: string | string[] } | undefined;
-    if (data?.message) {
-      return Array.isArray(data.message) ? data.message.join(', ') : data.message;
-    }
-  }
-  return fallback;
-}
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +32,20 @@ export function useExecution(executionId: string | null) {
       if (status === 'RUNNING' || status === 'PENDING') return 2000;
       return false;
     },
+  });
+}
+
+export function useWorkflowExecutions(
+  workflowId: string | null,
+  page = 1,
+  limit = 10,
+  sortBy = 'createdAt',
+  sortOrder: 'asc' | 'desc' = 'desc',
+) {
+  return useQuery<PaginatedExecutionSummaries>({
+    queryKey: ['workflow-executions', workflowId, page, limit, sortBy, sortOrder],
+    queryFn: () => workflowsApi.getExecutions(workflowId!, page, limit, sortBy, sortOrder),
+    enabled: !!workflowId,
   });
 }
 
@@ -187,8 +191,7 @@ export function useExecuteWorkflow() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['executions'] });
     },
-    onError: (error) =>
-      toast.error(extractErrorMessage(error, 'Failed to start execution')),
+    onError: () => toast.error('Failed to start execution'),
   });
 }
 
@@ -196,7 +199,6 @@ export function useCancelExecution() {
   return useMutation({
     mutationFn: (executionId: string) => workflowsApi.cancelExecution(executionId),
     onSuccess: () => toast.success('Execution cancelled'),
-    onError: (error) =>
-      toast.error(extractErrorMessage(error, 'Failed to cancel execution')),
+    onError: () => toast.error('Failed to cancel execution'),
   });
 }

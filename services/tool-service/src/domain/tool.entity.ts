@@ -32,7 +32,6 @@ export interface Tool {
   icon?: string;
   isBuiltIn: boolean;
   mcpConfig?: McpConfig;
-  repoFullName?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -50,7 +49,6 @@ export class ToolEntity {
     public readonly createdAt: Date,
     public readonly updatedAt: Date,
     public readonly mcpConfig: McpConfig | null = null,
-    public readonly repoFullName: string | null = null,
   ) {}
 
   static fromPrisma(data: any): ToolEntity {
@@ -66,7 +64,6 @@ export class ToolEntity {
       data.createdAt,
       data.updatedAt,
       data.mcpConfig ?? null,
-      data.repoFullName ?? null,
     );
   }
 
@@ -83,7 +80,6 @@ export class ToolEntity {
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       mcpConfig: this.mcpConfig,
-      repoFullName: this.repoFullName,
     };
   }
 

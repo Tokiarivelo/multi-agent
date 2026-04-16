@@ -20,11 +20,11 @@ export const toolsApi = {
   },
 
   update: async (id: string, payload: Partial<Tool>): Promise<Tool> => {
-    const { data } = await apiClient.patch<Tool>(`/api/tools/${id}`, payload);
+    const { data } = await apiClient.put<Tool>(`/api/tools/${id}`, payload);
     return data;
   },
 
-  remove: async (id: string): Promise<void> => {
+  delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/tools/${id}`);
   },
 
