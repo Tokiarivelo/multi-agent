@@ -38,7 +38,7 @@ export class BuiltInToolsService {
     this.logger.log(`Workspace root initialized to: ${this.workspaceRoot}`);
   }
 
-  async execute(toolName: string, parameters: Record<string, any>, _timeout: number): Promise<any> {
+  async execute(toolName: string, parameters: Record<string, any>, _timeout: number, code?: string): Promise<any> {
     switch (toolName) {
       case 'http_request':
         return this.httpRequest(parameters as any);
@@ -83,7 +83,20 @@ export class BuiltInToolsService {
       case 'trello_move_card':
         return this.trelloMoveCard(parameters as any);
       default:
+        if (code) {
+          return this.executeCustomCode(code, parameters);
+        }
         throw new Error(`Unknown built-in tool: ${toolName}`);
+    }
+  }
+
+  private async executeCustomCode(code: string, parameters: Record<string, any>): Promise<any> {
+    try {
+      // eslint-disable-next-line no-new-func
+      const fn = new Function('params', `${code}\nreturn execute(params);`);
+      return await Promise.resolve(fn(parameters));
+    } catch (error: any) {
+      throw new Error(`Custom code execution failed: ${error.message}`);
     }
   }
 

@@ -1,6 +1,7 @@
 'use client';
 
-import { useAgents } from '../hooks/useAgents';
+import { useState } from 'react';
+import { useAgents, useCreateAgent } from '../hooks/useAgents';
 import { useModels } from '@/features/models/hooks/useModels';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,15 +15,34 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Edit, Bot, Wrench, Activity, Clock, Box, FileText } from 'lucide-react';
+import { Plus, Edit, Bot, Wrench, Activity, Clock, Box, FileText, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { AgentAiGenerateModal } from './AgentAiGenerateModal';
+import { GeneratedAgentConfig, ProvisionedTool } from '../api/agents.api';
 
 export function AgentList() {
   const { t } = useTranslation();
   const { data, isLoading, error } = useAgents();
   const { data: modelsData, isLoading: modelsLoading } = useModels();
+  const createAgent = useCreateAgent();
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+
+  const handleAiApply = (config: GeneratedAgentConfig, modelId: string, provisionedTools?: ProvisionedTool[]) => {
+    // config.tools already contains real DB IDs after backend provisioning
+    // Use them directly; fall back to [] if provisioning didn't run
+    const toolIds = provisionedTools ? provisionedTools.map((t) => t.id) : [];
+    createAgent.mutate({
+      name: config.name,
+      description: config.description,
+      modelId,
+      systemPrompt: config.systemPrompt,
+      temperature: config.temperature,
+      maxTokens: config.maxTokens,
+      tools: toolIds,
+    });
+  };
 
   if (isLoading || modelsLoading) {
     return (
@@ -47,6 +67,7 @@ export function AgentList() {
   const models = modelsData?.data || [];
 
   return (
+    <>
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-end justify-between px-1">
         <div className="space-y-1">
@@ -62,6 +83,14 @@ export function AgentList() {
            <Badge variant="secondary" className="font-mono px-3 py-1 text-sm bg-blue-500/10 text-blue-600 border-none shadow-none hidden sm:inline-flex">
             {agents.length} {t('agents.configured')}
           </Badge>
+          <Button
+            variant="outline"
+            className="gap-2 border-blue-500/30 text-blue-600 hover:bg-blue-500/10 transition-all"
+            onClick={() => setAiModalOpen(true)}
+          >
+            <Sparkles className="h-4 w-4" />
+            Generate with AI
+          </Button>
           <Link href="/agents/new">
             <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-500/25 transition-all">
               <Plus className="h-4 w-4" />
@@ -191,5 +220,12 @@ export function AgentList() {
         </CardContent>
       </Card>
     </div>
+
+    <AgentAiGenerateModal
+      open={aiModalOpen}
+      onOpenChange={setAiModalOpen}
+      onApply={handleAiApply}
+    />
+    </>
   );
 }

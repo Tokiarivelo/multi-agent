@@ -11,6 +11,13 @@ export interface ToolDefinition {
   endpoint?: string;
 }
 
+export interface ToolSummary {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+}
+
 @Injectable()
 export class ToolClientService {
   private readonly toolServiceUrl: string;
@@ -55,6 +62,57 @@ export class ToolClientService {
         `Failed to fetch tool: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
+    }
+  }
+
+  async listToolsCatalog(pageSize = 200): Promise<ToolSummary[]> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.toolServiceUrl}/api/tools`, {
+          params: { page: 1, pageSize },
+        }),
+      );
+      return response.data?.data ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  async createTool(dto: {
+    name: string;
+    description: string;
+    category: string;
+    parameters: unknown[];
+    code?: string;
+    icon?: string;
+  }): Promise<{ id: string; name: string }> {
+    const response = await firstValueFrom(
+      this.httpService.post(`${this.toolServiceUrl}/api/tools`, dto),
+    );
+    return { id: response.data.id, name: response.data.name };
+  }
+
+  async generateToolWithAi(
+    prompt: string,
+    modelId: string,
+  ): Promise<{
+    name: string;
+    description: string;
+    category: string;
+    parameters: unknown[];
+    code?: string;
+    icon?: string;
+  } | null> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.toolServiceUrl}/api/tools/ai/generate`, {
+          prompt,
+          modelId,
+        }),
+      );
+      return response.data?.config ?? null;
+    } catch {
+      return null;
     }
   }
 

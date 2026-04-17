@@ -8,7 +8,9 @@ import { SandboxExecutorService } from '@infrastructure/sandbox/sandbox-executor
 import { BuiltInToolsService } from '@infrastructure/sandbox/built-in-tools.service';
 import { McpExecutorService } from '@infrastructure/sandbox/mcp-executor.service';
 import { ToolController } from '@presentation/controllers/tool.controller';
+import { ToolAiController } from '@presentation/controllers/tool-ai.controller';
 import { HealthController } from '@presentation/controllers/health.controller';
+import { ToolAiService } from '@infrastructure/external/tool-ai.service';
 import {
   CreateToolUseCase,
   UpdateToolUseCase,
@@ -31,7 +33,7 @@ const TOOL_REPOSITORY = 'ToolRepository';
       },
     ]),
   ],
-  controllers: [ToolController, HealthController],
+  controllers: [ToolController, ToolAiController, HealthController],
   providers: [
     PrismaService,
     {
@@ -47,6 +49,7 @@ const TOOL_REPOSITORY = 'ToolRepository';
     GetToolUseCase,
     ListToolsUseCase,
     ExecuteToolUseCase,
+    ToolAiService,
   ],
 })
 export class AppModule {}

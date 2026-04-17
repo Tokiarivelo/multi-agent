@@ -1,5 +1,5 @@
 import { plainToClass } from 'class-transformer';
-import { IsString, IsNumber, IsBoolean, validateSync } from 'class-validator';
+import { IsString, IsNumber, IsBoolean, IsOptional, validateSync } from 'class-validator';
 
 class EnvironmentVariables {
   @IsString()
@@ -31,6 +31,10 @@ class EnvironmentVariables {
 
   @IsBoolean()
   SANDBOX_ENABLED: boolean = true;
+
+  @IsOptional()
+  @IsString()
+  AGENT_SERVICE_URL: string = 'http://localhost:3002';
 }
 
 export function validate(config: Record<string, unknown>) {

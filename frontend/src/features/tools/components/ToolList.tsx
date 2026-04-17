@@ -13,7 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Plus, Wrench, Play, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Wrench, Play, Pencil, Trash2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import * as LucideIcons from 'lucide-react';
 import { useState } from 'react';
@@ -22,6 +22,7 @@ import { ExecuteToolModal } from './ExecuteToolModal';
 import { useTranslation } from 'react-i18next';
 import { DeleteGuardDialog } from '@/components/shared/DeleteGuardDialog';
 import { useDeleteGuard } from '@/hooks/useDeleteGuard';
+import { ToolAiGenerateModal } from './ToolAiGenerateModal';
 
 const DynamicIcon = ({ name, className }: { name?: string; className?: string }) => {
   if (!name) return <Wrench className={className} />;
@@ -40,6 +41,7 @@ export function ToolList() {
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [pendingDeleteTool, setPendingDeleteTool] = useState<Tool | null>(null);
   const deleteGuard = useDeleteGuard('tool');
+  const [aiModalOpen, setAiModalOpen] = useState(false);
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-destructive">{t('tools.error')}</div>;
@@ -53,6 +55,14 @@ export function ToolList() {
           <h2 className="text-2xl font-bold">{t('tools.title')}</h2>
           <p className="text-muted-foreground">{t('tools.description')}</p>
         </div>
+        <Button
+          variant="outline"
+          className="gap-2 border-amber-500/30 text-amber-600 hover:bg-amber-500/10 transition-all"
+          onClick={() => setAiModalOpen(true)}
+        >
+          <Sparkles className="h-4 w-4" />
+          Generate with AI
+        </Button>
         <Link href="/tools/new">
           <Button className="gap-2">
             <Plus className="h-4 w-4" />
@@ -201,6 +211,11 @@ export function ToolList() {
             },
           });
         }}
+      />
+
+      <ToolAiGenerateModal
+        open={aiModalOpen}
+        onOpenChange={setAiModalOpen}
       />
     </div>
   );
