@@ -17,6 +17,7 @@ import {
   CheckCircle,
   XCircle,
   History,
+  RefreshCw,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
@@ -50,6 +51,7 @@ export const WorkflowFlowNode = memo(
     const proposals = Array.isArray(nodeData?.proposals)
       ? (nodeData.proposals as Array<string | Record<string, unknown>>)
       : [];
+    const multiSelect = nodeData?.multiSelect !== false;
 
     const [promptInput, setPromptInput] = useState('');
     const [selectedProposals, setSelectedProposals] = useState<string[]>([]);
@@ -57,7 +59,8 @@ export const WorkflowFlowNode = memo(
     const [showHistory, setShowHistory] = useState(false);
 
     const queryClient = useQueryClient();
-    const agentIdForTokens = nodeType === 'AGENT' ? (data.config?.agentId as string | undefined) : undefined;
+    const agentIdForTokens =
+      nodeType === 'AGENT' ? (data.config?.agentId as string | undefined) : undefined;
 
     // Refetch token usage immediately when the node finishes (bypasses 30s staleTime)
     useEffect(() => {
@@ -77,7 +80,7 @@ export const WorkflowFlowNode = memo(
     const handleResume = async () => {
       let finalInput = promptInput;
       if (selectedProposals.length > 0) {
-        finalInput = JSON.stringify(selectedProposals);
+        finalInput = multiSelect ? JSON.stringify(selectedProposals) : selectedProposals[0];
       } else if (!promptInput.trim()) {
         return;
       }
@@ -99,10 +102,11 @@ export const WorkflowFlowNode = memo(
     const isEnd = nodeType === 'END';
     const isCondition = nodeType === 'CONDITIONAL';
     const isAgent = nodeType === 'AGENT';
+    const isOrchestrator = nodeType === 'ORCHESTRATOR';
 
     // Config summary line (for non-agent nodes)
     let configSummary = '';
-    if (!isAgent && typeof config?.agentId === 'string' && config.agentId)
+    if (!isAgent && !isOrchestrator && typeof config?.agentId === 'string' && config.agentId)
       configSummary = `Agent: ${config.agentId.slice(0, 16)}`;
     else if (typeof config?.toolId === 'string' && config.toolId)
       configSummary = `Tool: ${config.toolId.slice(0, 16)}`;
@@ -320,7 +324,8 @@ export const WorkflowFlowNode = memo(
                     {liveTokens.totalTokens.toLocaleString()} tok
                   </span>
                   <span className="text-[9px] text-muted-foreground/60 shrink-0">
-                    ↑{liveTokens.inputTokens.toLocaleString()} ↓{liveTokens.outputTokens.toLocaleString()}
+                    ↑{liveTokens.inputTokens.toLocaleString()} ↓
+                    {liveTokens.outputTokens.toLocaleString()}
                   </span>
                 </div>
                 {liveTokens.iteration > 0 && (
@@ -330,7 +335,10 @@ export const WorkflowFlowNode = memo(
                 )}
               </div>
               <div className="w-full h-0.5 rounded-full bg-foreground/10 overflow-hidden">
-                <div className="h-full bg-primary/60 rounded-full animate-pulse" style={{ width: `${Math.min(100, (liveTokens.iteration / 5) * 100 + 20)}%` }} />
+                <div
+                  className="h-full bg-primary/60 rounded-full animate-pulse"
+                  style={{ width: `${Math.min(100, (liveTokens.iteration / 5) * 100 + 20)}%` }}
+                />
               </div>
             </div>
           )}
@@ -341,20 +349,26 @@ export const WorkflowFlowNode = memo(
               {/* row 1: status + tokens */}
               <div className="flex items-center justify-between gap-1">
                 <div className="flex items-center gap-1 min-w-0">
-                  {lastExecution.success
-                    ? <CheckCircle className="h-2.5 w-2.5 text-emerald-500 shrink-0" />
-                    : <XCircle className="h-2.5 w-2.5 text-destructive shrink-0" />}
+                  {lastExecution.success ? (
+                    <CheckCircle className="h-2.5 w-2.5 text-emerald-500 shrink-0" />
+                  ) : (
+                    <XCircle className="h-2.5 w-2.5 text-destructive shrink-0" />
+                  )}
                   <span className="text-[9px] font-mono font-semibold text-violet-600 shrink-0">
                     {lastExecution.totalTokens.toLocaleString()} tok
                   </span>
                   <span className="text-[9px] text-muted-foreground/60 shrink-0">
-                    ↑{lastExecution.inputTokens.toLocaleString()} ↓{lastExecution.outputTokens.toLocaleString()}
+                    ↑{lastExecution.inputTokens.toLocaleString()} ↓
+                    {lastExecution.outputTokens.toLocaleString()}
                   </span>
                 </div>
                 <button
                   title="View token history"
                   onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => { e.stopPropagation(); setShowHistory(true); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowHistory(true);
+                  }}
                   className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-violet-500 transition-colors shrink-0"
                 >
                   <History className="h-2.5 w-2.5" />
@@ -370,6 +384,41 @@ export const WorkflowFlowNode = memo(
                   {formatRelativeTime(lastExecution.timestamp)}
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* ORCHESTRATOR node: loop + sub-agent badges */}
+          {isOrchestrator && (
+            <div className="mt-2 border-t border-foreground/10 pt-1.5 space-y-1">
+              <div className="flex flex-wrap gap-1">
+                <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/25 text-indigo-600 dark:text-indigo-400 font-medium leading-none">
+                  <RefreshCw className="h-2 w-2 shrink-0" />
+                  {`×${(config?.maxIterations as number) ?? 10}`}
+                </span>
+                {((config?.subAgents as { agentId: string }[]) ?? []).slice(0, 2).map((sa, i) => {
+                  const name = safeSubAgents[i]?.name ?? sa.agentId.slice(0, 10);
+                  return (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/25 text-violet-600 dark:text-violet-400 font-medium leading-none"
+                    >
+                      <Bot className="h-2 w-2 shrink-0" />
+                      {name.length > 10 ? `${name.slice(0, 10)}…` : name}
+                    </span>
+                  );
+                })}
+                {((config?.subAgents as unknown[]) ?? []).length > 2 && (
+                  <span className="text-[9px] text-muted-foreground/60 leading-none py-0.5">
+                    +{((config?.subAgents as unknown[]) ?? []).length - 2}
+                  </span>
+                )}
+              </div>
+              {nodeStatus === 'RUNNING' &&
+                (nodeData as Record<string, unknown>)?._iteration !== undefined && (
+                  <p className="text-[9px] text-indigo-400 font-mono">
+                    iter {String((nodeData as Record<string, unknown>)._iteration ?? 0)}
+                  </p>
+                )}
             </div>
           )}
 
@@ -392,7 +441,7 @@ export const WorkflowFlowNode = memo(
               {proposals.length > 0 && (
                 <div className="mb-3 space-y-2 max-h-[150px] overflow-y-auto pr-1">
                   <p className="text-[10px] text-muted-foreground font-medium">
-                    Select from proposals:
+                    {multiSelect ? 'Select one or more options:' : 'Select an option:'}
                   </p>
                   {proposals.map((proposal: string | Record<string, unknown>, i: number) => {
                     const value =
@@ -415,11 +464,17 @@ export const WorkflowFlowNode = memo(
                         )}
                       >
                         <input
-                          type="checkbox"
+                          type={multiSelect ? 'checkbox' : 'radio'}
+                          name={multiSelect ? undefined : `proposal-${id}`}
                           checked={isSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedProposals((prev) => [...prev, value]);
-                            else setSelectedProposals((prev) => prev.filter((p) => p !== value));
+                          onChange={() => {
+                            if (multiSelect) {
+                              if (isSelected)
+                                setSelectedProposals((prev) => prev.filter((p) => p !== value));
+                              else setSelectedProposals((prev) => [...prev, value]);
+                            } else {
+                              setSelectedProposals([value]);
+                            }
                           }}
                           className="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary w-3.5 h-3.5"
                         />

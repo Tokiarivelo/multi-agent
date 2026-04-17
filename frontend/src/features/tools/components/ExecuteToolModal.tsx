@@ -1,12 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -143,15 +138,19 @@ function ParameterField({
           {param.name}
         </Label>
         {param.required ? (
-          <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">required</Badge>
+          <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">
+            required
+          </Badge>
         ) : (
-          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">optional</Badge>
+          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+            optional
+          </Badge>
         )}
-        <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">{param.type}</Badge>
+        <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
+          {param.type}
+        </Badge>
       </div>
-      {param.description && (
-        <p className="text-xs text-muted-foreground">{param.description}</p>
-      )}
+      {param.description && <p className="text-xs text-muted-foreground">{param.description}</p>}
       {param.type === 'boolean' ? (
         <select
           id={id}
@@ -188,9 +187,11 @@ function ParameterField({
 // ─── Execution result ──────────────────────────────────────────────────────────
 
 function ShellResult({ data, error }: { data?: unknown; error?: string }) {
-  const shell = data as { stdout?: string; stderr?: string; code?: number; error?: string } | undefined;
+  const shell = data as
+    | { stdout?: string; stderr?: string; code?: number; error?: string }
+    | undefined;
   const stdout = shell?.stdout?.trim();
-  const stderr = (shell?.stderr?.trim()) || error || shell?.error;
+  const stderr = shell?.stderr?.trim() || error || shell?.error;
   const code = shell?.code ?? (error ? 1 : 0);
 
   return (
@@ -198,7 +199,9 @@ function ShellResult({ data, error }: { data?: unknown; error?: string }) {
       <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border-b border-zinc-800">
         <Terminal className="h-3 w-3 text-zinc-500" />
         <span className="text-zinc-400">output</span>
-        <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded ${code === 0 ? 'bg-emerald-900/40 text-emerald-400' : 'bg-red-900/40 text-red-400'}`}>
+        <span
+          className={`ml-auto text-[10px] px-1.5 py-0.5 rounded ${code === 0 ? 'bg-emerald-900/40 text-emerald-400' : 'bg-red-900/40 text-red-400'}`}
+        >
           exit {code}
         </span>
       </div>
@@ -208,9 +211,7 @@ function ShellResult({ data, error }: { data?: unknown; error?: string }) {
         ) : !stderr ? (
           <span className="text-zinc-600 italic">(no output)</span>
         ) : null}
-        {stderr && (
-          <pre className="text-red-400 whitespace-pre-wrap leading-relaxed">{stderr}</pre>
-        )}
+        {stderr && <pre className="text-red-400 whitespace-pre-wrap leading-relaxed">{stderr}</pre>}
       </div>
     </div>
   );
@@ -343,9 +344,7 @@ function ExecuteToolForm({
         <Button
           onClick={handleRun}
           disabled={executeTool.isPending}
-          className={
-            isShell ? 'gap-2 bg-emerald-600 hover:bg-emerald-700 text-white' : 'gap-2'
-          }
+          className={isShell ? 'gap-2 bg-emerald-600 hover:bg-emerald-700 text-white' : 'gap-2'}
         >
           {executeTool.isPending ? (
             <>
@@ -354,11 +353,7 @@ function ExecuteToolForm({
             </>
           ) : (
             <>
-              {isShell ? (
-                <Terminal className="h-4 w-4" />
-              ) : (
-                <Play className="h-4 w-4" />
-              )}
+              {isShell ? <Terminal className="h-4 w-4" /> : <Play className="h-4 w-4" />}
               Run
             </>
           )}
@@ -370,8 +365,17 @@ function ExecuteToolForm({
 
 export function ExecuteToolModal({ tool, open, onOpenChange }: ExecuteToolModalProps) {
   const [isPending, setIsPending] = useState(false);
-  const getActiveWorkspace = useWorkspaceStore((s) => s.getActiveWorkspace);
-  const cwd = getActiveWorkspace()?.nativePath;
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  // '' means "follow the active workspace"; any explicit id is a user override
+  const [selectedWsId, setSelectedWsId] = useState<string>('');
+
+  const resolvedWsId =
+    selectedWsId && workspaces.some((w) => w.id === selectedWsId)
+      ? selectedWsId
+      : (activeWorkspaceId ?? workspaces[0]?.id ?? '');
+  const selectedWs = workspaces.find((w) => w.id === resolvedWsId) ?? null;
+  const cwd = selectedWs?.nativePath;
 
   const isShell = tool?.name === 'shell_execute';
 
@@ -395,19 +399,34 @@ export function ExecuteToolModal({ tool, open, onOpenChange }: ExecuteToolModalP
             )}
             Test: {tool.name}
           </DialogTitle>
-          {tool.description && (
-            <p className="text-sm text-muted-foreground">{tool.description}</p>
+          {tool.description && <p className="text-sm text-muted-foreground">{tool.description}</p>}
+          {/* Workspace selector */}
+          {workspaces.length > 0 ? (
+            <div className="flex items-center gap-2 pt-0.5">
+              <span className="text-xs text-muted-foreground shrink-0">Workspace:</span>
+              <select
+                value={resolvedWsId}
+                onChange={(e) => setSelectedWsId(e.target.value)}
+                className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs font-mono text-foreground min-w-0 truncate"
+              >
+                {workspaces.map((ws) => (
+                  <option key={ws.id} value={ws.id}>
+                    {ws.name ?? ws.nativePath ?? ws.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <p className="text-xs text-amber-500">
+              No workspace open — cwd will use server default
+            </p>
           )}
-          {!isShell &&
-            (cwd ? (
-              <p className="text-xs text-muted-foreground font-mono truncate" title={cwd}>
-                cwd: {cwd}
-              </p>
-            ) : (
-              <p className="text-xs text-amber-500">
-                No workspace selected — cwd will use server default
-              </p>
-            ))}
+
+          {!isShell && cwd && (
+            <p className="text-xs text-muted-foreground font-mono truncate" title={cwd}>
+              cwd: {cwd}
+            </p>
+          )}
         </DialogHeader>
 
         <ExecuteToolForm

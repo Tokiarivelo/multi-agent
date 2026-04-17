@@ -47,7 +47,8 @@ export class AgentClientService {
         this.httpService.post(
           `${this.baseUrl}/api/agents/${request.agentId}/execute`,
           {
-            input: typeof request.input === 'string' ? request.input : JSON.stringify(request.input),
+            input:
+              typeof request.input === 'string' ? request.input : JSON.stringify(request.input),
             metadata: {
               ...request.config,
               toolIds: request.toolIds ?? [],

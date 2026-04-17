@@ -60,6 +60,7 @@ import {
   Workflow as WorkflowIcon,
   ExternalLink,
   MessageCircleQuestion,
+  Sparkles,
   User,
   GitCommitHorizontal,
 } from 'lucide-react';
@@ -323,79 +324,94 @@ function NodeExecutionDataPanel({
                       </div>
 
                       {/* WAITING_INPUT: show agent message + question */}
-                      {isWaiting && (() => {
-                        const agentMsg = raw?.agentMessage as string | undefined;
-                        const question = raw?.prompt as string | undefined;
-                        const proposals = raw?.proposals as string[] | undefined;
-                        return (
-                          <>
-                            {agentMsg && (
-                              <div className="text-xs leading-relaxed text-foreground/80 prose prose-sm dark:prose-invert max-w-none">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{agentMsg}</ReactMarkdown>
-                              </div>
-                            )}
-                            {question && (
-                              <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 border-l-2 border-blue-400 pl-2">
-                                {question}
-                              </p>
-                            )}
-                            {proposals && proposals.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {proposals.map((p, pi) => (
-                                  <span key={pi} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-300">
-                                    {p}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
+                      {isWaiting &&
+                        (() => {
+                          const agentMsg = raw?.agentMessage as string | undefined;
+                          const question = raw?.prompt as string | undefined;
+                          const proposals = raw?.proposals as string[] | undefined;
+                          return (
+                            <>
+                              {agentMsg && (
+                                <div className="text-xs leading-relaxed text-foreground/80 prose prose-sm dark:prose-invert max-w-none">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {agentMsg}
+                                  </ReactMarkdown>
+                                </div>
+                              )}
+                              {question && (
+                                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 border-l-2 border-blue-400 pl-2">
+                                  {question}
+                                </p>
+                              )}
+                              {proposals && proposals.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {proposals.map((p, pi) => (
+                                    <span
+                                      key={pi}
+                                      className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-300"
+                                    >
+                                      {p}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
 
                       {/* RUNNING after WAITING: show user response */}
-                      {isResume && (() => {
-                        const userResponse = raw?.userResponse as string | undefined;
-                        const question = raw?.prompt as string | undefined;
-                        return (
-                          <>
-                            {question && (
-                              <p className="text-[10px] text-muted-foreground italic">Re: {question}</p>
-                            )}
-                            {userResponse && (
-                              <p className="text-xs font-medium text-foreground bg-emerald-500/10 rounded px-2 py-1 border border-emerald-500/20">
-                                {userResponse}
-                              </p>
-                            )}
-                          </>
-                        );
-                      })()}
+                      {isResume &&
+                        (() => {
+                          const userResponse = raw?.userResponse as string | undefined;
+                          const question = raw?.prompt as string | undefined;
+                          return (
+                            <>
+                              {question && (
+                                <p className="text-[10px] text-muted-foreground italic">
+                                  Re: {question}
+                                </p>
+                              )}
+                              {userResponse && (
+                                <p className="text-xs font-medium text-foreground bg-emerald-500/10 rounded px-2 py-1 border border-emerald-500/20">
+                                  {userResponse}
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
 
                       {/* COMPLETED: show final agent response */}
-                      {(isCompleted || isFailed) && (() => {
-                        const output = deepParse(raw?.output) as Record<string, unknown> | string | undefined;
-                        const agentText = (() => {
-                          if (typeof output === 'string') return output;
-                          if (typeof output === 'object' && output !== null) {
-                            const o = (output as Record<string, unknown>).output;
-                            if (typeof o === 'string') return o;
-                          }
-                          return undefined;
-                        })();
-                        const err = raw?.error as string | undefined;
-                        return (
-                          <>
-                            {err && <p className="text-xs text-destructive">{err}</p>}
-                            {agentText && (
-                              <div className="text-xs leading-relaxed text-foreground/80 prose prose-sm dark:prose-invert max-w-none">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{agentText}</ReactMarkdown>
-                              </div>
-                            )}
-                            {!agentText && !err && (
-                              <StructuredDataViewer data={raw?.output} className="min-h-[60px]" />
-                            )}
-                          </>
-                        );
-                      })()}
+                      {(isCompleted || isFailed) &&
+                        (() => {
+                          const output = deepParse(raw?.output) as
+                            | Record<string, unknown>
+                            | string
+                            | undefined;
+                          const agentText = (() => {
+                            if (typeof output === 'string') return output;
+                            if (typeof output === 'object' && output !== null) {
+                              const o = (output as Record<string, unknown>).output;
+                              if (typeof o === 'string') return o;
+                            }
+                            return undefined;
+                          })();
+                          const err = raw?.error as string | undefined;
+                          return (
+                            <>
+                              {err && <p className="text-xs text-destructive">{err}</p>}
+                              {agentText && (
+                                <div className="text-xs leading-relaxed text-foreground/80 prose prose-sm dark:prose-invert max-w-none">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {agentText}
+                                  </ReactMarkdown>
+                                </div>
+                              )}
+                              {!agentText && !err && (
+                                <StructuredDataViewer data={raw?.output} className="min-h-[60px]" />
+                              )}
+                            </>
+                          );
+                        })()}
                     </div>
                   </div>
                 </div>
@@ -615,7 +631,9 @@ function NodeExecutionDataPanel({
             <div className="mt-1 space-y-2">
               <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
                 <span className="text-muted-foreground">Child Execution ID</span>
-                <code className="font-mono text-[10px] text-foreground/80 truncate">{subExecId}</code>
+                <code className="font-mono text-[10px] text-foreground/80 truncate">
+                  {subExecId}
+                </code>
                 <span className="text-muted-foreground">Workflow ID</span>
                 <code className="font-mono text-[10px] text-foreground/80 truncate">{subWfId}</code>
               </div>
@@ -745,24 +763,24 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   useEffect(() => {
     if (executionData) {
       const store = useWorkflowExecutionStore.getState();
-      
+
       // Set overall status
       store.setExecutionStatus(executionData.status);
-      
+
       // Populate nodes
       if (executionData.nodeExecutions) {
         executionData.nodeExecutions.forEach((ne: NodeExecution) => {
           store.setNodeStatus(ne.nodeId, ne.status as NodeStatus);
           if (ne.output !== undefined || ne.error !== undefined) {
-             store.setNodeData(ne.nodeId, {
-               input: ne.input,
-               output: ne.output,
-               error: ne.error
-             });
+            store.setNodeData(ne.nodeId, {
+              input: ne.input,
+              output: ne.output,
+              error: ne.error,
+            });
           }
         });
       }
-      
+
       // Sync local activeExecution so we can cancel it etc. Defer to avoid cascading render warning.
       queueMicrotask(() => {
         setActiveExecution(executionData as WorkflowExecution);
@@ -849,7 +867,11 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
         } else {
           const rawName = name || workflow?.id || 'untitled_workflow';
           const fileName = `${rawName.replace(/\s+/g, '_').toLowerCase()}.json`;
-          await writeFileAtPath(activeWs.rootHandle, fileName, JSON.stringify(workflowData, null, 2));
+          await writeFileAtPath(
+            activeWs.rootHandle,
+            fileName,
+            JSON.stringify(workflowData, null, 2),
+          );
           await refreshTree(activeWs.id);
           toast.success(`Saved to workspace locally: ${fileName}`);
         }
@@ -935,29 +957,34 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
               </CardTitle>
               {/* Short question as subtitle */}
               {waitingPrompt && (
-                <p className={cn(
-                  'text-sm font-semibold mt-1 leading-snug',
-                  waitingQuestionType === 'danger_choice' ? 'text-red-600 dark:text-red-400' : 'text-foreground',
-                )}>
+                <p
+                  className={cn(
+                    'text-sm font-semibold mt-1 leading-snug',
+                    waitingQuestionType === 'danger_choice'
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-foreground',
+                  )}
+                >
                   {waitingPrompt}
                 </p>
               )}
             </CardHeader>
             <CardContent className="pt-4 max-h-[70vh] overflow-y-auto space-y-3">
               {/* Agent body text (explanation above the question) */}
-              {waitingAgentText && waitingAgentText !== waitingPrompt && (
-                isJSON(waitingAgentText) ? (
-                  <StructuredDataViewer data={tryParseJSON(waitingAgentText)} className="min-h-[80px]" />
+              {waitingAgentText &&
+                waitingAgentText !== waitingPrompt &&
+                (isJSON(waitingAgentText) ? (
+                  <StructuredDataViewer
+                    data={tryParseJSON(waitingAgentText)}
+                    className="min-h-[80px]"
+                  />
                 ) : (
                   <div className="text-sm leading-relaxed text-foreground/80 prose prose-sm dark:prose-invert max-w-none border-l-2 border-border/60 pl-3">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {waitingAgentText}
-                    </ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{waitingAgentText}</ReactMarkdown>
                   </div>
-                )
-              )}
+                ))}
               <AgentReplyBar
-                nodeId={waitingNodeId ?? undefined}
+                nodeId={waitingNodeId!}
                 executionId={activeExecution?.id ?? activeExecutionId}
                 agentText={waitingAgentText ?? undefined}
                 externalProposals={waitingProposals}
@@ -1168,11 +1195,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
             <Card className="backdrop-blur-xl bg-white/40 dark:bg-black/40 border-border/50 shadow-xl shrink-0 pointer-events-auto">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <span>
-                    {i18n.language.startsWith('fr')
-                      ? 'Contrat I/O'
-                      : 'I/O Contract'}
-                  </span>
+                  <span>{i18n.language.startsWith('fr') ? 'Contrat I/O' : 'I/O Contract'}</span>
                   <Badge variant="secondary" className="text-[10px] font-normal">
                     {inputSchema.length + outputSchema.length} fields
                   </Badge>

@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-import { Workflow, PaginatedResponse } from '@/types';
+import { Workflow, PaginatedResponse, NodeTypeId } from '@/types';
 
 // ─── AI types ─────────────────────────────────────────────────────────────────
 
@@ -82,24 +82,7 @@ export interface PaginatedExecutionSummaries {
 
 export interface AddNodePayload {
   id: string;
-  type:
-    | 'AGENT'
-    | 'TOOL'
-    | 'CONDITIONAL'
-    | 'TRANSFORM'
-    | 'START'
-    | 'END'
-    | 'PROMPT'
-    | 'TEXT'
-    | 'FILE'
-    | 'LOOP'
-    | 'GITHUB'
-    | 'SLACK'
-    | 'WHATSAPP'
-    | 'SHELL'
-    | 'WORKSPACE_READ'
-    | 'WORKSPACE_WRITE'
-    | 'SUBWORKFLOW';
+  type: NodeTypeId;
   customName?: string;
   config?: Record<string, unknown>;
   position?: { x: number; y: number };

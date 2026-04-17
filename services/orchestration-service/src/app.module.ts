@@ -39,7 +39,7 @@ import { ResourceProvisioningService } from './infrastructure/external/resource-
     HttpModule.registerAsync({
       imports: [NestConfigModule],
       useFactory: async () => ({
-        timeout: 10000,
+        timeout: 30000,
         maxRedirects: 5,
       }),
       inject: [ConfigService],

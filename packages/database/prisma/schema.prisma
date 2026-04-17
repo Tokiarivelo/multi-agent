@@ -106,6 +106,7 @@ model Tool {
   updatedAt   DateTime     @updatedAt
   icon        String?
   mcpConfig   Json?
+  repoFullName String?
 
   @@index([category])
   @@index([isBuiltIn])

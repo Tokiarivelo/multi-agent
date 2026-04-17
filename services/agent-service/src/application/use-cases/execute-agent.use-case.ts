@@ -1,5 +1,6 @@
 import { Injectable, Inject, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { loadPrompt } from '../utils/prompt-loader.util';
 import {
   IAgentRepository,
   AGENT_REPOSITORY,
@@ -68,7 +69,15 @@ export class ExecuteAgentUseCase {
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ executionId, nodeId, model, inputTokens, outputTokens, totalTokens, iteration }),
+      body: JSON.stringify({
+        executionId,
+        nodeId,
+        model,
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        iteration,
+      }),
     }).catch((err) => this.logger.warn(`token-progress POST failed: ${err?.message}`));
   }
 
@@ -152,18 +161,18 @@ export class ExecuteAgentUseCase {
       messages.push({ role: 'user', content: userContent });
 
       const workspaceContextBlock = workspacePath
-        ? `\n\n[WORKSPACE CONTEXT]\n` +
-          `Active workspace path: ${workspacePath}\n` +
-          `Rules:\n` +
-          `- When calling file_read, pdf_read, or shell_execute, ALWAYS include cwd: "${workspacePath}"\n` +
-          `- Do NOT ask the user to confirm the path or file name — use the path above directly\n` +
-          `- Do NOT ask for permission before calling a tool — execute immediately when requested\n` +
-          `- If a file is not found, report the error; do not ask for an alternative path`
+        ? '\n\n[WORKSPACE CONTEXT]\n' + loadPrompt('workspace-context.md', { workspacePath })
         : '';
+
+      // ── Global: mandatory interactive-question protocol ─────────────────
+      // Loaded from prompts/ask-user-protocol.md — appended unconditionally
+      // so any agent/model knows how to signal that it needs user input.
+      const askUserRulesBlock =
+        '\n\n[INTERACTIVE QUESTION PROTOCOL — MANDATORY]\n' + loadPrompt('ask-user-protocol.md');
 
       const context = this.agentExecutionService.buildContext(
         messages,
-        (agent.systemPrompt ?? '') + workspaceContextBlock,
+        (agent.systemPrompt ?? '') + workspaceContextBlock + askUserRulesBlock,
       );
       this.agentExecutionService.validateTokenLimit(
         context.conversationHistory,
@@ -201,7 +210,9 @@ export class ExecuteAgentUseCase {
           this.logger.warn(`makeOnProgress(${iterIndex}): skipped — execId or nodeId missing`);
           return undefined;
         }
-        this.logger.log(`makeOnProgress(${iterIndex}): callback registered for execId=${execId} nodeId=${execNodeId}`);
+        this.logger.log(
+          `makeOnProgress(${iterIndex}): callback registered for execId=${execId} nodeId=${execNodeId}`,
+        );
         return (p: { inputTokens: number; outputTokens: number; totalTokens: number }) => {
           this.reportTokenProgress(
             execId,
@@ -226,7 +237,15 @@ export class ExecuteAgentUseCase {
       totalOutputTokens = response.outputTokens ?? 0;
 
       // Final accurate report after iteration 0 completes
-      this.reportTokenProgress(execId!, execNodeId!, modelConfig.modelName, totalInputTokens, totalOutputTokens, totalTokens, 0);
+      this.reportTokenProgress(
+        execId!,
+        execNodeId!,
+        modelConfig.modelName,
+        totalInputTokens,
+        totalOutputTokens,
+        totalTokens,
+        0,
+      );
 
       let iterations = 0;
       const MAX_ITERATIONS = 5;
@@ -272,7 +291,15 @@ export class ExecuteAgentUseCase {
         totalTokens += response.tokens ?? 0;
         totalInputTokens += response.inputTokens ?? 0;
         totalOutputTokens += response.outputTokens ?? 0;
-        this.reportTokenProgress(execId!, execNodeId!, modelConfig.modelName, totalInputTokens, totalOutputTokens, totalTokens, iterations);
+        this.reportTokenProgress(
+          execId!,
+          execNodeId!,
+          modelConfig.modelName,
+          totalInputTokens,
+          totalOutputTokens,
+          totalTokens,
+          iterations,
+        );
       }
       const subAgentResults: any[] = [];
 
@@ -359,21 +386,23 @@ export class ExecuteAgentUseCase {
         completedAt: new Date(),
       });
 
-      this.tokenUsageRepository.create({
-        userId: ragUserId || (nodeMetadata.userId as string) || 'unknown',
-        agentId: agent.id,
-        executionId: execution.id,
-        workflowId: nodeMetadata.workflowId as string | undefined,
-        nodeId: nodeMetadata.nodeId as string | undefined,
-        isTest: Boolean(nodeMetadata.isTest),
-        model: modelConfig.modelName,
-        inputTokens: totalInputTokens,
-        outputTokens: totalOutputTokens,
-        totalTokens,
-        inputPreview: dto.input.slice(0, 500),
-        outputPreview: response.content?.slice(0, 500),
-        success: true,
-      }).catch((err) => this.logger.error('Failed to save token usage', err?.message));
+      this.tokenUsageRepository
+        .create({
+          userId: ragUserId || (nodeMetadata.userId as string) || 'unknown',
+          agentId: agent.id,
+          executionId: execution.id,
+          workflowId: nodeMetadata.workflowId as string | undefined,
+          nodeId: nodeMetadata.nodeId as string | undefined,
+          isTest: Boolean(nodeMetadata.isTest),
+          model: modelConfig.modelName,
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
+          totalTokens,
+          inputPreview: dto.input.slice(0, 500),
+          outputPreview: response.content?.slice(0, 500),
+          success: true,
+        })
+        .catch((err) => this.logger.error('Failed to save token usage', err?.message));
 
       return completedExecution;
     } catch (error) {
@@ -384,21 +413,23 @@ export class ExecuteAgentUseCase {
       });
 
       const failMeta = (dto.metadata ?? {}) as Record<string, any>;
-      this.tokenUsageRepository.create({
-        userId: failMeta.userId || 'unknown',
-        agentId: agent.id,
-        executionId: execution.id,
-        workflowId: failMeta.workflowId as string | undefined,
-        nodeId: failMeta.nodeId as string | undefined,
-        isTest: Boolean(failMeta.isTest),
-        model: 'unknown',
-        inputTokens: 0,
-        outputTokens: 0,
-        totalTokens: 0,
-        inputPreview: dto.input.slice(0, 500),
-        success: false,
-        errorMessage: error.message,
-      }).catch((err) => this.logger.error('Failed to save token usage (error path)', err?.message));
+      this.tokenUsageRepository
+        .create({
+          userId: failMeta.userId || 'unknown',
+          agentId: agent.id,
+          executionId: execution.id,
+          workflowId: failMeta.workflowId as string | undefined,
+          nodeId: failMeta.nodeId as string | undefined,
+          isTest: Boolean(failMeta.isTest),
+          model: 'unknown',
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          inputPreview: dto.input.slice(0, 500),
+          success: false,
+          errorMessage: error.message,
+        })
+        .catch((err) => this.logger.error('Failed to save token usage (error path)', err?.message));
 
       throw new BadRequestException(`Agent execution failed: ${error.message}`);
     }

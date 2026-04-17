@@ -62,6 +62,24 @@ export class ProxyController {
           case 'files':
             target = this.configService.get<string>('FILE_SERVICE_URL', 'http://localhost:3008');
             break;
+          case 'github':
+            target = this.configService.get<string>(
+              'GITHUB_MCP_SERVICE_URL',
+              'http://localhost:3010',
+            );
+            break;
+          case 'mcp':
+            target = this.configService.get<string>(
+              'GITHUB_MCP_SERVICE_URL',
+              'http://localhost:3010',
+            );
+            break;
+          case 'trello':
+            target = this.configService.get<string>(
+              'TRELLO_MCP_SERVICE_URL',
+              'http://localhost:3011',
+            );
+            break;
           case 'auth':
             target = this.configService.get<string>(
               'FRONTEND_SERVICE_URL',
@@ -110,6 +128,23 @@ export class ProxyController {
     return next();
   }
 
+  @Public()
+  @All('github/*')
+  proxyGithub(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    return this.proxyMiddleware(req as any, res as any, next);
+  }
+
+  @Public()
+  @All('mcp')
+  proxyMcp(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    return this.proxyMiddleware(req as any, res as any, next);
+  }
+
+  @All('trello/*')
+  proxyTrello(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    return this.proxyMiddleware(req as any, res as any, next);
+  }
+
   @All('*')
   proxy(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     const segments = req.path.split('/').filter(Boolean);
@@ -147,6 +182,8 @@ export class ProxyController {
       case 'files':
       case 'auth':
       case 'users':
+      case 'github':
+      case 'trello':
         break;
       default:
         return next(

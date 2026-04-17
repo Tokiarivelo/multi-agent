@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -11,12 +12,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import {
-  CreateToolDto,
-  UpdateToolDto,
-  ExecuteToolDto,
-  ListToolsDto,
-} from '@application/dto';
+import { CreateToolDto, UpdateToolDto, ExecuteToolDto, ListToolsDto } from '@application/dto';
 import {
   CreateToolUseCase,
   UpdateToolUseCase,
@@ -54,6 +50,7 @@ export class ToolController {
   }
 
   @Put(':id')
+  @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateToolDto) {
     return this.updateToolUseCase.execute(id, dto);
   }

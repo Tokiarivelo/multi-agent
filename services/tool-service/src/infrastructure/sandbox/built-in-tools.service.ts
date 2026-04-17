@@ -26,12 +26,15 @@ export class BuiltInToolsService {
     const domains = this.configService.get<string>('ALLOWED_DOMAINS', '*');
     this.allowedDomains = domains === '*' ? ['*'] : domains.split(',');
     this.enableFileOps = this.configService.get<boolean>('ENABLE_FILE_OPERATIONS', true);
-    
+
     // Default workspace root is two levels up if in dev (multi-agent/services/tool-service)
     // or current directory if elsewhere. Can be overridden by WORKSPACE_ROOT env.
-    const defaultRoot = path.resolve(process.cwd(), process.env.NODE_ENV === 'development' ? '../..' : '.');
+    const defaultRoot = path.resolve(
+      process.cwd(),
+      process.env.NODE_ENV === 'development' ? '../..' : '.',
+    );
     this.workspaceRoot = this.configService.get<string>('WORKSPACE_ROOT') || defaultRoot;
-    
+
     this.logger.log(`Workspace root initialized to: ${this.workspaceRoot}`);
   }
 
@@ -49,6 +52,10 @@ export class BuiltInToolsService {
         return this.pdfRead(parameters as any);
       case 'file_write':
         return this.fileWrite(parameters as any);
+      case 'workspace_read':
+        return this.workspaceRead(parameters as any);
+      case 'workspace_write':
+        return this.workspaceWrite(parameters as any);
       case 'github_api':
         return this.githubApi(parameters as any);
       case 'slack_post_message':
@@ -234,6 +241,23 @@ export class BuiltInToolsService {
     }
   }
 
+  private async workspaceRead(params: {
+    filePath: string;
+    workspaceId?: string;
+  }): Promise<{ success: boolean; content: string; path: string }> {
+    return this.fileRead({ path: params.filePath });
+  }
+
+  private async workspaceWrite(params: {
+    filePath: string;
+    content: string;
+    workspaceId?: string;
+  }): Promise<{ success: boolean; path: string }> {
+    const resolvedPath = this.resolvePath(params.filePath);
+    await this.fileWrite({ path: resolvedPath, content: params.content });
+    return { success: true, path: resolvedPath };
+  }
+
   private isAllowedDomain(url: string): boolean {
     if (this.allowedDomains.includes('*')) {
       return true;
@@ -339,9 +363,11 @@ export class BuiltInToolsService {
     }
     try {
       if (!params.cwd) {
-        this.logger.warn(`No 'cwd' provided for shell command, falling back to server default: ${this.workspaceRoot}`);
+        this.logger.warn(
+          `No 'cwd' provided for shell command, falling back to server default: ${this.workspaceRoot}`,
+        );
       }
-      
+
       const execCwd = params.cwd
         ? path.isAbsolute(params.cwd)
           ? params.cwd
@@ -375,20 +401,16 @@ export class BuiltInToolsService {
     const { apiKey, token, listId, name, description } = params;
     try {
       const response = await firstValueFrom(
-        this.httpService.post(
-          'https://api.trello.com/1/cards',
-          null,
-          {
-            params: {
-              key: apiKey,
-              token,
-              idList: listId,
-              name,
-              ...(description ? { desc: description } : {}),
-            },
-            timeout: 10000,
+        this.httpService.post('https://api.trello.com/1/cards', null, {
+          params: {
+            key: apiKey,
+            token,
+            idList: listId,
+            name,
+            ...(description ? { desc: description } : {}),
           },
-        ),
+          timeout: 10000,
+        }),
       );
       return { success: true, card: response.data };
     } catch (error: any) {
@@ -457,7 +479,10 @@ export class BuiltInToolsService {
           }),
         );
         const exact = cards.data.find((c: any) => c.name.toLowerCase() === needle);
-        if (exact) { match = exact; break; }
+        if (exact) {
+          match = exact;
+          break;
+        }
         if (!match) {
           const partial = cards.data.find((c: any) => c.name.toLowerCase().includes(needle));
           if (partial) match = partial;
@@ -470,13 +495,15 @@ export class BuiltInToolsService {
 
     try {
       const response = await firstValueFrom(
-        this.httpService.put(
-          `https://api.trello.com/1/cards/${cardId}`,
-          null,
-          { params: { key: apiKey, token, idList: listId }, timeout: 10000 },
-        ),
+        this.httpService.put(`https://api.trello.com/1/cards/${cardId}`, null, {
+          params: { key: apiKey, token, idList: listId },
+          timeout: 10000,
+        }),
       );
-      return { success: true, card: { id: response.data.id, name: response.data.name, idList: response.data.idList } };
+      return {
+        success: true,
+        card: { id: response.data.id, name: response.data.name, idList: response.data.idList },
+      };
     } catch (error: any) {
       throw new Error(`Trello move card failed: ${error.response?.data || error.message}`);
     }
@@ -526,7 +553,9 @@ export class BuiltInToolsService {
   }): Promise<any> {
     if (!this.enableFileOps) throw new Error('File operations are disabled');
     const cwd = this.resolvePath(params.cwd);
-    const command = params.checkout ? `git checkout -b ${params.name}` : `git branch ${params.name}`;
+    const command = params.checkout
+      ? `git checkout -b ${params.name}`
+      : `git branch ${params.name}`;
     return this.execGitCommand(command, cwd);
   }
 

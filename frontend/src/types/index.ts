@@ -26,6 +26,27 @@ export interface RegisterData {
 }
 
 // Workflow Types
+export type NodeTypeId =
+  | 'START'
+  | 'END'
+  | 'AGENT'
+  | 'TOOL'
+  | 'MCP'
+  | 'CONDITIONAL'
+  | 'TRANSFORM'
+  | 'PROMPT'
+  | 'TEXT'
+  | 'FILE'
+  | 'LOOP'
+  | 'GITHUB'
+  | 'SLACK'
+  | 'WHATSAPP'
+  | 'SHELL'
+  | 'WORKSPACE_READ'
+  | 'WORKSPACE_WRITE'
+  | 'SUBWORKFLOW'
+  | 'ORCHESTRATOR';
+
 export interface WorkflowIOField {
   key: string;
   label?: string;
@@ -53,23 +74,8 @@ export interface Workflow {
 
 export interface WorkflowNode {
   id: string;
-  /** Backend sends uppercase: AGENT | TOOL | CONDITIONAL | TRANSFORM | START | END */
-  type:
-    | 'AGENT'
-    | 'TOOL'
-    | 'CONDITIONAL'
-    | 'TRANSFORM'
-    | 'START'
-    | 'END'
-    | 'PROMPT'
-    | 'TEXT'
-    | 'FILE'
-    | 'agent'
-    | 'tool'
-    | 'condition'
-    | 'prompt'
-    | 'text'
-    | 'file';
+  /** Backend sends uppercase NodeTypeId, legacy frontend uses lowercase */
+  type: NodeTypeId | Lowercase<NodeTypeId>;
   data: {
     agentId?: string;
     toolId?: string;
@@ -130,8 +136,8 @@ export interface Tool {
   icon?: string;
   isBuiltIn: boolean;
   mcpConfig?: McpConfig;
-  status?: string;
   repoFullName?: string;
+  status?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -150,28 +156,6 @@ export interface ToolExecutionResult {
   error?: string;
   executionTime: number;
   memoryUsed?: number;
-}
-
-// GitHub Types
-export interface GitHubRepo {
-  id: number;
-  name: string;
-  fullName: string;
-  description: string | null;
-  private: boolean;
-  htmlUrl: string;
-  language: string | null;
-  stargazersCount: number;
-  updatedAt: string;
-  defaultBranch: string;
-  fork: boolean;
-}
-
-export interface GitHubConnection {
-  connected: boolean;
-  accessToken?: string;
-  login?: string;
-  avatarUrl?: string;
 }
 
 // End Tool Types
@@ -317,4 +301,26 @@ export interface ApiError {
   message: string;
   code?: string;
   details?: Record<string, unknown>;
+}
+
+// GitHub OAuth Integration Types
+export interface GitHubRepo {
+  id: number;
+  name: string;
+  fullName: string;
+  description: string | null;
+  private: boolean;
+  htmlUrl: string;
+  language: string | null;
+  stargazersCount: number;
+  updatedAt: string;
+  defaultBranch: string;
+  fork: boolean;
+}
+
+export interface GitHubConnection {
+  connected: boolean;
+  login?: string;
+  avatarUrl?: string;
+  accessToken?: string;
 }

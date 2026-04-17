@@ -54,15 +54,20 @@ export class ExecuteToolUseCase {
       // and sandboxed tools use the correct working directory. Only set when not already
       // provided by the caller in their explicit parameters.
       const parameters =
-        dto.cwd && !dto.parameters['cwd']
-          ? { ...dto.parameters, cwd: dto.cwd }
-          : dto.parameters;
+        dto.cwd && !dto.parameters['cwd'] ? { ...dto.parameters, cwd: dto.cwd } : dto.parameters;
 
       let result: any;
 
       if (tool.category === ToolCategory.MCP) {
         if (!tool.mcpConfig) throw new BadRequestException('MCP tool missing mcpConfig');
-        result = await this.mcpExecutor.execute(tool.mcpConfig, parameters, timeout);
+
+        let mcpParams = parameters;
+        if (tool.repoFullName && tool.repoFullName.includes('/')) {
+          const [owner, repo] = tool.repoFullName.split('/');
+          mcpParams = { ...mcpParams, owner, repo };
+        }
+
+        result = await this.mcpExecutor.execute(tool.mcpConfig, mcpParams, timeout);
       } else if (tool.isBuiltIn) {
         result = await this.builtInTools.execute(tool.name, parameters, timeout);
       } else if (tool.code) {
