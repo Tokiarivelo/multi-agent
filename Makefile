@@ -1,6 +1,6 @@
 # Makefile for Multi-Agent Platform Kubernetes Deployment
 
-.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-workspace-tools test-subworkflow
+.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-tools seed-agents seed-all test-subworkflow
 
 # Default target
 .DEFAULT_GOAL := help
@@ -169,10 +169,18 @@ test-mcp: ## Smoke-test the MCP endpoint (requires agent-service running on :300
 	  -H 'Content-Type: application/json' \
 	  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | jq .
 
-seed-workspace-tools: ## Seed workspace_read and workspace_write tools into the database
-	@echo "$(GREEN)Seeding workspace tools…$(NC)"
+seed-tools: ## Seed built-in tools into the database
+	@echo "$(GREEN)Seeding built-in tools…$(NC)"
 	cd packages/database && pnpm ts-node src/seed/seed-tools.ts
-	@echo "$(GREEN)Workspace tools seeded!$(NC)"
+	@echo "$(GREEN)Built-in tools seeded!$(NC)"
+
+seed-agents: ## Seed system agents and models into the database
+	@echo "$(GREEN)Seeding system agents…$(NC)"
+	cd packages/database && pnpm ts-node src/seed/seed-agents.ts
+	@echo "$(GREEN)System agents seeded!$(NC)"
+
+seed-all: seed-tools seed-agents ## Run all seed files
+	@echo "$(GREEN)All data seeded successfully!$(NC)"
 
 test-subworkflow: ## Smoke-test SUBWORKFLOW node via the orchestration service test endpoint
 	@echo "$(GREEN)Testing SUBWORKFLOW node integration…$(NC)"
