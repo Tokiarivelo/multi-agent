@@ -22,4 +22,8 @@ export class CompletionDto {
   @IsNumber()
   @Min(1)
   maxTokens?: number;
+
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }

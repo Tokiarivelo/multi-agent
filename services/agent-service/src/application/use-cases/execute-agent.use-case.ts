@@ -111,8 +111,11 @@ export class ExecuteAgentUseCase {
     try {
       await this.agentRepository.updateExecution(execution.id, { status: ExecutionStatus.RUNNING });
 
-      const modelConfig = await this.modelClient.getModelConfig(agent.modelId);
       const nodeMetadata = (dto.metadata ?? {}) as Record<string, any>;
+      const ragUserId: string = (nodeMetadata.userId as string) ?? '';
+
+      const modelConfig = await this.modelClient.getModelConfig(agent.modelId, ragUserId);
+      
       // Accept both keys: workspacePath (set by AGENT node) and cwd (legacy / direct runs)
       const workspacePath =
         (nodeMetadata.workspacePath as string | undefined) ||
@@ -139,7 +142,6 @@ export class ExecuteAgentUseCase {
       // The context block is prepended as a system-level injection to avoid
       // inflating the conversation history and wasting tokens.
       let ragContextBlock = '';
-      const ragUserId: string = (nodeMetadata.userId as string) ?? '';
       const useVectorSearch: boolean = Boolean(nodeMetadata.useVectorSearch);
       if (ragUserId && useVectorSearch) {
         const ragResults = await this.vectorClient.searchFiles(ragUserId, dto.input, 5);
@@ -325,7 +327,7 @@ export class ExecuteAgentUseCase {
             continue;
           }
 
-          const subModelConfig = await this.modelClient.getModelConfig(subAgentEntity.modelId);
+          const subModelConfig = await this.modelClient.getModelConfig(subAgentEntity.modelId, ragUserId);
           await this.langchainProvider.initialize({
             provider: subModelConfig.provider as any,
             model: subModelConfig.modelName,
@@ -459,7 +461,8 @@ export class ExecuteAgentUseCase {
         status: ExecutionStatus.RUNNING,
       });
 
-      const modelConfig = await this.modelClient.getModelConfig(agent.modelId);
+      const ragUserId: string = (dto.metadata?.userId as string) ?? '';
+      const modelConfig = await this.modelClient.getModelConfig(agent.modelId, ragUserId);
 
       const llmConfig: LLMConfig = {
         provider: modelConfig.provider as any,

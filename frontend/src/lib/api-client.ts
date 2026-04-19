@@ -21,7 +21,7 @@ const getAccessToken = async (forceRefresh = false): Promise<string | null> => {
     const res = await fetch('/api/auth/session');
     const freshSession = await res.json();
     return (freshSession?.accessToken as string) ?? null;
-  } catch (error) {
+  } catch {
     return null;
   }
 };

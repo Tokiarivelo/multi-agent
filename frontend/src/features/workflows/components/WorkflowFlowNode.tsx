@@ -23,7 +23,7 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { workflowsApi } from '../api/workflows.api';
-import { Trash2, Settings2 } from 'lucide-react';
+import { Trash2, Settings2, Copy } from 'lucide-react';
 import { useTokenUsage } from '@/features/analytics/hooks/useTokenUsage';
 import { AgentTokenHistoryModal } from '@/features/analytics/components/AgentTokenHistoryModal';
 import { useQueryClient } from '@tanstack/react-query';
@@ -172,7 +172,7 @@ export const WorkflowFlowNode = memo(
 
     const isDeletable = !isStart && !isEnd;
 
-    const dispatchNodeAction = (type: 'delete' | 'edit') => {
+    const dispatchNodeAction = (type: 'delete' | 'edit' | 'duplicate') => {
       window.dispatchEvent(
         new CustomEvent(`workflow-node-action`, { detail: { nodeId: id, action: type } }),
       );
@@ -202,6 +202,17 @@ export const WorkflowFlowNode = memo(
               }}
             >
               <Settings2 className="h-3 w-3" />
+            </button>
+            <button
+              className="flex items-center justify-center h-6 w-6 rounded-md bg-background/95 border border-border/60 text-muted-foreground hover:text-foreground hover:border-border shadow-md backdrop-blur-sm transition-all hover:scale-105 active:scale-95"
+              title="Duplicate node (Ctrl+D)"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatchNodeAction('duplicate');
+              }}
+            >
+              <Copy className="h-3 w-3" />
             </button>
             <button
               className="flex items-center justify-center h-6 w-6 rounded-md bg-background/95 border border-destructive/30 text-destructive/60 hover:text-destructive hover:border-destructive shadow-md backdrop-blur-sm transition-all hover:scale-105 active:scale-95"

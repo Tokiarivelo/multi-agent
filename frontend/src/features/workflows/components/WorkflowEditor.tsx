@@ -60,7 +60,6 @@ import {
   Workflow as WorkflowIcon,
   ExternalLink,
   MessageCircleQuestion,
-  Sparkles,
   User,
   GitCommitHorizontal,
 } from 'lucide-react';

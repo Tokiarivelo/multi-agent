@@ -28,10 +28,14 @@ export class ModelClientService {
     );
   }
 
-  async getModelConfig(modelId: string): Promise<ModelConfig> {
+  async getModelConfig(modelId: string, userId?: string): Promise<ModelConfig> {
     try {
+      const url = new URL(`${this.modelServiceUrl}/api/models/${modelId}`);
+      if (userId) {
+        url.searchParams.append('userId', userId);
+      }
       const response = await firstValueFrom(
-        this.httpService.get(`${this.modelServiceUrl}/api/models/${modelId}`),
+        this.httpService.get(url.toString()),
       );
 
       const model = response.data;

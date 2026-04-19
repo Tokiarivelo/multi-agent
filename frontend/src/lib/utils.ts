@@ -64,7 +64,7 @@ export function isJSON(str: string): boolean {
   try {
     const result = JSON.parse(str);
     return typeof result === 'object' && result !== null;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -73,7 +73,7 @@ export function tryParseJSON(str: string): unknown {
   if (typeof str !== 'string') return str;
   try {
     return JSON.parse(str);
-  } catch (e) {
+  } catch {
     return str;
   }
 }

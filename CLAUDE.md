@@ -30,9 +30,11 @@ k8s/        # Kubernetes manifests
 
 ### i18n (MANDATORY on every UI feature)
 
-- Every user-facing string: `useTranslation()` + `t('feature.key')`
-- Add keys to both `src/locales/en/<feature>.ts` and `src/locales/fr/<feature>.ts`
-- Register in `src/locales/{en,fr}/index.ts`
+- **Every** user-facing string — buttons, labels, titles, toasts, placeholders — must use `useTranslation()` + `t('feature.key')`. No hardcoded English strings, ever.
+- Add the key to **both** `src/locales/en/<feature>.ts` **and** `src/locales/fr/<feature>.ts` in the same PR/commit.
+- Do NOT use the fallback overload `t('key', 'Default text')` — add the key to the locale file instead.
+- Register the locale file in `src/locales/{en,fr}/index.ts` if it is new.
+- Before marking any UI task done: grep the diff for raw string literals inside JSX and confirm each one is translated.
 
 ### New Microservice Checklist
 

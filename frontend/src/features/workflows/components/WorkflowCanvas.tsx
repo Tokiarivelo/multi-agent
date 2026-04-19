@@ -37,6 +37,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Cpu,
+  Copy,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { NodeEditor } from './NodeEditor';
@@ -250,9 +251,14 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
 
   const { resolvedTheme } = useTheme();
   const { t, i18n } = useTranslation();
-  const { zoomIn, zoomOut, screenToFlowPosition } = useReactFlow();
+  const { zoomIn, zoomOut, screenToFlowPosition, getNodes } = useReactFlow();
 
   const [paletteOpen, setPaletteOpen] = useState(true);
+
+  /** Clipboard for Ctrl+C / Ctrl+V copy-paste */
+  const clipboard = useRef<FlowNode[]>([]);
+  /** Stable ref so keyboard handlers can call handleDuplicateNodes before it's defined */
+  const duplicateNodesRef = useRef<(nodesToDup: FlowNode[]) => void>(() => {});
 
   /**
    * Edges deleted in the same JS tick as a node deletion are collected here.
@@ -285,6 +291,43 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [zoomIn, zoomOut]);
+
+  /* Ctrl+C / Ctrl+V copy-paste, Ctrl+D duplicate */
+  useEffect(() => {
+    const handleCopyPaste = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        const toCopy = nodes.filter((n) => {
+          const d = n.data as WorkflowNodeData;
+          return n.selected && d.nodeType !== 'START' && d.nodeType !== 'END';
+        });
+        if (toCopy.length > 0) clipboard.current = toCopy;
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        if (clipboard.current.length === 0) return;
+        duplicateNodesRef.current(clipboard.current);
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        e.preventDefault();
+        const toDup = nodes.filter((n) => {
+          const d = n.data as WorkflowNodeData;
+          return n.selected && d.nodeType !== 'START' && d.nodeType !== 'END';
+        });
+        if (toDup.length > 0) duplicateNodesRef.current(toDup);
+      }
+    };
+
+    window.addEventListener('keydown', handleCopyPaste);
+    return () => window.removeEventListener('keydown', handleCopyPaste);
+  }, [nodes]);
 
   /* Listen for edge split (plus button) */
   useEffect(() => {
@@ -323,8 +366,10 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
   /* Listen for node quick-action events (edit / delete) dispatched from WorkflowFlowNode */
   useEffect(() => {
     const handleNodeAction = (e: Event) => {
-      const { nodeId, action } = (e as CustomEvent<{ nodeId: string; action: 'edit' | 'delete' }>)
-        .detail;
+      const { nodeId, action } = (e as CustomEvent<{
+        nodeId: string;
+        action: 'edit' | 'delete' | 'duplicate';
+      }>).detail;
 
       if (action === 'edit') {
         setEditingNodeId(nodeId);
@@ -366,12 +411,35 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
           return currentNodes;
         });
       }
+
+      if (action === 'duplicate') {
+        const node = getNodes().find((n) => n.id === nodeId);
+        if (!node) return;
+        const data = node.data as WorkflowNodeData;
+        if (data?.nodeType === 'START' || data?.nodeType === 'END') return;
+        const newNode: AddNodePayload = {
+          id: uuidv4(),
+          type: data.nodeType as AddNodePayload['type'],
+          customName: data.customName,
+          config: { ...data.config },
+          position: { x: node.position.x + 40, y: node.position.y + 40 },
+        };
+        addNodeMutation.mutate(newNode, {
+          onSuccess: () => {
+            setNodes((prev) => [
+              ...prev,
+              makeFlowNode(newNode, agentsData?.data ?? [], toolsData?.data ?? []),
+            ]);
+            pushHistory({ op: 'node_added', node: newNode });
+          },
+        });
+      }
     };
 
     window.addEventListener('workflow-node-action', handleNodeAction);
     return () => window.removeEventListener('workflow-node-action', handleNodeAction);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [edges, deleteNodeMutation, setNodes]);
+  }, [edges, deleteNodeMutation, setNodes, addNodeMutation, agentsData?.data, toolsData?.data]);
 
   /* Sync when workflow prop changes externally, or when agents/tools load */
   useEffect(() => {
@@ -427,8 +495,9 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
         | undefined)
     : undefined;
 
-  /* Selected node */
-  const selectedNode = nodes.find((n) => n.selected) ?? null;
+  /* Selected nodes (multi-select support) */
+  const selectedNodes = nodes.filter((n) => n.selected);
+  const selectedNode = selectedNodes.length === 1 ? (selectedNodes[0] ?? null) : null;
 
   useEffect(() => {
     setSelectedNodeId(selectedNode?.id ?? null);
@@ -802,31 +871,67 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
 
   const selectedEdge = edges.find((e) => e.selected) ?? null;
 
+  /* ─── Duplicate nodes ────────────────────────────────────────────── */
+  // Keep the stable ref in sync so keyboard handlers always call the latest version
+  useEffect(() => { duplicateNodesRef.current = handleDuplicateNodes; });
+
+  const handleDuplicateNodes = useCallback(
+    (nodesToDup: FlowNode[]) => {
+      const OFFSET = 40;
+      nodesToDup.forEach((node) => {
+        const data = node.data as WorkflowNodeData;
+        if (data.nodeType === 'START' || data.nodeType === 'END') return;
+        const newNode: AddNodePayload = {
+          id: uuidv4(),
+          type: data.nodeType as AddNodePayload['type'],
+          customName: data.customName,
+          config: { ...data.config },
+          position: { x: node.position.x + OFFSET, y: node.position.y + OFFSET },
+        };
+        addNodeMutation.mutate(newNode, {
+          onSuccess: () => {
+            setNodes((prev) => [
+              ...prev,
+              makeFlowNode(newNode, agentsData?.data ?? [], toolsData?.data ?? []),
+            ]);
+            pushHistory({ op: 'node_added', node: newNode });
+          },
+        });
+      });
+    },
+    [addNodeMutation, agentsData?.data, toolsData?.data, setNodes, pushHistory],
+  );
+
   const handleDeleteSelected = () => {
-    if (selectedNode) {
-      const data = selectedNode.data as WorkflowNodeData;
-      if (data?.nodeType === 'START' || data?.nodeType === 'END') return;
-      const nodePayload: AddNodePayload = {
-        id: selectedNode.id,
-        type: data.nodeType as AddNodePayload['type'],
-        customName: data.customName,
-        config: data.config,
-        position: selectedNode.position as { x: number; y: number },
-      };
-      // Capture edges connected to this node before deleting
-      const connectedEdges: AddEdgePayload[] = edges
-        .filter((e) => e.source === selectedNode.id || e.target === selectedNode.id)
-        .map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          condition: e.label as string | undefined,
-        }));
-      deleteNodeMutation.mutate(selectedNode.id, {
-        onSuccess: () => {
-          setNodes((prev) => prev.filter((n) => n.id !== selectedNode.id));
-          pushHistory({ op: 'node_deleted', node: nodePayload, connectedEdges });
-        },
+    const deletable = selectedNodes.filter((n) => {
+      const data = n.data as WorkflowNodeData;
+      return data?.nodeType !== 'START' && data?.nodeType !== 'END';
+    });
+
+    if (deletable.length > 0) {
+      deletable.forEach((node) => {
+        const data = node.data as WorkflowNodeData;
+        const nodePayload: AddNodePayload = {
+          id: node.id,
+          type: data.nodeType as AddNodePayload['type'],
+          customName: data.customName,
+          config: data.config,
+          position: node.position as { x: number; y: number },
+        };
+        const connectedEdges: AddEdgePayload[] = edges
+          .filter((e) => e.source === node.id || e.target === node.id)
+          .map((e) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            condition: e.label as string | undefined,
+          }));
+        deleteNodeMutation.mutate(node.id, {
+          onSuccess: () => {
+            setNodes((prev) => prev.filter((n) => n.id !== node.id));
+            pushHistory({ op: 'node_deleted', node: nodePayload, connectedEdges });
+          },
+        });
       });
     } else if (selectedEdge) {
       const edgePayload: AddEdgePayload = {
@@ -968,6 +1073,9 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
         edgeTypes={edgeTypes}
         fitView
         deleteKeyCode={['Delete', 'Backspace']}
+        multiSelectionKeyCode={['Control', 'Meta', 'Shift']}
+        selectionKeyCode="Shift"
+        selectionOnDrag={false}
         className="bg-background"
         colorMode={resolvedTheme === 'dark' ? 'dark' : 'light'}
       >
@@ -1033,6 +1141,16 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
                   <Settings2 className="h-3.5 w-3.5" />
                   {t('workflows.canvas.edit')}
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => handleDuplicateNodes([selectedNode])}
+                  title="Duplicate node (Ctrl+D)"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  {t('workflows.canvas.duplicate')}
+                </Button>
                 {selectedMeta && (
                   <Badge variant="secondary" className="text-xs">
                     {i18n.language.startsWith('fr') ? selectedMeta.labelFr : selectedMeta.label}
@@ -1040,7 +1158,24 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
                 )}
               </>
             )}
-            {(selectedNode || selectedEdge) && (
+            {selectedNodes.length > 1 && (
+              <>
+                <Badge variant="secondary" className="text-xs">
+                  {selectedNodes.length} {t('workflows.canvas.nodes')}
+                </Badge>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => handleDuplicateNodes(selectedNodes)}
+                  title="Duplicate selected nodes (Ctrl+D)"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  {t('workflows.canvas.duplicateAll')}
+                </Button>
+              </>
+            )}
+            {(selectedNodes.length > 0 || selectedEdge) && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -1050,6 +1185,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 {t('workflows.canvas.delete')}
+                {selectedNodes.length > 1 && ` (${selectedNodes.length})`}
               </Button>
             )}
 

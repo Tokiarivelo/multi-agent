@@ -318,7 +318,10 @@ function PipelineStepEditor({
                       onValueChange={(v) => updateStepConfig(step.id, 'toolId', v)}
                     >
                       <SelectTrigger className="h-7 text-xs">
-                        <SelectValue placeholder="Select tool…" />
+                        <SelectValue placeholder="Select tool…">
+                          {tools.find((tl) => tl.id === (step.config.toolId as string))?.name ||
+                            (step.config.toolId as string)}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {tools.map((t) => (
@@ -428,12 +431,12 @@ function WorkspaceReadConfig({
             <span className="text-muted-foreground font-normal">(folder to read from)</span>
           </Label>
           <Select value={selectedId} onValueChange={(v) => onConfigChange('workspaceId', v)}>
-            <SelectTrigger className="h-9 text-sm font-mono">
+            <SelectTrigger className="h-9 text-sm">
               <SelectValue placeholder="Select workspace…" />
             </SelectTrigger>
             <SelectContent>
               {workspaces.map((ws) => (
-                <SelectItem key={ws.id} value={ws.id} className="font-mono text-sm">
+                <SelectItem key={ws.id} value={ws.id} className="text-sm">
                   📁 {ws.name}
                 </SelectItem>
               ))}
@@ -495,12 +498,12 @@ function WorkspaceWriteConfig({
             <span className="text-muted-foreground font-normal">(folder to write into)</span>
           </Label>
           <Select value={selectedId} onValueChange={(v) => onConfigChange('workspaceId', v)}>
-            <SelectTrigger className="h-9 text-sm font-mono">
+            <SelectTrigger className="h-9 text-sm">
               <SelectValue placeholder="Select workspace…" />
             </SelectTrigger>
             <SelectContent>
               {workspaces.map((ws) => (
-                <SelectItem key={ws.id} value={ws.id} className="font-mono text-sm">
+                <SelectItem key={ws.id} value={ws.id} className="text-sm">
                   📁 {ws.name}
                 </SelectItem>
               ))}
@@ -846,7 +849,7 @@ function NodeEditorForm({
                 const agentToolIds: string[] = selectedAgent?.tools ?? [];
                 /** Resolve names for display */
                 const agentToolNames = agentToolIds.map(
-                  (tid) => tools.find((t) => t.id === tid)?.name ?? tid,
+                  (tid) => tools.find((t) => t.id === tid)?.name ?? t('workflows.node_editor.unknownTool', { defaultValue: 'Unknown Tool' }) + ` (${tid.slice(0, 8)})`,
                 );
                 return (
                   <div className="space-y-4">
@@ -859,7 +862,9 @@ function NodeEditorForm({
                           onValueChange={(v) => handleConfigChange('agentId', v)}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder={t('workflows.node_editor.selectAgent')} />
+                            <SelectValue placeholder={t('workflows.node_editor.selectAgent')}>
+                              {agents.find((a) => a.id === (config.agentId as string))?.name}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {agents.map((a) => (
@@ -930,7 +935,7 @@ function NodeEditorForm({
                                 }}
                               >
                                 <SelectTrigger className="h-8 text-xs flex-1">
-                                  <SelectValue placeholder="Select tool…" />
+                                  <SelectValue placeholder="Select tool…">{tools.find((tl) => tl.id === tid)?.name || tid}</SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                   {tools.map((tl) => (
@@ -1012,7 +1017,9 @@ function NodeEditorForm({
                                   }}
                                 >
                                   <SelectTrigger className="h-8 text-xs flex-1">
-                                    <SelectValue placeholder="Select sub-agent…" />
+                                    <SelectValue placeholder="Select sub-agent…">
+                                      {agents.find((a) => a.id === sa.agentId)?.name || sa.agentId}
+                                    </SelectValue>
                                   </SelectTrigger>
                                   <SelectContent>
                                     {agents
@@ -1112,7 +1119,7 @@ function NodeEditorForm({
                           {((config.subAgents as { agentId: string; role?: string }[]) ?? []).map(
                             (sa, i) => {
                               const name =
-                                agents.find((a) => a.id === sa.agentId)?.name ?? sa.agentId;
+                                agents.find((a) => a.id === sa.agentId)?.name ?? (sa.agentId ? `${t('workflows.node_editor.unknownAgent', { defaultValue: 'Unknown Agent' })} (${sa.agentId.slice(0, 8)})` : '');
                               return (
                                 <span
                                   key={i}
@@ -1266,7 +1273,9 @@ function NodeEditorForm({
                           onValueChange={(v) => handleConfigChange('agentId', v)}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select orchestrator agent…" />
+                            <SelectValue placeholder="Select orchestrator agent…">
+                              {agents.find((a) => a.id === (cfg.agentId as string))?.name}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {agents.map((a) => (
@@ -1389,7 +1398,11 @@ function NodeEditorForm({
                           onValueChange={(v) => handleConfigChange('subAgentStrategy', v)}
                         >
                           <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
+                            <SelectValue>
+                              {(cfg.subAgentStrategy as string) === 'auto'
+                                ? 'auto — agent signals __SPAWN_SUBAGENTS__'
+                                : 'disabled — no auto-spawning'}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="auto">
@@ -1443,7 +1456,10 @@ function NodeEditorForm({
                                     }}
                                   >
                                     <SelectTrigger className="h-8 text-xs flex-1">
-                                      <SelectValue placeholder="Select sub-agent…" />
+                                      <SelectValue placeholder="Select sub-agent…">
+                                        {agents.find((a) => a.id === sa.agentId)?.name ||
+                                          sa.agentId}
+                                      </SelectValue>
                                     </SelectTrigger>
                                     <SelectContent>
                                       {agents
@@ -1530,7 +1546,7 @@ function NodeEditorForm({
                                 }}
                               >
                                 <SelectTrigger className="h-8 text-xs flex-1">
-                                  <SelectValue placeholder="Select tool…" />
+                                  <SelectValue placeholder="Select tool…">{tools.find((tl) => tl.id === tid)?.name || tid}</SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                   {tools.map((tl) => (
@@ -1796,7 +1812,9 @@ function NodeEditorForm({
                     onValueChange={(v) => handleConfigChange('toolId', v)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t('workflows.node_editor.selectTool')} />
+                      <SelectValue placeholder={t('workflows.node_editor.selectTool')}>
+                        {tools.find((tl) => tl.id === (config.toolId as string))?.name}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {tools.map((tl) => (
@@ -1833,7 +1851,9 @@ function NodeEditorForm({
                             placeholder={
                               t('workflows.node_editor.selectMcpTool') || 'Select MCP tool…'
                             }
-                          />
+                          >
+                            {tools.find((tl) => tl.id === (config.toolId as string))?.name}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {mcpTools.map((tl) => (

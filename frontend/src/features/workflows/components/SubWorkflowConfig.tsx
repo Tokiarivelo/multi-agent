@@ -254,14 +254,14 @@ export function SubWorkflowConfig({
           <div className="h-9 rounded-md border border-input bg-muted/30 animate-pulse" />
         ) : availableWorkflows.length > 0 ? (
           <Select value={selectedId} onValueChange={(v) => onConfigChange('workflowId', v)}>
-            <SelectTrigger className="h-9 text-sm font-mono">
+            <SelectTrigger className="h-9 text-sm">
               <SelectValue
                 placeholder={isFr ? 'Sélectionner un workflow…' : 'Select a workflow…'}
               />
             </SelectTrigger>
             <SelectContent>
               {availableWorkflows.map((wf) => (
-                <SelectItem key={wf.id} value={wf.id} className="font-mono text-sm">
+                <SelectItem key={wf.id} value={wf.id} className="text-sm">
                   <span className="flex items-center gap-2">
                     <span
                       className={`inline-block w-1.5 h-1.5 rounded-full ${
@@ -278,7 +278,6 @@ export function SubWorkflowConfig({
                         {wf.definition?.outputSchema?.length ?? 0}↑
                       </span>
                     )}
-                    <span className="text-[10px] text-muted-foreground ml-auto">{wf.id}</span>
                   </span>
                 </SelectItem>
               ))}

@@ -16,7 +16,9 @@ export class CompletionUseCase {
   async execute(dto: CompletionDto): Promise<{ content: string; tokens: number }> {
     this.logger.log(`Running one-shot completion with model ${dto.modelId}`);
 
-    const modelConfig = await this.modelClientService.getModelConfig(dto.modelId);
+    const modelConfig = await this.modelClientService.getModelConfig(dto.modelId, dto.userId);
+
+    console.log('Model config:', modelConfig);
 
     const llmConfig = {
       provider: modelConfig.provider.toLowerCase() as

@@ -21,6 +21,8 @@ export const workflows = {
   'workflows.canvas.nodes': 'nœuds',
   'workflows.canvas.edge': 'lien',
   'workflows.canvas.edges': 'liens',
+  'workflows.canvas.duplicate': 'Dupliquer',
+  'workflows.canvas.duplicateAll': 'Tout dupliquer',
   'workflows.editor.cancel': 'Annuler',
   'workflows.editor.save': 'Enregistrer le flux',
   'workflows.editor.saving': 'Enregistrement...',

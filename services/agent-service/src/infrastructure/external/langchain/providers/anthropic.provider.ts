@@ -16,6 +16,9 @@ export class AnthropicProvider {
   private model!: ChatAnthropic;
 
   async initialize(config: LLMConfig): Promise<void> {
+    console.log('Initializing Anthropic provider with model:', config.model);
+    console.log('Initializing Anthropic provider with API key:', config.apiKey);
+
     this.model = new ChatAnthropic({
       modelName: config.model,
       anthropicApiKey: config.apiKey,
@@ -34,7 +37,9 @@ export class AnthropicProvider {
     tools?: any[],
     onProgress?: (progress: TokenProgressPayload) => void,
   ): Promise<LLMResponse> {
-    this.logger.log(`execute() called — onProgress=${onProgress ? 'YES (streaming)' : 'NO (blocking)'} tools=${tools?.length ?? 0}`);
+    this.logger.log(
+      `execute() called — onProgress=${onProgress ? 'YES (streaming)' : 'NO (blocking)'} tools=${tools?.length ?? 0}`,
+    );
     if (onProgress) {
       this.logger.log('Entering executeWithProgress (streaming mode)');
       return this.executeWithProgress(messages, tools, onProgress);
@@ -97,7 +102,9 @@ export class AnthropicProvider {
     onProgress: (progress: TokenProgressPayload) => void,
   ): Promise<LLMResponse> {
     try {
-      this.logger.log(`executeWithProgress: starting stream — model=${this.model.modelName} tools=${tools?.length ?? 0}`);
+      this.logger.log(
+        `executeWithProgress: starting stream — model=${this.model.modelName} tools=${tools?.length ?? 0}`,
+      );
       const streamingModel = new ChatAnthropic({
         modelName: this.model.modelName,
         anthropicApiKey: this.model.anthropicApiKey,
@@ -120,7 +127,11 @@ export class AnthropicProvider {
           } else if (!schema.type) {
             schema = { type: 'object', properties: schema.properties || schema };
           }
-          return { name: fn.name, description: fn.description || `Tool ${fn.name}`, input_schema: schema };
+          return {
+            name: fn.name,
+            description: fn.description || `Tool ${fn.name}`,
+            input_schema: schema,
+          };
         });
         boundModel = streamingModel.bindTools(anthropicTools);
       }
@@ -138,7 +149,9 @@ export class AnthropicProvider {
         }
         if (chunkCount % 10 === 0) {
           const estOutput = this.estimateTokens(aggregated.content?.toString() ?? '');
-          this.logger.log(`executeWithProgress: chunk=${chunkCount} estOutput=${estOutput} — calling onProgress`);
+          this.logger.log(
+            `executeWithProgress: chunk=${chunkCount} estOutput=${estOutput} — calling onProgress`,
+          );
           onProgress({ inputTokens: 0, outputTokens: estOutput, totalTokens: estOutput });
         }
       }
@@ -155,7 +168,9 @@ export class AnthropicProvider {
         usage?.output_tokens ?? this.estimateTokens(aggregated.content?.toString() ?? '');
       const totalTokens = inputTokens + outputTokens;
 
-      this.logger.log(`executeWithProgress: final tokens — in=${inputTokens} out=${outputTokens} total=${totalTokens}`);
+      this.logger.log(
+        `executeWithProgress: final tokens — in=${inputTokens} out=${outputTokens} total=${totalTokens}`,
+      );
       onProgress({ inputTokens, outputTokens, totalTokens });
 
       return {
@@ -198,7 +213,7 @@ export class AnthropicProvider {
         const anthropicTools = tools.map((t) => {
           const fn = t.type === 'function' ? t.function : t;
           let schema = fn.parameters || fn.input_schema;
-          
+
           if (!schema || Object.keys(schema).length === 0) {
             schema = {
               type: 'object',

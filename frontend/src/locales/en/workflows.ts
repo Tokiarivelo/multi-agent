@@ -21,6 +21,8 @@ export const workflows = {
   'workflows.canvas.nodes': 'nodes',
   'workflows.canvas.edge': 'edge',
   'workflows.canvas.edges': 'edges',
+  'workflows.canvas.duplicate': 'Duplicate',
+  'workflows.canvas.duplicateAll': 'Duplicate all',
   'workflows.editor.cancel': 'Cancel',
   'workflows.editor.save': 'Save Workflow',
   'workflows.editor.saving': 'Saving...',

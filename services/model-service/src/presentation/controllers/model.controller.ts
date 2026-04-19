@@ -67,8 +67,8 @@ export class ModelController {
   }
 
   @Get('default')
-  async getDefault() {
-    return this.getModelUseCase.getDefault();
+  async getDefault(@Query('userId') userId?: string) {
+    return this.getModelUseCase.getDefault(userId);
   }
 
   @Get('providers/:provider/available-models')
@@ -86,8 +86,8 @@ export class ModelController {
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return this.getModelUseCase.execute(id);
+  async findOne(@Param('id') id: string, @Query('userId') userId?: string) {
+    return this.getModelUseCase.execute(id, userId);
   }
 
   @Put(':id')

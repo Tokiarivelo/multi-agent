@@ -171,7 +171,7 @@ export class WorkflowAiService {
     session.messages.push(userMessage);
 
     const apiMessages = this.buildApiMessages(session);
-    const response = await this.callCompletion(opts.modelId, apiMessages);
+    const response = await this.callCompletion(opts.modelId, apiMessages, userId);
     const { parsed, raw } = this.parseJsonResponse(response.content);
 
     session.messages.push({
@@ -242,7 +242,7 @@ export class WorkflowAiService {
     });
 
     const apiMessages = this.buildApiMessages(session);
-    const response = await this.callCompletion(opts.modelId, apiMessages);
+    const response = await this.callCompletion(opts.modelId, apiMessages, userId);
     const { parsed, raw } = this.parseJsonResponse(response.content);
 
     session.messages.push({
@@ -491,12 +491,14 @@ export class WorkflowAiService {
   private async callCompletion(
     modelId: string,
     messages: Array<{ role: string; content: string }>,
+    userId?: string,
   ): Promise<{ content: string }> {
     try {
       const { data } = await firstValueFrom(
         this.httpService.post(`${this.agentServiceUrl}/api/completions`, {
           modelId,
           messages,
+          userId,
         }),
       );
       return data as { content: string };
