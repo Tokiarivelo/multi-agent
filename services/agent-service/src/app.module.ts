@@ -24,9 +24,11 @@ import { VectorClientService } from './infrastructure/external/vector-client.ser
 import { AgentRepository } from './infrastructure/persistence/agent.repository';
 import { TokenUsageRepository } from './infrastructure/persistence/token-usage.repository';
 import { AgentController } from './presentation/controllers/agent.controller';
+import { AgentAiController } from './presentation/controllers/agent-ai.controller';
 import { CompletionController } from './presentation/controllers/completion.controller';
 import { HealthController } from './presentation/controllers/health.controller';
 import { McpController } from './presentation/controllers/mcp.controller';
+import { AgentAiService } from './infrastructure/external/agent-ai.service';
 import { AgentExecutionGateway } from './presentation/gateways/agent-execution.gateway';
 
 @Module({
@@ -37,7 +39,7 @@ import { AgentExecutionGateway } from './presentation/gateways/agent-execution.g
       maxRedirects: 5,
     }),
   ],
-  controllers: [AgentController, CompletionController, HealthController, McpController],
+  controllers: [AgentController, AgentAiController, CompletionController, HealthController, McpController],
   providers: [
     PrismaService,
     SeedService,
@@ -66,6 +68,7 @@ import { AgentExecutionGateway } from './presentation/gateways/agent-execution.g
     TokenUsageRepository,
     GetTokenUsageUseCase,
     CompletionUseCase,
+    AgentAiService,
   ],
 })
 export class AppModule {}

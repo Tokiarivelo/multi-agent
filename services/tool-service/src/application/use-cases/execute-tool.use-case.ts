@@ -69,7 +69,7 @@ export class ExecuteToolUseCase {
 
         result = await this.mcpExecutor.execute(tool.mcpConfig, mcpParams, timeout);
       } else if (tool.isBuiltIn) {
-        result = await this.builtInTools.execute(tool.name, parameters, timeout);
+        result = await this.builtInTools.execute(tool.name, parameters, timeout, tool.code ?? undefined);
       } else if (tool.code) {
         result = await this.sandboxExecutor.execute(tool.code, parameters, timeout, dto.cwd);
       } else {

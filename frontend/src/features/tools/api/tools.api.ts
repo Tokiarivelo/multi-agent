@@ -1,6 +1,28 @@
 import { apiClient } from '@/lib/api-client';
 import { Tool, PaginatedResponse, ToolExecutionResult } from '@/types';
 
+export interface GeneratedToolConfig {
+  name: string;
+  description: string;
+  category: 'WEB' | 'API' | 'DATABASE' | 'FILE' | 'CUSTOM' | 'MCP';
+  parameters: Array<{
+    name: string;
+    type: 'string' | 'number' | 'boolean' | 'object' | 'array';
+    description: string;
+    required: boolean;
+    default?: unknown;
+  }>;
+  code: string;
+  icon: string;
+}
+
+export interface ToolAiResult {
+  sessionId: string;
+  message: string;
+  config?: GeneratedToolConfig;
+  history: Array<{ role: string; content: string; timestamp: string }>;
+}
+
 export const toolsApi = {
   getAll: async (page = 1, pageSize = 20): Promise<PaginatedResponse<Tool>> => {
     const { data } = await apiClient.get<PaginatedResponse<Tool>>(
@@ -26,6 +48,15 @@ export const toolsApi = {
 
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/tools/${id}`);
+  },
+
+  generateWithAi: async (payload: {
+    prompt: string;
+    modelId: string;
+    sessionId?: string;
+  }): Promise<ToolAiResult> => {
+    const { data } = await apiClient.post<ToolAiResult>('/api/tools/ai/generate', payload);
+    return data;
   },
 
   execute: async (
