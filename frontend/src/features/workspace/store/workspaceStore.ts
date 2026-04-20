@@ -51,7 +51,7 @@ interface WorkspaceState {
   watcherEnabled: boolean; // whether periodic workspace scanning is active
 
   // ── Workspace CRUD ──
-  setWorkspaces: (workspaces: WorkspaceEntry[]) => void;
+  setWorkspaces: (workspaces: WorkspaceEntry[], restoredActiveId?: string | null) => void;
   addWorkspace: (entry: WorkspaceEntry) => void;
   removeWorkspace: (id: string) => void;
   updateWorkspaceTree: (id: string, tree: FileNode | null) => void;
@@ -98,12 +98,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   // ── Workspace CRUD ──────────────────────────────────────────────────────────
 
-  setWorkspaces: (workspaces) =>
+  setWorkspaces: (workspaces, restoredActiveId?: string | null) => {
+    const activeWorkspaceId =
+      (restoredActiveId && workspaces.some((w) => w.id === restoredActiveId))
+        ? restoredActiveId
+        : workspaces[0]?.id ?? null;
     set({
       workspaces,
-      activeWorkspaceId: workspaces[0]?.id ?? null,
+      activeWorkspaceId,
       terminalWorkspaceId: workspaces[0]?.id ?? null,
-    }),
+    });
+  },
 
   addWorkspace: (entry) =>
     set((state) => {
@@ -192,7 +197,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       workspaces: state.workspaces.map((w) => (w.id === id ? { ...w, hasPermission } : w)),
     })),
 
-  setActiveWorkspaceId: (id) => set({ activeWorkspaceId: id }),
+  setActiveWorkspaceId: (id) => {
+    set({ activeWorkspaceId: id });
+    workspaceStorageService.saveActiveWorkspaceId(id);
+  },
   setTerminalWorkspaceId: (id) => set({ terminalWorkspaceId: id, currentTerminalPath: '' }),
 
   // ── Editor ──────────────────────────────────────────────────────────────────

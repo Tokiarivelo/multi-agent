@@ -362,7 +362,10 @@ export const useWorkspace = () => {
     const store = useWorkspaceStore.getState();
     try {
       store.setIsLoading(true);
-      const savedList = await workspaceStorageService.loadWorkspaces();
+      const [savedList, restoredActiveId] = await Promise.all([
+        workspaceStorageService.loadWorkspaces(),
+        workspaceStorageService.loadActiveWorkspaceId(),
+      ]);
       if (savedList.length === 0) return;
 
       const entries: WorkspaceEntry[] = await Promise.all(
@@ -403,7 +406,7 @@ export const useWorkspace = () => {
         }),
       );
 
-      store.setWorkspaces(entries);
+      store.setWorkspaces(entries, restoredActiveId);
       if (entries.some((e) => !e.hasPermission)) {
         toast.info(t('workspace.needsPermission', 'Some workspaces need permission to reconnect'));
       }

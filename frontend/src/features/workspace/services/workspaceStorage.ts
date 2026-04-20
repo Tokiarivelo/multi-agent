@@ -9,6 +9,7 @@ export interface SavedWorkspace {
 }
 
 const STORAGE_KEY = 'multi_agent_workspaces';
+const ACTIVE_WORKSPACE_KEY = 'multi_agent_active_workspace_id';
 
 export const workspaceStorageService = {
   /** Save workspaces array to indexedDB */
@@ -17,6 +18,24 @@ export const workspaceStorageService = {
       await set(STORAGE_KEY, workspaces);
     } catch (error) {
       console.error('Failed to save workspaces to IndexedDB:', error);
+    }
+  },
+
+  /** Persist the active workspace selection */
+  async saveActiveWorkspaceId(id: string | null): Promise<void> {
+    try {
+      await set(ACTIVE_WORKSPACE_KEY, id);
+    } catch (error) {
+      console.error('Failed to save active workspace id:', error);
+    }
+  },
+
+  /** Load the persisted active workspace id */
+  async loadActiveWorkspaceId(): Promise<string | null> {
+    try {
+      return (await get<string | null>(ACTIVE_WORKSPACE_KEY)) ?? null;
+    } catch {
+      return null;
     }
   },
 

@@ -150,4 +150,8 @@ export const workflows = {
   'workflows.ai.clearSession': 'Effacer la session',
   'workflows.ai.error': 'Échec de la requête IA',
   'workflows.ai.enterHint': 'Entrée pour envoyer · Maj+Entrée pour nouvelle ligne',
+  'workflows.waitingInput.title': "L'agent a besoin de votre saisie",
+  'workflows.waitingInput.dangerTitle': 'Action dangereuse — Confirmation requise',
+  'workflows.waitingInput.cancelExecution': "Annuler l'exécution",
+  'workflows.waitingInput.cancelling': 'Annulation…',
 };

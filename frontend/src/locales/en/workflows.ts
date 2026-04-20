@@ -147,4 +147,8 @@ export const workflows = {
   'workflows.ai.clearSession': 'Clear session',
   'workflows.ai.error': 'AI request failed',
   'workflows.ai.enterHint': 'Enter to send · Shift+Enter for new line',
+  'workflows.waitingInput.title': 'Agent Needs Your Input',
+  'workflows.waitingInput.dangerTitle': 'Dangerous Action — Confirmation Required',
+  'workflows.waitingInput.cancelExecution': 'Cancel execution',
+  'workflows.waitingInput.cancelling': 'Cancelling…',
 };
