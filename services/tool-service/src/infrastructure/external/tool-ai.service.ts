@@ -48,8 +48,10 @@ RULES:
 1. Response = one JSON object from { to }
 2. In "code": newlines → \\n, double-quotes → \\"  (never literal line breaks)
 3. No trailing commas, no comments
+4. DO NOT wrap the configuration inside a "config" object. Return ONLY the flat structure with name, description, category, parameters, code, and icon at the root level.
+5. DO NOT include a "message" field.
 
-Schema: {"name":"...","description":"...","message":"...","config":{"name":"...","description":"...","category":"API","parameters":[{"name":"...","type":"string","description":"...","required":true}],"code":"async function execute(params) {\\n  ...\\n}","icon":"Cloud"}}
+Schema: {"name":"...","description":"...","category":"API","parameters":[{"name":"...","type":"string","description":"...","required":true}],"code":"async function execute(params) {\\n  ...\\n}","icon":"Cloud"}
 
 Categories: WEB | API | DATABASE | FILE | CUSTOM | MCP
 Types: string | number | boolean | object | array
@@ -58,7 +60,7 @@ Icons: Globe, Link, Database, FileText, Cloud, Zap, Search, Code, Wrench, Mail
 Code rules: use params.x for inputs, fetch() for HTTP, return {result:...} or {error:msg}, wrap in try/catch.
 
 EXAMPLE:
-{"name":"Weather Fetcher","description":"Fetches weather for a city","message":"Weather API tool using Open-Meteo","config":{"name":"Weather Fetcher","description":"Gets current weather via Open-Meteo (no API key)","category":"API","parameters":[{"name":"city","type":"string","description":"City name","required":true}],"code":"async function execute(params) {\\n  try {\\n    const g = await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(params.city)+'&count=1').then(r=>r.json());\\n    if (!g.results?.length) return {error:'City not found'};\\n    const {latitude,longitude} = g.results[0];\\n    const w = await fetch('https://api.open-meteo.com/v1/forecast?latitude='+latitude+'&longitude='+longitude+'&current_weather=true').then(r=>r.json());\\n    return {city:params.city,temperature:w.current_weather.temperature,windspeed:w.current_weather.windspeed};\\n  } catch(e) {return {error:e.message};}\\n}","icon":"Cloud"}}
+{"name":"Weather Fetcher","description":"Gets current weather via Open-Meteo (no API key)","category":"API","parameters":[{"name":"city","type":"string","description":"City name","required":true}],"code":"async function execute(params) {\\n  try {\\n    const g = await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(params.city)+'&count=1').then(r=>r.json());\\n    if (!g.results?.length) return {error:'City not found'};\\n    const {latitude,longitude} = g.results[0];\\n    const w = await fetch('https://api.open-meteo.com/v1/forecast?latitude='+latitude+'&longitude='+longitude+'&current_weather=true').then(r=>r.json());\\n    return {city:params.city,temperature:w.current_weather.temperature,windspeed:w.current_weather.windspeed};\\n  } catch(e) {return {error:e.message};}\\n}","icon":"Cloud"}
 
 Output JSON only:`;
 
@@ -151,7 +153,7 @@ export class ToolAiService {
     for (const candidate of candidates) {
       try {
         const obj = JSON.parse(candidate) as Record<string, unknown>;
-        const normalized = this.normalizeResponse(obj);
+        const normalized = this.normalizeResponse(this.flattenIfNested(obj));
         if (normalized) {
           return { parsed: normalized, raw: candidate };
         }
@@ -167,7 +169,7 @@ export class ToolAiService {
       for (const candidate of this.extractJsonCandidates(repaired)) {
         try {
           const obj = JSON.parse(candidate) as Record<string, unknown>;
-          const normalized = this.normalizeResponse(obj);
+          const normalized = this.normalizeResponse(this.flattenIfNested(obj));
           if (normalized) {
             return { parsed: normalized, raw: candidate };
           }
@@ -287,6 +289,24 @@ export class ToolAiService {
         return `${prefix}${escaped}${suffix}`;
       },
     );
+  }
+
+  /**
+   * If the LLM returned a nested { ..., config: { ... } } shape, promote the
+   * config fields to the root level. Root-level name/description win when longer.
+   */
+  private flattenIfNested(obj: Record<string, unknown>): Record<string, unknown> {
+    if (!obj.config || typeof obj.config !== 'object') return obj;
+    const cfg = obj.config as Record<string, unknown>;
+    const rootName = String(obj.name ?? '').trim();
+    const cfgName = String(cfg.name ?? '').trim();
+    const rootDesc = String(obj.description ?? '').trim();
+    const cfgDesc = String(cfg.description ?? '').trim();
+    return {
+      ...cfg,
+      name: cfgName.length >= rootName.length ? cfgName : rootName,
+      description: cfgDesc.length >= rootDesc.length ? cfgDesc : rootDesc,
+    };
   }
 
   /**
