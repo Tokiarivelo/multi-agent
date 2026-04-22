@@ -22,6 +22,7 @@ import { CreateWorkflowDto } from '../../application/dto/create-workflow.dto';
 import { UpdateWorkflowDto } from '../../application/dto/update-workflow.dto';
 import { ExecuteWorkflowDto } from '../../application/dto/execute-workflow.dto';
 import { AddNodeDto, UpdateNodeDto, AddEdgeDto } from '../../application/dto/node-operation.dto';
+import { WorkflowHealingService } from '../../infrastructure/external/workflow-healing.service';
 import { spawn } from 'child_process';
 
 @ApiTags('Workflows')
@@ -36,6 +37,7 @@ export class WorkflowController {
     private readonly updateWorkflowUseCase: UpdateWorkflowUseCase,
     private readonly deleteWorkflowUseCase: DeleteWorkflowUseCase,
     private readonly getWorkflowExecutionsUseCase: GetWorkflowExecutionsUseCase,
+    private readonly healingService: WorkflowHealingService,
   ) {}
 
   // ─── Workflow CRUD ────────────────────────────────────────────────────────
@@ -280,6 +282,53 @@ export class WorkflowController {
       body.config,
       body.executionId,
     );
+  }
+
+  @Post(':id/nodes/:nodeId/analyze-test-outcome')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Analyze the functional outcome of a test node run' })
+  async analyzeTestOutcome(
+    @Param('id') workflowId: string,
+    @Param('nodeId') nodeId: string,
+    @Query('userId') userId: string,
+    @Body()
+    body: {
+      modelId: string;
+      output: unknown;
+      input?: unknown;
+      nodeType?: string;
+      nodeName?: string;
+      forceLlm?: boolean;
+    },
+  ) {
+    const ctx = {
+      executionId: `test-${workflowId}-${nodeId}`,
+      originalRequest: JSON.stringify(body.input ?? {}),
+      nodeOutputs: [
+        {
+          nodeId,
+          nodeName: body.nodeName ?? nodeId,
+          nodeType: body.nodeType ?? 'UNKNOWN',
+          output: body.output,
+          status: 'COMPLETED',
+        },
+      ],
+      finalOutput: body.output,
+    };
+
+    const result = await this.healingService.detectFunctionalFailure(
+      ctx,
+      body.modelId,
+      userId,
+      body.forceLlm ?? false,
+    );
+
+    let healingLogId: string | undefined;
+    if (result.isFunctionalFailure) {
+      healingLogId = await this.healingService.saveFunctionalFailureLog(ctx, result, 'PENDING', true);
+    }
+
+    return { ...result, healingLogId };
   }
 
   // ─── Workspace helpers ────────────────────────────────────────────────────

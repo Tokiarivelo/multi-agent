@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useRetryExecution, useCancelExecution } from '../hooks/useExecutions';
+import { HealingPanel } from './HealingPanel';
 import { formatDate, getStatusColor } from '@/lib/utils';
 import { RefreshCw, X, Calendar, Clock, Hash, Activity, Terminal, AlertCircle, PlayCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -190,15 +191,22 @@ export function ExecutionDetails({ execution }: ExecutionDetailsProps) {
             )}
 
             {execution.error && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-[11px] font-bold text-destructive uppercase tracking-widest px-1">
-                  <AlertCircle className="h-3.5 w-3.5" />
-                  {t('workflows.execution.error_title')}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-[11px] font-bold text-destructive uppercase tracking-widest px-1">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    {t('workflows.execution.error_title')}
+                  </div>
+                  <pre className="p-5 bg-destructive/5 border border-destructive/20 rounded-xl text-xs font-mono overflow-auto text-destructive shadow-inner leading-relaxed">
+                    {execution.error}
+                  </pre>
                 </div>
-                <pre className="p-5 bg-destructive/5 border border-destructive/20 rounded-xl text-xs font-mono overflow-auto text-destructive shadow-inner leading-relaxed">
-                  {execution.error}
-                </pre>
+                <HealingPanel executionId={execution.id} executionStatus={execution.status} />
               </div>
+            )}
+
+            {!execution.error && execution.status === 'completed' && (
+              <HealingPanel executionId={execution.id} executionStatus={execution.status} />
             )}
           </div>
         </CardContent>

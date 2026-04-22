@@ -18,12 +18,12 @@ import { PrismaService } from '../database/prisma.service';
 import { WorkflowGateway } from '../../presentation/gateways/workflow.gateway';
 import { ExecutionStatus as PrismaExecutionStatus } from '@prisma/client';
 import { EventEmitter } from 'events';
+import { WorkflowHealingService } from './workflow-healing.service';
 
 @Injectable()
 export class WorkflowExecutorService implements IWorkflowExecutor {
   private readonly logger = new Logger(WorkflowExecutorService.name);
   private readonly maxRetries: number;
-  private readonly executionTimeout: number;
   private readonly promptEmitter = new EventEmitter();
 
   constructor(
@@ -35,9 +35,9 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly workflowGateway: WorkflowGateway,
+    private readonly healingService: WorkflowHealingService,
   ) {
     this.maxRetries = this.configService.get<number>('MAX_RETRY_ATTEMPTS', 3);
-    this.executionTimeout = this.configService.get<number>('EXECUTION_TIMEOUT', 300000);
   }
 
   async execute(workflowId: string, input: any, userId: string): Promise<WorkflowExecution> {
@@ -112,6 +112,15 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       this.workflowGateway.sendExecutionUpdate(execution);
 
       this.saveExecutionLogs(execution, workflow.id, context);
+
+      // ── Functional failure detection (non-blocking, runs after completion) ──
+      if (!hasFailedNodes && execution.isCompleted()) {
+        this.detectFunctionalFailureAsync(execution, context).catch((err) => {
+          this.logger.warn(
+            `Functional failure detection error for ${execution.id}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        });
+      }
     } catch (error) {
       this.logger.error(
         `Execution ${execution.id} failed`,
@@ -282,17 +291,66 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         this.logger.log(`Retrying node ${nodeId}, attempt ${nodeExecution.retryCount + 1}`);
         await this.executeNode(nodeId, workflow, execution, context);
       } else {
-        execution.failNodeExecution(
-          nodeId,
-          error instanceof Error ? error.message : 'Unknown error',
-        );
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const stackTrace = error instanceof Error ? error.stack : undefined;
+
+        // ── Auto-healing: attempt AI-assisted fix when retries are exhausted ──
+        const autoHealEnabled = this.configService.get<boolean>('AUTO_HEAL_ENABLED', true);
+        const healingModelId = this.configService.get<string>('HEALING_MODEL_ID', '');
+
+        if (autoHealEnabled && healingModelId) {
+          try {
+            const healingContext = {
+              executionId: execution.id,
+              nodeId,
+              nodeName: node.customName || node.type,
+              nodeType: node.type,
+              nodeConfig: node.config ?? {},
+              input,
+              errorMessage,
+              stackTrace,
+              retryCount: nodeExecution?.retryCount ?? this.maxRetries,
+            };
+
+            const suggestion = await this.healingService.analyzeError(
+              healingContext,
+              healingModelId,
+              context.userId,
+            );
+
+            await this.healingService.saveHealingLog(healingContext, suggestion, 'PENDING');
+
+            if (suggestion.strategy === 'AUTO_FIX' && suggestion.confidence >= 0.75 && Object.keys(suggestion.fixedConfig).length > 0) {
+              this.logger.log(`[AUTO-HEAL] Applying fix for node ${nodeId}: ${suggestion.fixSummary}`);
+
+              // Patch node config in-memory and retry once
+              node.config = { ...node.config, ...suggestion.fixedConfig };
+              execution.incrementRetryCount(nodeId);
+              await this.updateExecution(execution);
+
+              this.workflowGateway.sendNodeUpdate(execution.id, nodeId, node.customName || node.type, 'RUNNING', {
+                input,
+                healing: { applied: true, fixSummary: suggestion.fixSummary },
+              });
+
+              await this.executeNode(nodeId, workflow, execution, context);
+              return;
+            }
+          } catch (healErr) {
+            this.logger.warn(
+              `[AUTO-HEAL] Analysis failed for node ${nodeId}: ${healErr instanceof Error ? healErr.message : String(healErr)}`,
+            );
+          }
+        }
+
+        execution.failNodeExecution(nodeId, errorMessage);
         await this.updateExecution(execution);
         this.workflowGateway.sendNodeUpdate(
           execution.id,
           nodeId,
           node.customName || node.type,
           'FAILED',
-          { input, error: error instanceof Error ? error.message : 'Unknown error' },
+          { input, error: errorMessage },
         );
       }
     }
@@ -1331,6 +1389,59 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
       default:
         throw new Error(`Unknown node type: ${node.type}`);
+    }
+  }
+
+  // ─── Functional failure detection (runs async after successful completion) ──
+
+  private async detectFunctionalFailureAsync(execution: WorkflowExecution, context: any): Promise<void> {
+    const functionalHealingEnabled = this.configService.get<boolean>('FUNCTIONAL_HEALING_ENABLED', false);
+    const healingModelId = this.configService.get<string>('HEALING_MODEL_ID', '');
+
+    if (!functionalHealingEnabled || !healingModelId) return;
+
+    const nodeOutputs = (execution.nodeExecutions as any[])
+      .filter((n: any) => n.status === 'COMPLETED' && n.output !== undefined)
+      .map((n: any) => ({
+        nodeId: n.nodeId,
+        nodeName: n.nodeName ?? n.nodeId,
+        nodeType: 'UNKNOWN',
+        output: n.output,
+        status: n.status,
+      }));
+
+    if (nodeOutputs.length === 0) return;
+
+    const originalRequest =
+      typeof execution.input === 'string'
+        ? execution.input
+        : JSON.stringify(execution.input ?? {});
+
+    const functionalCtx = {
+      executionId: execution.id,
+      originalRequest,
+      nodeOutputs,
+      finalOutput: execution.output ?? context.variables,
+    };
+
+    const result = await this.healingService.detectFunctionalFailure(
+      functionalCtx,
+      healingModelId,
+      execution.userId,
+    );
+
+    if (result.isFunctionalFailure && result.confidence >= 0.6) {
+      await this.healingService.saveFunctionalFailureLog(functionalCtx, result, 'PENDING');
+
+      this.logger.warn(
+        `[FUNCTIONAL-FAIL] execution=${execution.id} node=${result.failedNodeId} ` +
+          `confidence=${result.confidence} reason="${result.failureReason}"`,
+      );
+
+      this.workflowGateway.sendExecutionUpdate({
+        ...execution,
+        metadata: { functionalFailure: { detected: true, reason: result.failureReason } },
+      } as any);
     }
   }
 

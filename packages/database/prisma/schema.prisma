@@ -230,6 +230,28 @@ model WorkflowExecution {
   @@map("workflow_executions")
 }
 
+model WorkflowHealingLog {
+  id           String    @id @default(uuid())
+  executionId  String
+  nodeId       String
+  nodeName     String?
+  nodeType     String?
+  errorMessage String
+  errorContext Json
+  suggestion   Json
+  failureType  String    @default("TECHNICAL") // TECHNICAL | FUNCTIONAL
+  strategy     String    // AUTO_FIX | MANUAL_APPROVAL | LOG_ONLY
+  status       String    // PENDING | APPLIED | REJECTED | FAILED
+  isTest       Boolean   @default(false)
+  appliedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([executionId])
+  @@index([failureType])
+  @@map("workflow_healing_logs")
+}
+
 model VectorCollection {
   id               String   @id @default(uuid())
   userId           String

@@ -32,6 +32,8 @@ import { WorkflowGateway } from './presentation/gateways/workflow.gateway';
 import { WorkflowAiController } from './presentation/controllers/workflow-ai.controller';
 import { WorkflowAiService } from './infrastructure/external/workflow-ai.service';
 import { ResourceProvisioningService } from './infrastructure/external/resource-provisioning.service';
+import { WorkflowHealingService } from './infrastructure/external/workflow-healing.service';
+import { HealingController } from './presentation/controllers/healing.controller';
 
 @Module({
   imports: [
@@ -51,6 +53,7 @@ import { ResourceProvisioningService } from './infrastructure/external/resource-
     WorkspaceController,
     HealthController,
     InternalController,
+    HealingController,
   ],
   providers: [
     PrismaService,
@@ -59,6 +62,7 @@ import { ResourceProvisioningService } from './infrastructure/external/resource-
     ToolClientService,
     WorkflowAiService,
     ResourceProvisioningService,
+    WorkflowHealingService,
     WorkflowGateway,
 
     // Use Cases
