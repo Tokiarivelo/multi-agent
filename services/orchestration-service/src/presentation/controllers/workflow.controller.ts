@@ -325,7 +325,12 @@ export class WorkflowController {
 
     let healingLogId: string | undefined;
     if (result.isFunctionalFailure) {
-      healingLogId = await this.healingService.saveFunctionalFailureLog(ctx, result, 'PENDING', true);
+      healingLogId = await this.healingService.saveFunctionalFailureLog(
+        ctx,
+        result,
+        'PENDING',
+        true,
+      );
     }
 
     return { ...result, healingLogId };

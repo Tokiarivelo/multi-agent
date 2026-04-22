@@ -1,8 +1,10 @@
 import { Body, Controller, Get, Inject, Logger, Param, Post } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkflowHealingService } from '../../infrastructure/external/workflow-healing.service';
-import { IWorkflowExecutor, WORKFLOW_EXECUTOR } from '../../application/interfaces/workflow-executor.interface';
-
+import {
+  IWorkflowExecutor,
+  WORKFLOW_EXECUTOR,
+} from '../../application/interfaces/workflow-executor.interface';
 
 interface HealRequestDto {
   modelId: string;
@@ -35,10 +37,7 @@ export class HealingController {
   // ─── Analyze a failed execution and suggest a fix ─────────────────────────
 
   @Post(':id/heal')
-  async analyzeExecution(
-    @Param('id') executionId: string,
-    @Body() dto: HealRequestDto,
-  ) {
+  async analyzeExecution(@Param('id') executionId: string, @Body() dto: HealRequestDto) {
     const execution = await this.prisma.workflowExecution.findUnique({
       where: { id: executionId },
       include: { workflow: true },
@@ -96,10 +95,7 @@ export class HealingController {
   // ─── Apply the suggested fix and re-run from the failed node ─────────────
 
   @Post(':id/apply-fix')
-  async applyFix(
-    @Param('id') executionId: string,
-    @Body() dto: ApplyFixRequestDto,
-  ) {
+  async applyFix(@Param('id') executionId: string, @Body() dto: ApplyFixRequestDto) {
     const [execution, healingLog] = await Promise.all([
       this.prisma.workflowExecution.findUnique({
         where: { id: executionId },
@@ -174,10 +170,7 @@ export class HealingController {
   // ─── Reject a suggested fix ───────────────────────────────────────────────
 
   @Post(':id/reject-fix')
-  async rejectFix(
-    @Param('id') _executionId: string,
-    @Body() body: { healingLogId: string },
-  ) {
+  async rejectFix(@Param('id') _executionId: string, @Body() body: { healingLogId: string }) {
     await this.healingService.updateHealingLogStatus(body.healingLogId, 'REJECTED');
     return { success: true };
   }
@@ -185,10 +178,7 @@ export class HealingController {
   // ─── Analyze outcome of a COMPLETED execution for functional failures ────
 
   @Post(':id/analyze-outcome')
-  async analyzeOutcome(
-    @Param('id') executionId: string,
-    @Body() dto: AnalyzeOutcomeDto,
-  ) {
+  async analyzeOutcome(@Param('id') executionId: string, @Body() dto: AnalyzeOutcomeDto) {
     const execution = await this.prisma.workflowExecution.findUnique({
       where: { id: executionId },
     });

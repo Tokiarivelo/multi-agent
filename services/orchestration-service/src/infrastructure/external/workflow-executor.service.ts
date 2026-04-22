@@ -320,18 +320,30 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
             await this.healingService.saveHealingLog(healingContext, suggestion, 'PENDING');
 
-            if (suggestion.strategy === 'AUTO_FIX' && suggestion.confidence >= 0.75 && Object.keys(suggestion.fixedConfig).length > 0) {
-              this.logger.log(`[AUTO-HEAL] Applying fix for node ${nodeId}: ${suggestion.fixSummary}`);
+            if (
+              suggestion.strategy === 'AUTO_FIX' &&
+              suggestion.confidence >= 0.75 &&
+              Object.keys(suggestion.fixedConfig).length > 0
+            ) {
+              this.logger.log(
+                `[AUTO-HEAL] Applying fix for node ${nodeId}: ${suggestion.fixSummary}`,
+              );
 
               // Patch node config in-memory and retry once
               node.config = { ...node.config, ...suggestion.fixedConfig };
               execution.incrementRetryCount(nodeId);
               await this.updateExecution(execution);
 
-              this.workflowGateway.sendNodeUpdate(execution.id, nodeId, node.customName || node.type, 'RUNNING', {
-                input,
-                healing: { applied: true, fixSummary: suggestion.fixSummary },
-              });
+              this.workflowGateway.sendNodeUpdate(
+                execution.id,
+                nodeId,
+                node.customName || node.type,
+                'RUNNING',
+                {
+                  input,
+                  healing: { applied: true, fixSummary: suggestion.fixSummary },
+                },
+              );
 
               await this.executeNode(nodeId, workflow, execution, context);
               return;
@@ -1394,8 +1406,14 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
   // ─── Functional failure detection (runs async after successful completion) ──
 
-  private async detectFunctionalFailureAsync(execution: WorkflowExecution, context: any): Promise<void> {
-    const functionalHealingEnabled = this.configService.get<boolean>('FUNCTIONAL_HEALING_ENABLED', false);
+  private async detectFunctionalFailureAsync(
+    execution: WorkflowExecution,
+    context: any,
+  ): Promise<void> {
+    const functionalHealingEnabled = this.configService.get<boolean>(
+      'FUNCTIONAL_HEALING_ENABLED',
+      false,
+    );
     const healingModelId = this.configService.get<string>('HEALING_MODEL_ID', '');
 
     if (!functionalHealingEnabled || !healingModelId) return;
@@ -1413,9 +1431,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     if (nodeOutputs.length === 0) return;
 
     const originalRequest =
-      typeof execution.input === 'string'
-        ? execution.input
-        : JSON.stringify(execution.input ?? {});
+      typeof execution.input === 'string' ? execution.input : JSON.stringify(execution.input ?? {});
 
     const functionalCtx = {
       executionId: execution.id,

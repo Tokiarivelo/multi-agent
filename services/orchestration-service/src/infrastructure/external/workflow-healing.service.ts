@@ -52,16 +52,16 @@ export interface NodeOutput {
 
 export interface FunctionalFailureContext {
   executionId: string;
-  originalRequest: string;    // execution.input as a readable string
-  nodeOutputs: NodeOutput[];  // all node outputs in execution order
-  finalOutput: unknown;       // execution.output
+  originalRequest: string; // execution.input as a readable string
+  nodeOutputs: NodeOutput[]; // all node outputs in execution order
+  finalOutput: unknown; // execution.output
 }
 
 export interface FunctionalFailureResult {
   isFunctionalFailure: boolean;
   confidence: number;
   failureReason: string;
-  failedNodeId: string;       // 'WORKFLOW' when it's the overall outcome
+  failedNodeId: string; // 'WORKFLOW' when it's the overall outcome
   failedNodeName: string;
   suggestedAction: string;
   fixedConfig: Record<string, unknown>;
@@ -224,7 +224,9 @@ export class WorkflowHealingService {
       );
       raw = response.content;
     } catch (err) {
-      this.logger.error(`Technical healing AI call failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.error(
+        `Technical healing AI call failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return this.fallbackTechnicalSuggestion(context);
     }
 
@@ -308,7 +310,9 @@ export class WorkflowHealingService {
       );
       raw = response.content;
     } catch (err) {
-      this.logger.error(`Functional healing AI call failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.error(
+        `Functional healing AI call failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       // Fallback: trust the heuristic if LLM fails
       return this.fallbackFunctionalResult(ctx, heuristicResult);
     }
@@ -343,7 +347,9 @@ export class WorkflowHealingService {
         nodeName: result.failedNodeName,
         nodeType: 'FUNCTIONAL_CHECK',
         errorMessage: result.failureReason,
-        errorContext: JSON.parse(JSON.stringify({ ...ctx, nodeOutputs: ctx.nodeOutputs.slice(0, 10) })),
+        errorContext: JSON.parse(
+          JSON.stringify({ ...ctx, nodeOutputs: ctx.nodeOutputs.slice(0, 10) }),
+        ),
         suggestion: JSON.parse(JSON.stringify(suggestion)),
         failureType: 'FUNCTIONAL',
         strategy: result.strategy,
@@ -385,7 +391,12 @@ export class WorkflowHealingService {
   private runHeuristicScan(
     nodeOutputs: NodeOutput[],
     finalOutput: unknown,
-  ): { matchCount: number; suspiciousNodeId: string | null; suspiciousNodeName: string; matchedTexts: string[] } {
+  ): {
+    matchCount: number;
+    suspiciousNodeId: string | null;
+    suspiciousNodeName: string;
+    matchedTexts: string[];
+  } {
     const matchedTexts: string[] = [];
     let suspiciousNodeId: string | null = null;
     let suspiciousNodeName = 'Workflow';
@@ -444,7 +455,9 @@ export class WorkflowHealingService {
       `Current Node Config:\n${JSON.stringify(context.nodeConfig, null, 2)}\n\n` +
       `Input Data:\n${JSON.stringify(context.input, null, 2)}\n\n` +
       `Error Message:\n${context.errorMessage}\n` +
-      (context.stackTrace ? `\nStack Trace (first 500 chars):\n${context.stackTrace.slice(0, 500)}\n` : '')
+      (context.stackTrace
+        ? `\nStack Trace (first 500 chars):\n${context.stackTrace.slice(0, 500)}\n`
+        : '')
     );
   }
 
@@ -464,7 +477,11 @@ export class WorkflowHealingService {
       `Final workflow output:\n${JSON.stringify(ctx.finalOutput, null, 2).slice(0, 800)}\n\n` +
       (heuristic.matchCount > 0
         ? `⚠ Heuristic pre-scan flagged ${heuristic.matchCount} suspicious indicator(s):\n` +
-          heuristic.matchedTexts.slice(0, 5).map((t) => `  - ${t}`).join('\n') + '\n\n'
+          heuristic.matchedTexts
+            .slice(0, 5)
+            .map((t) => `  - ${t}`)
+            .join('\n') +
+          '\n\n'
         : '') +
       `Based on this analysis, determine whether the task was actually accomplished.`
     );
@@ -487,7 +504,8 @@ export class WorkflowHealingService {
         fixSummary: parsed.fixSummary ?? 'No fix available',
         fixedConfig: parsed.fixedConfig ?? {},
         strategy: parsed.strategy ?? 'LOG_ONLY',
-        confidence: typeof parsed.confidence === 'number' ? Math.min(1, Math.max(0, parsed.confidence)) : 0,
+        confidence:
+          typeof parsed.confidence === 'number' ? Math.min(1, Math.max(0, parsed.confidence)) : 0,
       };
     } catch {
       this.logger.warn(`Could not parse technical healing response for node ${context.nodeId}`);
@@ -501,7 +519,8 @@ export class WorkflowHealingService {
         const parsed = JSON.parse(text) as Partial<FunctionalFailureResult>;
         return {
           isFunctionalFailure: parsed.isFunctionalFailure ?? false,
-          confidence: typeof parsed.confidence === 'number' ? Math.min(1, Math.max(0, parsed.confidence)) : 0,
+          confidence:
+            typeof parsed.confidence === 'number' ? Math.min(1, Math.max(0, parsed.confidence)) : 0,
           failureReason: parsed.failureReason ?? '',
           failedNodeId: parsed.failedNodeId ?? 'WORKFLOW',
           failedNodeName: parsed.failedNodeName ?? 'Workflow',
@@ -519,7 +538,10 @@ export class WorkflowHealingService {
     if (direct) return direct;
 
     // 2. Strip markdown code fences (```json ... ``` or ``` ... ```)
-    const stripped = raw.replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/m, '').trim();
+    const stripped = raw
+      .replace(/^```(?:json)?\s*/im, '')
+      .replace(/\s*```\s*$/m, '')
+      .trim();
     const fromStripped = attempt(stripped);
     if (fromStripped) return fromStripped;
 
@@ -530,7 +552,9 @@ export class WorkflowHealingService {
       if (fromMatch) return fromMatch;
     }
 
-    this.logger.warn(`Could not parse functional failure response. Raw (first 300 chars): ${raw.slice(0, 300)}`);
+    this.logger.warn(
+      `Could not parse functional failure response. Raw (first 300 chars): ${raw.slice(0, 300)}`,
+    );
     return {
       isFunctionalFailure: false,
       confidence: 0,
