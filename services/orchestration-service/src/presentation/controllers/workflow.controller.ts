@@ -286,7 +286,9 @@ export class WorkflowController {
 
   @Post(':id/nodes/:nodeId/analyze-test-outcome')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Analyze the functional outcome of a test node run with optional custom prompt' })
+  @ApiOperation({
+    summary: 'Analyze the functional outcome of a test node run with optional custom prompt',
+  })
   async analyzeTestOutcome(
     @Param('id') workflowId: string,
     @Param('nodeId') nodeId: string,
