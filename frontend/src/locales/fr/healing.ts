@@ -34,4 +34,8 @@ export const healing = {
   'healing.test.taskAccomplished': 'Le résultat semble correct — aucun échec fonctionnel détecté.',
   'healing.test.applyFix': 'Appliquer la correction au nœud',
   'healing.test.fixApplied': 'Correction appliquée à la configuration du nœud',
+  'healing.test.addPrompt': 'Ajouter un prompt d\'analyse (optionnel)',
+  'healing.test.promptPlaceholder': 'Décrivez ce qu\'il faut vérifier — ex. "Vérifier que le résultat contient un résumé valide"',
+  'healing.test.suggestedTools': 'Modifications d\'outils suggérées',
+  'healing.test.applyTools': 'Appliquer les changements d\'outils',
 };

@@ -1,7 +1,6 @@
 'use client';
 
 import { useTranslation } from 'react-i18next';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { NodeTurn } from '../store/workflowExecution.store';
 import { MultiTurnTimeline } from './MultiTurnTimeline';
 import { SingleTurnView } from './SingleTurnView';

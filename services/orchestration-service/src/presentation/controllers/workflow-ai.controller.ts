@@ -13,7 +13,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiResponse, ApiQuery } from '@nestjs/swagger';
-import { WorkflowAiService } from '../../infrastructure/external/workflow-ai.service';
+import { WorkflowAiService, NodeAiResult } from '../../infrastructure/external/workflow-ai.service';
 import { GetWorkflowUseCase } from '../../application/use-cases/get-workflow.use-case';
 
 @ApiTags('Workflow AI')
@@ -41,6 +41,39 @@ export class WorkflowAiController {
 
     this.logger.log(`Generating workflow with model ${body.modelId}`);
     return this.workflowAiService.generateWorkflow({
+      prompt: body.prompt,
+      modelId: body.modelId,
+      sessionId: body.sessionId,
+      userId: userId ?? 'system',
+    });
+  }
+
+  // ─── Node Edit — MUST be declared before :workflowId/edit to avoid param capture ──
+
+  @Post('nodes/edit')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Edit a single workflow node config with AI assistance' })
+  @ApiResponse({ status: 200, description: 'Updated node config with session context' })
+  async editNode(
+    @Body()
+    body: {
+      nodeType: string;
+      nodeConfig: Record<string, unknown>;
+      customName?: string;
+      prompt: string;
+      modelId: string;
+      sessionId?: string;
+    },
+    @Query('userId') userId?: string,
+  ): Promise<NodeAiResult> {
+    if (!body.prompt?.trim()) throw new BadRequestException('prompt is required');
+    if (!body.modelId?.trim()) throw new BadRequestException('modelId is required');
+    if (!body.nodeType?.trim()) throw new BadRequestException('nodeType is required');
+
+    return this.workflowAiService.editNode({
+      nodeType: body.nodeType,
+      nodeConfig: body.nodeConfig ?? {},
+      customName: body.customName,
       prompt: body.prompt,
       modelId: body.modelId,
       sessionId: body.sessionId,

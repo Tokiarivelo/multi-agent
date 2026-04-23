@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Save,
   Play,
+  Square,
   Trash2,
   Terminal,
   ChevronLeft,
@@ -40,11 +41,14 @@ export interface WorkflowEditorHeaderProps {
   outputLogsToFile: boolean;
   isSaving: boolean;
   isExecuting: boolean;
+  isRunning: boolean;
+  isCancelling: boolean;
   panelOpen: boolean;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onBack: () => void;
   onSave: () => void;
   onExecute: () => void;
+  onCancel: () => void;
   onToggleLogs: () => void;
   onTogglePanel: () => void;
   onDelete: () => void;
@@ -58,11 +62,14 @@ export function WorkflowEditorHeader({
   outputLogsToFile,
   isSaving,
   isExecuting,
+  isRunning,
+  isCancelling,
   panelOpen,
   fileInputRef,
   onBack,
   onSave,
   onExecute,
+  onCancel,
   onToggleLogs,
   onTogglePanel,
   onDelete,
@@ -88,7 +95,7 @@ export function WorkflowEditorHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        {workflow?.id && (
+        {workflow?.id && !isRunning && (
           <Button
             variant="outline"
             onClick={onExecute}
@@ -98,6 +105,18 @@ export function WorkflowEditorHeader({
           >
             <Play className="h-4 w-4" />
             {isExecuting ? t('workflows.editor.running') : t('workflows.actions.run')}
+          </Button>
+        )}
+
+        {workflow?.id && isRunning && (
+          <Button
+            variant="destructive"
+            onClick={onCancel}
+            disabled={isCancelling}
+            className="gap-2"
+          >
+            <Square className="h-4 w-4" />
+            {isCancelling ? t('workflows.editor.cancelling', 'Cancelling…') : t('workflows.editor.stop', 'Stop')}
           </Button>
         )}
 

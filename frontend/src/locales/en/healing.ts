@@ -34,4 +34,8 @@ export const healing = {
   'healing.test.taskAccomplished': 'Output looks correct — no functional failure detected.',
   'healing.test.applyFix': 'Apply fix to node',
   'healing.test.fixApplied': 'Fix applied to node config',
+  'healing.test.addPrompt': 'Add analysis prompt (optional)',
+  'healing.test.promptPlaceholder': 'Describe what to check — e.g. "Verify the output contains a valid summary"',
+  'healing.test.suggestedTools': 'Suggested tool changes',
+  'healing.test.applyTools': 'Apply tool changes',
 };
