@@ -7,6 +7,7 @@ import { dashboard } from './dashboard';
 import { agents } from './agents';
 import { github } from './github';
 import { tools } from './tools';
+import { healing } from './healing';
 
 export const en = {
   ...workflows,
@@ -18,4 +19,5 @@ export const en = {
   ...agents,
   ...github,
   ...tools,
+  ...healing,
 };

@@ -54,6 +54,7 @@ import { SubWorkflowConfig } from './SubWorkflowConfig';
 import { useWorkflowLogs } from '../hooks/useWorkflowLogs';
 import { useWorkflowExecutionStore } from '../store/workflowExecution.store';
 import { DocPanel } from '@/components/shared/DocPanel';
+import { TestOutcomePanel } from './TestOutcomePanel';
 
 /** Sub-agent configuration inside an AGENT node */
 export interface SubAgentConfig {
@@ -2900,6 +2901,21 @@ function NodeEditorForm({
                             );
                           })}
                         </div>
+                      )}
+
+                      {/* AI outcome check — only shown when node ran successfully */}
+                      {!testResult.error && workflowId && (
+                        <TestOutcomePanel
+                          workflowId={workflowId}
+                          nodeId={initialNode?.id ?? 'unsaved'}
+                          nodeName={initialNode?.customName ?? type}
+                          nodeType={type}
+                          testOutput={testResult.output}
+                          testInput={testResult.input}
+                          onApplyFix={(fixedConfig) =>
+                            setConfig((prev) => ({ ...prev, ...fixedConfig }))
+                          }
+                        />
                       )}
                     </div>
                   )}
