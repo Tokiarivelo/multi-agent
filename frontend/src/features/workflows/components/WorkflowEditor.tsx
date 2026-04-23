@@ -31,7 +31,7 @@ interface WorkflowEditorProps {
 }
 
 export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -233,6 +233,9 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   };
 
   const isSaving = createWorkflow.isPending || updateWorkflow.isPending;
+  const isWorkflowRunning =
+    !!(activeExecution || activeExecutionId) &&
+    (executionStatus === 'RUNNING' || executionStatus === 'PENDING' || executeWorkflow.isPending);
 
   return (
     <div className="flex flex-col h-full w-full pointer-events-none z-50 overflow-hidden relative">
@@ -268,11 +271,14 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
         outputLogsToFile={outputLogsToFile}
         isSaving={isSaving}
         isExecuting={executeWorkflow.isPending}
+        isRunning={isWorkflowRunning}
+        isCancelling={cancelExecution.isPending}
         panelOpen={panelOpen}
         fileInputRef={fileInputRef}
         onBack={() => router.push('/workflows')}
         onSave={handleSave}
         onExecute={handleExecute}
+        onCancel={handleCancelExecution}
         onToggleLogs={() => setLogsOpen((v) => !v)}
         onTogglePanel={() => setPanelOpen((v) => !v)}
         onDelete={() => deleteWorkflow.mutate(workflow!.id)}

@@ -76,6 +76,12 @@ export function useAnalyzeTestOutcome() {
       nodeType?: string;
       nodeName?: string;
       forceLlm?: boolean;
+      /** Optional free-form analysis instructions sent to the AI */
+      prompt?: string;
+      /** Current tool IDs on the node */
+      currentTools?: string[];
+      /** All available tools in the workflow */
+      availableTools?: { id: string; name: string }[];
     }) => healingApi.analyzeTestOutcome(params),
   });
 }

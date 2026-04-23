@@ -25,7 +25,9 @@ import {
   Copy,
   Check,
   XCircle,
+  Sparkles,
 } from 'lucide-react';
+import { NodeAiPanel } from './NodeAiPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -600,6 +602,7 @@ function NodeEditorForm({
   const isEdit = !!initialNode?.id;
 
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
   const [type, setType] = useState<NodeTypeId>((initialNode?.type as NodeTypeId) ?? 'AGENT');
   const [config, setConfig] = useState<Record<string, unknown>>(initialNode?.config ?? {});
@@ -773,9 +776,25 @@ function NodeEditorForm({
 
   return createPortal(
     <div
-      className="fixed top-4 right-4 z-50 h-[calc(100%-2rem)] flex flex-col pointer-events-auto shadow-2xl animate-in slide-in-from-right-8 duration-300"
+      className="fixed top-4 right-4 z-50 h-[calc(100%-2rem)] flex flex-row-reverse gap-2 pointer-events-auto animate-in slide-in-from-right-8 duration-300"
       onKeyDown={(e: React.KeyboardEvent) => e.stopPropagation()}
     >
+      {/* AI panel — slides in to the left of the node editor */}
+      {aiPanelOpen && isEdit && (
+        <div className="w-80 flex flex-col shadow-2xl rounded-2xl overflow-hidden border border-border/50 order-2">
+          <NodeAiPanel
+            nodeType={type}
+            config={config}
+            customName={customName}
+            onApply={(newConfig, newName) => {
+              setConfig(newConfig);
+              if (newName) setCustomName(newName);
+              setAiPanelOpen(false);
+            }}
+            onClose={() => setAiPanelOpen(false)}
+          />
+        </div>
+      )}
       <Resizable
         defaultSize={{
           width: 400,
@@ -784,7 +803,7 @@ function NodeEditorForm({
         minWidth={320}
         maxWidth={800}
         enable={{ left: true }}
-        className="flex flex-col h-full"
+        className="flex flex-col h-full shadow-2xl"
       >
         <Card className="flex flex-col h-full bg-card/85 backdrop-blur-xl border border-border/50 shadow-none overflow-hidden rounded-2xl">
           <CardHeader className="flex-row items-center justify-between border-b border-border/50 py-4 shadow-sm">
@@ -798,9 +817,22 @@ function NodeEditorForm({
                     label: i18n.language.startsWith('fr') ? meta.labelFr : meta.label,
                   })}
             </CardTitle>
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-full">
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              {isEdit && (
+                <Button
+                  variant={aiPanelOpen ? 'secondary' : 'ghost'}
+                  size="icon"
+                  onClick={() => setAiPanelOpen((v) => !v)}
+                  className="h-8 w-8 rounded-full"
+                  title={t('workflows.nodeAi.title', 'AI Edit Node')}
+                >
+                  <Sparkles className="h-4 w-4 text-violet-500" />
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-full">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </CardHeader>
 
           <CardContent className="flex-1 overflow-y-auto p-4 space-y-5">
@@ -2674,7 +2706,7 @@ function NodeEditorForm({
 
           {/* ─── Test Node Panel — available for both new and existing nodes ─── */}
           {workflowId && (
-            <div className="border-t border-border/50 bg-muted/10">
+            <div className="border-t border-border/50 bg-muted/10 shrink-0 flex flex-col min-h-0">
               <Collapsible open={testPanelOpen} onOpenChange={setTestPanelOpen}>
                 <CollapsibleTrigger asChild>
                   <Button
@@ -2702,223 +2734,234 @@ function NodeEditorForm({
                       ))}
                   </Button>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="px-4 pt-3 pb-4 space-y-3 animate-in slide-in-from-top-1">
-                  {/* Input Editor */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Manual Input (JSON)</Label>
-                    <div className="border border-border/50 rounded-md overflow-hidden">
-                      <Editor
-                        height="120px"
-                        language="json"
-                        theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
-                        value={testInput}
-                        onChange={(val) => setTestInput(val ?? '{}')}
-                        options={{
-                          minimap: { enabled: false },
-                          fontSize: 11,
-                          lineNumbersMinChars: 2,
-                          padding: { top: 8 },
-                          scrollBeyondLastLine: false,
-                          formatOnPaste: true,
-                          formatOnType: false,
-                        }}
-                      />
+                <CollapsibleContent>
+                  <div className="overflow-y-auto max-h-[55vh] px-4 pt-3 pb-4 space-y-3 animate-in slide-in-from-top-1">
+                    {/* Input Editor */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Manual Input (JSON)</Label>
+                      <div className="border border-border/50 rounded-md overflow-hidden">
+                        <Editor
+                          height="120px"
+                          language="json"
+                          theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
+                          value={testInput}
+                          onChange={(val) => setTestInput(val ?? '{}')}
+                          options={{
+                            minimap: { enabled: false },
+                            fontSize: 11,
+                            lineNumbersMinChars: 2,
+                            padding: { top: 8 },
+                            scrollBeyondLastLine: false,
+                            formatOnPaste: true,
+                            formatOnType: false,
+                          }}
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <Button
-                    size="sm"
-                    onClick={runTest}
-                    disabled={testRunning}
-                    className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                  >
-                    {testRunning ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Running…
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-3.5 w-3.5" /> Run Node
-                      </>
-                    )}
-                  </Button>
-
-                  {/* Live token counter — visible while the test is streaming */}
-                  {testRunning && testLiveTokens && (
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono px-1">
-                      <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
-                      <span className="text-primary font-semibold">
-                        {testLiveTokens.totalTokens.toLocaleString()} tok
-                      </span>
-                      <span>
-                        ↑{testLiveTokens.inputTokens.toLocaleString()} ↓
-                        {testLiveTokens.outputTokens.toLocaleString()}
-                      </span>
-                      {testLiveTokens.iteration > 0 && (
-                        <span className="text-muted-foreground/60">
-                          iter {testLiveTokens.iteration}
-                        </span>
+                    <Button
+                      size="sm"
+                      onClick={runTest}
+                      disabled={testRunning}
+                      className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      {testRunning ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Running…
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3.5 w-3.5" /> Run Node
+                        </>
                       )}
-                    </div>
-                  )}
+                    </Button>
 
-                  {/* Result */}
-                  {testResult && (
-                    <div className="space-y-2">
-                      {/* Output or Error */}
-                      <div
-                        className={cn(
-                          'rounded-md border p-3 text-xs font-mono relative group/output transition-all duration-200',
-                          testResult.error
-                            ? 'border-destructive/40 bg-destructive/5 text-destructive'
-                            : 'border-emerald-500/30 bg-emerald-500/5',
-                          !outputExpanded && 'max-h-40 overflow-auto',
+                    {/* Live token counter — visible while the test is streaming */}
+                    {testRunning && testLiveTokens && (
+                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono px-1">
+                        <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                        <span className="text-primary font-semibold">
+                          {testLiveTokens.totalTokens.toLocaleString()} tok
+                        </span>
+                        <span>
+                          ↑{testLiveTokens.inputTokens.toLocaleString()} ↓
+                          {testLiveTokens.outputTokens.toLocaleString()}
+                        </span>
+                        {testLiveTokens.iteration > 0 && (
+                          <span className="text-muted-foreground/60">
+                            iter {testLiveTokens.iteration}
+                          </span>
                         )}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="font-semibold text-muted-foreground flex items-center gap-2">
-                            {testResult.error ? (
-                              <>
-                                <XCircle className="h-3.5 w-3.5" />
-                                <span>Error</span>
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                <span>Output</span>
-                              </>
-                            )}
-                          </p>
-                          {!testResult.error && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-[10px] gap-1 opacity-60 hover:opacity-100 transition-opacity"
-                              onClick={() => setOutputExpanded(!outputExpanded)}
-                            >
-                              {outputExpanded ? (
-                                <>
-                                  <ChevronUp className="h-3 w-3" />
-                                  Collapse
-                                </>
-                              ) : (
-                                <>
-                                  <ChevronDown className="h-3 w-3" />
-                                  Expand
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
+                      </div>
+                    )}
+
+                    {/* Result */}
+                    {testResult && (
+                      <div className="space-y-2">
+                        {/* Output or Error */}
                         <div
                           className={cn(
-                            'w-full',
-                            testResult.error ? 'text-destructive font-mono text-sm' : 'mt-2',
+                            'rounded-md border p-3 text-xs font-mono relative group/output transition-all duration-200',
+                            testResult.error
+                              ? 'border-destructive/40 bg-destructive/5 text-destructive'
+                              : 'border-emerald-500/30 bg-emerald-500/5',
+                            !outputExpanded && 'max-h-40 overflow-auto',
                           )}
                         >
-                          {testResult.error ? (
-                            <pre className="whitespace-pre-wrap break-all">{testResult.error}</pre>
-                          ) : (
-                            <StructuredDataViewer data={testResult.output} />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Logs */}
-                      {testResult.logs.length > 0 && (
-                        <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs font-mono overflow-auto max-h-48 space-y-0.5 relative group/logs">
                           <div className="flex items-center justify-between mb-2">
-                            <p className="font-semibold text-muted-foreground tracking-wide uppercase text-[10px]">
-                              Execution Logs
-                            </p>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-[10px] gap-1 opacity-0 group-hover/logs:opacity-100 transition-opacity"
-                              onClick={() => handleCopyTestLog(testResult.logs.join('\n'), 'all')}
-                            >
-                              {copiedLogId === 'all' ? (
-                                <Check className="h-3 w-3 text-emerald-500" />
+                            <p className="font-semibold text-muted-foreground flex items-center gap-2">
+                              {testResult.error ? (
+                                <>
+                                  <XCircle className="h-3.5 w-3.5" />
+                                  <span>Error</span>
+                                </>
                               ) : (
-                                <Copy className="h-3 w-3" />
+                                <>
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                  <span>Output</span>
+                                </>
                               )}
-                              Copy All
-                            </Button>
-                          </div>
-                          {testResult.logs.map((log, i) => {
-                            const isConsoleError = log.startsWith('[ERROR]');
-                            const isConsoleWarn = log.startsWith('[WARN]');
-                            const isConsoleLog = log.startsWith('[LOG]');
-                            const isConsoleInfo = log.startsWith('[INFO]');
-                            const isConsoleDebug = log.startsWith('[DEBUG]');
-
-                            return (
-                              <div
-                                key={i}
-                                className={cn(
-                                  'flex items-start gap-2 py-1 px-2 rounded-sm border-l-2 relative group/item transition-colors',
-                                  isConsoleError
-                                    ? 'bg-red-500/5 border-red-500/50 text-red-500 dark:text-red-400'
-                                    : isConsoleWarn
-                                      ? 'bg-amber-500/5 border-amber-500/50 text-amber-600 dark:text-amber-400'
-                                      : isConsoleLog || isConsoleInfo
-                                        ? 'bg-sky-500/5 border-sky-500/50 text-sky-600 dark:text-sky-400'
-                                        : isConsoleDebug
-                                          ? 'bg-violet-500/5 border-violet-500/50 text-violet-500 dark:text-violet-400'
-                                          : 'bg-muted/10 border-muted-foreground/30 text-muted-foreground',
-                                )}
+                            </p>
+                            {!testResult.error && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-[10px] gap-1 opacity-60 hover:opacity-100 transition-opacity"
+                                onClick={() => setOutputExpanded(!outputExpanded)}
                               >
-                                <span className="font-mono text-[9px] uppercase font-bold shrink-0 w-8 opacity-70 mt-0.5">
-                                  {isConsoleError
-                                    ? 'ERR'
-                                    : isConsoleWarn
-                                      ? 'WRN'
-                                      : isConsoleLog
-                                        ? 'LOG'
-                                        : isConsoleInfo
-                                          ? 'INF'
-                                          : isConsoleDebug
-                                            ? 'DBG'
-                                            : 'SYS'}
-                                </span>
-                                <span className="break-all flex-1 pr-6 leading-relaxed">
-                                  {log.replace(/^\[(ERROR|WARN|LOG|INFO|DEBUG)\]\s*/, '')}
-                                </span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5 absolute right-1 top-1 opacity-0 group-hover/item:opacity-100 transition-opacity bg-background/40 hover:bg-background/80"
-                                  onClick={() => handleCopyTestLog(log, `log-${i}`)}
-                                  title="Copy log entry"
-                                >
-                                  {copiedLogId === `log-${i}` ? (
-                                    <Check className="h-3 w-3 text-emerald-500" />
-                                  ) : (
-                                    <Copy className="h-3 w-3 text-muted-foreground" />
-                                  )}
-                                </Button>
-                              </div>
-                            );
-                          })}
+                                {outputExpanded ? (
+                                  <>
+                                    <ChevronUp className="h-3 w-3" />
+                                    Collapse
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="h-3 w-3" />
+                                    Expand
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                          <div
+                            className={cn(
+                              'w-full',
+                              testResult.error ? 'text-destructive font-mono text-sm' : 'mt-2',
+                            )}
+                          >
+                            {testResult.error ? (
+                              <pre className="whitespace-pre-wrap break-all">{testResult.error}</pre>
+                            ) : (
+                              <StructuredDataViewer data={testResult.output} />
+                            )}
+                          </div>
                         </div>
-                      )}
 
-                      {/* AI outcome check — only shown when node ran successfully */}
-                      {!testResult.error && workflowId && (
-                        <TestOutcomePanel
-                          workflowId={workflowId}
-                          nodeId={initialNode?.id ?? 'unsaved'}
-                          nodeName={initialNode?.customName ?? type}
-                          nodeType={type}
-                          testOutput={testResult.output}
-                          testInput={testResult.input}
-                          onApplyFix={(fixedConfig) =>
-                            setConfig((prev) => ({ ...prev, ...fixedConfig }))
-                          }
-                        />
-                      )}
-                    </div>
-                  )}
+                        {/* Logs */}
+                        {testResult.logs.length > 0 && (
+                          <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs font-mono overflow-auto max-h-48 space-y-0.5 relative group/logs">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="font-semibold text-muted-foreground tracking-wide uppercase text-[10px]">
+                                Execution Logs
+                              </p>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-[10px] gap-1 opacity-0 group-hover/logs:opacity-100 transition-opacity"
+                                onClick={() => handleCopyTestLog(testResult.logs.join('\n'), 'all')}
+                              >
+                                {copiedLogId === 'all' ? (
+                                  <Check className="h-3 w-3 text-emerald-500" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                                Copy All
+                              </Button>
+                            </div>
+                            {testResult.logs.map((log, i) => {
+                              const isConsoleError = log.startsWith('[ERROR]');
+                              const isConsoleWarn = log.startsWith('[WARN]');
+                              const isConsoleLog = log.startsWith('[LOG]');
+                              const isConsoleInfo = log.startsWith('[INFO]');
+                              const isConsoleDebug = log.startsWith('[DEBUG]');
+
+                              return (
+                                <div
+                                  key={i}
+                                  className={cn(
+                                    'flex items-start gap-2 py-1 px-2 rounded-sm border-l-2 relative group/item transition-colors',
+                                    isConsoleError
+                                      ? 'bg-red-500/5 border-red-500/50 text-red-500 dark:text-red-400'
+                                      : isConsoleWarn
+                                        ? 'bg-amber-500/5 border-amber-500/50 text-amber-600 dark:text-amber-400'
+                                        : isConsoleLog || isConsoleInfo
+                                          ? 'bg-sky-500/5 border-sky-500/50 text-sky-600 dark:text-sky-400'
+                                          : isConsoleDebug
+                                            ? 'bg-violet-500/5 border-violet-500/50 text-violet-500 dark:text-violet-400'
+                                            : 'bg-muted/10 border-muted-foreground/30 text-muted-foreground',
+                                  )}
+                                >
+                                  <span className="font-mono text-[9px] uppercase font-bold shrink-0 w-8 opacity-70 mt-0.5">
+                                    {isConsoleError
+                                      ? 'ERR'
+                                      : isConsoleWarn
+                                        ? 'WRN'
+                                        : isConsoleLog
+                                          ? 'LOG'
+                                          : isConsoleInfo
+                                            ? 'INF'
+                                            : isConsoleDebug
+                                              ? 'DBG'
+                                              : 'SYS'}
+                                  </span>
+                                  <span className="break-all flex-1 pr-6 leading-relaxed">
+                                    {log.replace(/^\[(ERROR|WARN|LOG|INFO|DEBUG)\]\s*/, '')}
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 absolute right-1 top-1 opacity-0 group-hover/item:opacity-100 transition-opacity bg-background/40 hover:bg-background/80"
+                                    onClick={() => handleCopyTestLog(log, `log-${i}`)}
+                                    title="Copy log entry"
+                                  >
+                                    {copiedLogId === `log-${i}` ? (
+                                      <Check className="h-3 w-3 text-emerald-500" />
+                                    ) : (
+                                      <Copy className="h-3 w-3 text-muted-foreground" />
+                                    )}
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* AI outcome check — only shown when node ran successfully */}
+                        {!testResult.error && workflowId && (
+                          <TestOutcomePanel
+                            workflowId={workflowId}
+                            nodeId={initialNode?.id ?? 'unsaved'}
+                            nodeName={initialNode?.customName ?? type}
+                            nodeType={type}
+                            testOutput={testResult.output}
+                            testInput={testResult.input}
+                            currentToolIds={(config.toolIds as string[]) ?? []}
+                            availableTools={tools}
+                            onApplyFix={(fixedConfig) => {
+                              const { customName: newName, type: newType, ...restConfig } = fixedConfig;
+                              if (newName && typeof newName === 'string') {
+                                setCustomName(newName);
+                              }
+                              if (newType && typeof newType === 'string') {
+                                setType(newType as NodeTypeId);
+                              }
+                              setConfig((prev) => ({ ...prev, ...restConfig }));
+                            }}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </CollapsibleContent>
               </Collapsible>
             </div>

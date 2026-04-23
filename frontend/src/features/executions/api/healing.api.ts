@@ -41,6 +41,8 @@ export interface FunctionalFailureResult {
   executionId?: string;
   executionStatus?: string;
   healingLogId?: string;
+  /** Tool IDs echoed back by the server (current tools at time of check) */
+  currentTools?: string[];
 }
 
 export interface HealingLog {
@@ -116,6 +118,12 @@ export const healingApi = {
     nodeName?: string;
     forceLlm?: boolean;
     userId?: string;
+    /** Optional free-form analysis instructions sent to the AI */
+    prompt?: string;
+    /** Current tool IDs assigned to this node */
+    currentTools?: string[];
+    /** All available tools in the workflow */
+    availableTools?: { id: string; name: string }[];
   }): Promise<FunctionalFailureResult> => {
     const { workflowId, nodeId, ...body } = params;
     const { data } = await apiClient.post<FunctionalFailureResult>(

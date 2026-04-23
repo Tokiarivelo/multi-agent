@@ -32,6 +32,14 @@ export interface AiWorkflowResult {
   };
 }
 
+export interface NodeAiResult {
+  sessionId: string;
+  message: string;
+  config?: Record<string, unknown>;
+  customName?: string;
+  history: AiMessage[];
+}
+
 export interface WorkflowExecution {
   id: string;
   workflowId: string;
@@ -237,6 +245,18 @@ export const workflowsApi = {
       `/api/workflows/${workflowId}/ai/edit`,
       payload,
     );
+    return data;
+  },
+
+  editNodeWithAi: async (payload: {
+    nodeType: string;
+    nodeConfig: Record<string, unknown>;
+    customName?: string;
+    prompt: string;
+    modelId: string;
+    sessionId?: string;
+  }): Promise<NodeAiResult> => {
+    const { data } = await apiClient.post<NodeAiResult>('/api/workflows/ai/nodes/edit', payload);
     return data;
   },
 
