@@ -293,9 +293,7 @@ export class WorkflowHealingService {
 
     // A custom prompt always forces LLM analysis
     const shouldCallLlm =
-      forceLlm ||
-      !!customPrompt ||
-      heuristicResult.matchCount >= HEURISTIC_CONFIDENCE_THRESHOLD;
+      forceLlm || !!customPrompt || heuristicResult.matchCount >= HEURISTIC_CONFIDENCE_THRESHOLD;
 
     // Skip LLM if heuristic finds nothing, no custom prompt, and forceLlm is off
     if (!shouldCallLlm) {
@@ -313,11 +311,11 @@ export class WorkflowHealingService {
 
     // LLM analysis
     const userMessage = this.buildFunctionalPrompt(
-      ctx, 
-      heuristicResult, 
-      customPrompt, 
-      currentTools, 
-      availableTools
+      ctx,
+      heuristicResult,
+      customPrompt,
+      currentTools,
+      availableTools,
     );
 
     let raw: string;
@@ -496,7 +494,7 @@ export class WorkflowHealingService {
 
     let toolContext = '';
     if (availableTools && availableTools.length > 0) {
-      toolContext += `\n\nAvailable Tools:\n${availableTools.map(t => `- [${t.id}] ${t.name}`).join('\n')}\n`;
+      toolContext += `\n\nAvailable Tools:\n${availableTools.map((t) => `- [${t.id}] ${t.name}`).join('\n')}\n`;
       if (currentTools) {
         toolContext += `Current Tool IDs on node: ${currentTools.length > 0 ? currentTools.join(', ') : 'None'}\n`;
       }
