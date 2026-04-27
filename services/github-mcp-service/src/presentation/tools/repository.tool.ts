@@ -63,8 +63,14 @@ export class RepositoryTool implements McpToolHandler {
             type: 'string',
             description: 'Source branch for create_branch (defaults to main)',
           },
-          path: { type: 'string', description: 'File or directory path (for get_file / list_files)' },
-          branch: { type: 'string', description: 'Branch to read from (for get_file / list_files)' },
+          path: {
+            type: 'string',
+            description: 'File or directory path (for get_file / list_files)',
+          },
+          branch: {
+            type: 'string',
+            description: 'Branch to read from (for get_file / list_files)',
+          },
           state: {
             type: 'string',
             description: 'Filter state for list_prs / list_issues: open, closed, or all',
@@ -76,7 +82,8 @@ export class RepositoryTool implements McpToolHandler {
           pull_number: { type: 'number', description: 'PR number to merge (for merge_pr)' },
           merge_method: {
             type: 'string',
-            description: 'Merge strategy for merge_pr: merge, squash, or rebase (defaults to squash)',
+            description:
+              'Merge strategy for merge_pr: merge, squash, or rebase (defaults to squash)',
             enum: ['merge', 'squash', 'rebase'],
           },
         },
@@ -119,7 +126,8 @@ export class RepositoryTool implements McpToolHandler {
         const head = args['head'] as string;
         const base = args['base'] as string;
         const body = (args['body'] as string) || '';
-        if (!title || !head || !base) throw new Error('title, head, and base are required for create_pr');
+        if (!title || !head || !base)
+          throw new Error('title, head, and base are required for create_pr');
         const data = await this.github.createPullRequest(owner, repo, title, body, head, base, gh);
         return textResult(JSON.stringify(data, null, 2));
       }
@@ -127,7 +135,10 @@ export class RepositoryTool implements McpToolHandler {
       case 'merge_pr': {
         const pullNumber = args['pull_number'] as number;
         if (!pullNumber) throw new Error('pull_number is required for merge_pr');
-        const mergeMethod = ((args['merge_method'] as string) || 'squash') as 'merge' | 'squash' | 'rebase';
+        const mergeMethod = ((args['merge_method'] as string) || 'squash') as
+          | 'merge'
+          | 'squash'
+          | 'rebase';
         const data = await this.github.mergePullRequest(owner, repo, pullNumber, mergeMethod, gh);
         return textResult(JSON.stringify(data, null, 2));
       }

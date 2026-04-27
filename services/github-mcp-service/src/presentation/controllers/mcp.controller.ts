@@ -96,7 +96,9 @@ export class McpController {
       return this.error(null, JSON_RPC_ERRORS.INVALID_REQUEST, 'Invalid JSON-RPC request');
     }
 
-    this.logger.debug(`RPC method="${req.method}" id=${req.id} oauth=${githubToken ? 'yes' : 'no'}`);
+    this.logger.debug(
+      `RPC method="${req.method}" id=${req.id} oauth=${githubToken ? 'yes' : 'no'}`,
+    );
 
     try {
       switch (req.method) {
@@ -115,9 +117,7 @@ export class McpController {
           }
 
           // Inject the OAuth token so the tool executes as the user, not the GitHub App
-          const argsWithToken = githubToken
-            ? { ...args, __githubToken: githubToken }
-            : args;
+          const argsWithToken = githubToken ? { ...args, __githubToken: githubToken } : args;
 
           const result: McpToolResult = await tool.execute(argsWithToken ?? {});
           return this.success(req.id, result);

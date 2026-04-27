@@ -34,7 +34,9 @@ export class GithubAuthService implements OnModuleInit {
         const delay = RETRY_DELAYS_MS[attempt] ?? 0;
         this.logger.warn(
           `GitHub auth attempt ${attempt + 1} failed: ${(err as Error).message}` +
-            (isLast ? ' — service will start anyway; calls will retry on demand.' : ` — retrying in ${delay}ms`),
+            (isLast
+              ? ' — service will start anyway; calls will retry on demand.'
+              : ` — retrying in ${delay}ms`),
         );
         if (isLast) return;
         await new Promise((r) => setTimeout(r, delay));
@@ -60,7 +62,10 @@ export class GithubAuthService implements OnModuleInit {
     const { token, expiresAt } = await Promise.race([
       this.auth({ type: 'installation' }) as Promise<{ token: string; expiresAt: string }>,
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`GitHub auth timed out after ${timeoutMs}ms`)), timeoutMs),
+        setTimeout(
+          () => reject(new Error(`GitHub auth timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        ),
       ),
     ]);
 

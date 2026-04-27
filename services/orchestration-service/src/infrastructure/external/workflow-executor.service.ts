@@ -515,7 +515,9 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
                       (Array.isArray(parsed.choices) && (parsed.choices as unknown[]).length > 0
                         ? 'single_choice'
                         : 'custom'),
-                    choices: Array.isArray(parsed.choices) ? (parsed.choices as string[]) : undefined,
+                    choices: Array.isArray(parsed.choices)
+                      ? (parsed.choices as string[])
+                      : undefined,
                   };
                   sentinelSourceText = candidate;
                   this.logger.log(
@@ -557,9 +559,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
             // ── Pause workflow and wait for user input ─────────────────────
             const questionType = askUser.type ?? 'single_choice';
             const choices = askUser.choices ?? [];
-            const visibleText = sentinelSourceText
-              .replace(/__ASK_USER__:\{[\s\S]*?\}/g, '')
-              .trim();
+            const visibleText = sentinelSourceText.replace(/__ASK_USER__:\{[\s\S]*?\}/g, '').trim();
 
             execution.waitNodeExecution(node.id);
             await this.updateExecution(execution);
