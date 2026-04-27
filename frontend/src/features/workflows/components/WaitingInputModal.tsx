@@ -49,6 +49,7 @@ export function WaitingInputModal({
 }: WaitingInputModalProps) {
   const { t } = useTranslation();
   const isDanger = waitingQuestionType === 'danger_choice';
+  const isOAuth = waitingQuestionType === 'oauth_required';
 
   return (
     <div className="absolute inset-0 z-100 flex items-center justify-center bg-black/20 backdrop-blur-sm pointer-events-auto transition-opacity animate-in fade-in">
@@ -57,7 +58,9 @@ export function WaitingInputModal({
           'w-[560px] shadow-2xl backdrop-blur-xl border-border/50 animate-in zoom-in-95',
           isDanger
             ? 'bg-white/95 dark:bg-black/95 border-red-500/30'
-            : 'bg-white/90 dark:bg-black/90',
+            : isOAuth
+              ? 'bg-white/95 dark:bg-black/95 border-amber-500/30'
+              : 'bg-white/90 dark:bg-black/90',
         )}
       >
         <CardHeader className="pb-2 border-b border-border/50">
@@ -65,13 +68,15 @@ export function WaitingInputModal({
             <CardTitle
               className={cn(
                 'flex items-center gap-2 text-sm',
-                isDanger ? 'text-red-500' : 'text-blue-500',
+                isDanger ? 'text-red-500' : isOAuth ? 'text-amber-500' : 'text-blue-500',
               )}
             >
               <MessageCircleQuestion className="h-4 w-4 shrink-0" />
               {isDanger
                 ? t('workflows.waitingInput.dangerTitle', 'Dangerous Action — Confirmation Required')
-                : t('workflows.waitingInput.title', 'Agent Needs Your Input')}
+                : isOAuth
+                  ? t('workflows.waitingInput.oauthTitle', 'GitHub Permission Required')
+                  : t('workflows.waitingInput.title', 'Agent Needs Your Input')}
             </CardTitle>
             <Button
               variant="ghost"

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { workflowsApi } from '../api/workflows.api';
+import { githubApi } from '@/features/github/api/github.api';
 import { toast } from 'sonner';
 import {
   MessageCircleQuestion,
@@ -17,11 +18,13 @@ import {
   ToggleLeft,
   ListChecks,
   Pencil,
+  Github,
+  CheckCircle2,
 } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-export type QuestionType = 'single_choice' | 'multiple_choice' | 'danger_choice' | 'custom';
+export type QuestionType = 'single_choice' | 'multiple_choice' | 'danger_choice' | 'custom' | 'oauth_required';
 
 export interface AgentReplyBarProps {
   nodeId: string;
@@ -197,6 +200,105 @@ function DangerBar({ question, proposals, executionId, nodeId, onDone }: DangerB
   );
 }
 
+// ─── GitHub OAuth Bar ──────────────────────────────────────────────────────────
+
+interface OAuthBarProps {
+  executionId: string | null;
+  nodeId: string;
+  onDone: () => void;
+}
+
+function OAuthBar({ executionId, nodeId, onDone }: OAuthBarProps) {
+  const { t } = useTranslation();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const popupRef = useRef<Window | null>(null);
+
+  useEffect(() => {
+    const handler = async (event: MessageEvent) => {
+      if (event.data?.type !== 'github_oauth_success') return;
+      const payload = event.data as { type: string; accessToken: string; login: string; avatarUrl: string };
+      setConnected(true);
+      setIsConnecting(false);
+      popupRef.current?.close();
+
+      try {
+        await githubApi.saveTokenToProfile(payload.accessToken);
+      } catch {
+        // non-fatal
+      }
+
+      if (!executionId) return;
+      try {
+        await workflowsApi.resumeNode(executionId, nodeId, 'github_connected');
+        onDone();
+        toast.success(t('workflows.agentReply.githubConnected', 'GitHub connected — workflow resuming…'));
+      } catch (err) {
+        toast.error(`Failed to resume: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [executionId, nodeId, onDone, t]);
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    try {
+      const { url } = await githubApi.getAuthorizationUrl();
+      const popup = window.open(url, 'github_oauth', 'width=600,height=700,scrollbars=yes');
+      popupRef.current = popup;
+      if (!popup) {
+        toast.error(t('workflows.agentReply.githubPopupBlocked', 'Pop-up blocked — allow pop-ups and try again.'));
+        setIsConnecting(false);
+      }
+    } catch (err) {
+      toast.error(`Failed to start OAuth: ${err instanceof Error ? err.message : String(err)}`);
+      setIsConnecting(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/5 p-3 space-y-3 animate-in fade-in slide-in-from-bottom-2">
+      <div className="flex items-center gap-2">
+        <Github className="h-4 w-4 text-amber-500 shrink-0" />
+        <p className="text-xs font-semibold text-amber-500">
+          {t('workflows.agentReply.githubAuthTitle', 'GitHub access required')}
+        </p>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {t(
+          'workflows.agentReply.githubAuthDesc',
+          'This action requires access to your GitHub account. Connect once and the workflow will continue automatically.',
+        )}
+      </p>
+      <div className="flex justify-end">
+        {connected ? (
+          <div className="flex items-center gap-1.5 text-xs text-emerald-500 font-medium">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {t('workflows.agentReply.githubAuthDone', 'Connected — resuming…')}
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            className="h-8 gap-2 bg-[#24292e] hover:bg-[#1b1f23] text-white text-xs"
+            onClick={handleConnect}
+            disabled={isConnecting}
+          >
+            {isConnecting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Github className="h-3.5 w-3.5" />
+            )}
+            {isConnecting
+              ? t('workflows.agentReply.githubConnecting', 'Connecting…')
+              : t('workflows.agentReply.githubConnectButton', 'Connect GitHub')}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export function AgentReplyBar({
@@ -258,6 +360,20 @@ export function AgentReplyBar({
       setIsSubmitting(false);
     }
   };
+
+  // OAuth required: special handler
+  if (questionType === 'oauth_required') {
+    return (
+      <OAuthBar
+        executionId={executionId}
+        nodeId={nodeId}
+        onDone={() => {
+          setSelected([]);
+          setCustomText('');
+        }}
+      />
+    );
+  }
 
   // Danger type: special handler
   if (isDanger) {

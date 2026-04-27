@@ -64,6 +64,10 @@ export function useGitHub() {
       const payload = event.data as { type: string; accessToken: string; login: string; avatarUrl: string };
       saveConnection(payload);
       popupRef.current?.close();
+      // Persist token server-side so backend services can use it without user intervention
+      githubApi.saveTokenToProfile(payload.accessToken).catch(() => {
+        // Non-fatal: token is still in localStorage for repository listing
+      });
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);

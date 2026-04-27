@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const GATEWAY_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const GATEWAY_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 /**
  * GET /api/github/callback

@@ -1,5 +1,7 @@
 export { SearchRepositoriesTool } from './search-repositories.tool';
 export { GetFileContentsTool } from './get-file-contents.tool';
+export { ListBranchesTool } from './list-branches.tool';
+export { RepositoryTool } from './repository.tool';
 export { PushFilesTool } from './push-files.tool';
 export { CreateBranchTool } from './create-branch.tool';
 export { ListIssuesTool, CreateIssueTool } from './issues.tool';

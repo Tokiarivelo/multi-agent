@@ -458,113 +458,108 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
             return [];
           };
 
-          // ── Step 1: Collect all text candidates ──────────────────────────
-          const allStrings = collectStrings(agentResult.output);
-
-          this.logger.debug(`[ASK_USER] node=${node.id} scanning ${allStrings.length} string(s)`);
-
-          // ── Step 2: Find the sentinel in any candidate string ────────────
-          // Lenient: sentinel can appear anywhere in the text (not just end).
-          // We pick the LAST occurrence in the deepest matching string so that
-          // a model that accidentally prints it twice still works correctly.
-          const SENTINEL_RE = /__ASK_USER__:(\{[\s\S]*?\})/g;
-
-          let askUser: AskUserPayload | null = null;
-          let sentinelSourceText = '';
-
-          for (const candidate of allStrings) {
-            let match: RegExpExecArray | null;
-            let lastMatch: RegExpExecArray | null = null;
-            // Reset regex per candidate
-            const re = new RegExp(SENTINEL_RE.source, 'g');
-            while ((match = re.exec(candidate)) !== null) {
-              lastMatch = match;
-            }
-            if (!lastMatch) continue;
-
-            try {
-              const parsed = JSON.parse(lastMatch[1]) as Record<string, unknown>;
-              if (typeof parsed.question === 'string') {
-                askUser = {
-                  question: parsed.question,
-                  type:
-                    (parsed.type as AskUserPayload['type']) ??
-                    (Array.isArray(parsed.choices) && (parsed.choices as unknown[]).length > 0
-                      ? 'single_choice'
-                      : 'custom'),
-                  choices: Array.isArray(parsed.choices) ? (parsed.choices as string[]) : undefined,
-                };
-                sentinelSourceText = candidate;
-                this.logger.log(
-                  `[ASK_USER] node=${node.id} detected — type=${askUser.type} ` +
-                    `choices=${askUser.choices?.length ?? 0}`,
-                );
-                break; // use first matching candidate
+          // ── Interaction loop: keep asking until the agent produces a final answer ──
+          // Each iteration: scan agentResult for __ASK_USER__, pause for user input,
+          // re-run the agent with the answer, then scan again.  Exit when no question
+          // is detected (agent is done) or when the safety cap is reached.
+          const resolveAgentText = (value: unknown): string => {
+            if (typeof value === 'string') {
+              try {
+                return resolveAgentText(JSON.parse(value));
+              } catch {
+                return value;
               }
-            } catch {
-              this.logger.warn(
-                `AGENT node ${node.id}: failed to parse __ASK_USER__ JSON — raw: ${lastMatch[1]}`,
-              );
             }
-          }
+            if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+              const obj = value as Record<string, unknown>;
+              if (typeof obj.output === 'string') return resolveAgentText(obj.output);
+              if (typeof obj.text === 'string') return resolveAgentText(obj.text);
+              if (typeof obj.content === 'string') return resolveAgentText(obj.content);
+            }
+            return '';
+          };
 
-          // ── Step 3: Heuristic fallback — bare question without sentinel ───
-          // Models sometimes ask a question in plain text without the sentinel.
-          // If no sentinel was found, resolve the deepest plain-text response
-          // and check whether it ends with a question (last non-empty line ends
-          // in '?').  If so, treat it as a `custom` question so the user can reply.
-          if (!askUser) {
-            // Resolve the actual plain-text agent output through the nesting layers:
-            //   agentResult.output  →  { output: "<json-string>", ... }  OR  "<json-string>"
-            //   inner parsed         →  { output: "<plain-text>", ... }
-            const resolveAgentText = (value: unknown): string => {
-              if (typeof value === 'string') {
-                try {
-                  return resolveAgentText(JSON.parse(value));
-                } catch {
-                  return value;
+          const SENTINEL_RE_SOURCE = /__ASK_USER__:(\{[\s\S]*?\})/g.source;
+          let interactionRound = 0;
+          const MAX_INTERACTIONS = 20;
+
+          while (interactionRound < MAX_INTERACTIONS) {
+            interactionRound++;
+
+            // ── Step 1: Collect all text candidates ────────────────────────
+            const allStrings = collectStrings(agentResult.output);
+            this.logger.debug(
+              `[ASK_USER] node=${node.id} round=${interactionRound} scanning ${allStrings.length} string(s)`,
+            );
+
+            // ── Step 2: Find the sentinel ──────────────────────────────────
+            let askUser: AskUserPayload | null = null;
+            let sentinelSourceText = '';
+
+            for (const candidate of allStrings) {
+              let match: RegExpExecArray | null;
+              let lastMatch: RegExpExecArray | null = null;
+              const re = new RegExp(SENTINEL_RE_SOURCE, 'g');
+              while ((match = re.exec(candidate)) !== null) {
+                lastMatch = match;
+              }
+              if (!lastMatch) continue;
+
+              try {
+                const parsed = JSON.parse(lastMatch[1]) as Record<string, unknown>;
+                if (typeof parsed.question === 'string') {
+                  askUser = {
+                    question: parsed.question,
+                    type:
+                      (parsed.type as AskUserPayload['type']) ??
+                      (Array.isArray(parsed.choices) && (parsed.choices as unknown[]).length > 0
+                        ? 'single_choice'
+                        : 'custom'),
+                    choices: Array.isArray(parsed.choices) ? (parsed.choices as string[]) : undefined,
+                  };
+                  sentinelSourceText = candidate;
+                  this.logger.log(
+                    `[ASK_USER] node=${node.id} detected — type=${askUser.type} ` +
+                      `choices=${askUser.choices?.length ?? 0}`,
+                  );
+                  break;
+                }
+              } catch {
+                this.logger.warn(
+                  `AGENT node ${node.id}: failed to parse __ASK_USER__ JSON — raw: ${lastMatch[1]}`,
+                );
+              }
+            }
+
+            // ── Step 3: Heuristic fallback — bare question without sentinel ─
+            if (!askUser) {
+              const plainText = resolveAgentText(agentResult.output).trim();
+              if (plainText) {
+                const lines = plainText
+                  .split('\n')
+                  .map((l) => l.trim())
+                  .filter(Boolean);
+                const lastLine = lines[lines.length - 1] ?? '';
+                if (lastLine.endsWith('?')) {
+                  askUser = { question: lastLine, type: 'custom', choices: undefined };
+                  sentinelSourceText = plainText;
+                  this.logger.log(
+                    `[ASK_USER] node=${node.id} heuristic: bare question detected — ` +
+                      `"${lastLine.slice(0, 80)}"`,
+                  );
                 }
               }
-              if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-                const obj = value as Record<string, unknown>;
-                if (typeof obj.output === 'string') return resolveAgentText(obj.output);
-                if (typeof obj.text === 'string') return resolveAgentText(obj.text);
-                if (typeof obj.content === 'string') return resolveAgentText(obj.content);
-              }
-              return '';
-            };
-
-            const plainText = resolveAgentText(agentResult.output).trim();
-
-            if (plainText) {
-              // Extract the last non-empty line and check if it ends with '?'
-              const lines = plainText
-                .split('\n')
-                .map((l) => l.trim())
-                .filter(Boolean);
-              const lastLine = lines[lines.length - 1] ?? '';
-
-              if (lastLine.endsWith('?')) {
-                // Use the last question sentence as the question text
-                askUser = {
-                  question: lastLine,
-                  type: 'custom',
-                  choices: undefined,
-                };
-                sentinelSourceText = plainText;
-                this.logger.log(
-                  `[ASK_USER] node=${node.id} heuristic: bare question detected — ` +
-                    `"${lastLine.slice(0, 80)}"`,
-                );
-              }
             }
-          }
-          if (askUser) {
+
+            // No question in this response → agent is done
+            if (!askUser) break;
+
+            // ── Pause workflow and wait for user input ─────────────────────
             const questionType = askUser.type ?? 'single_choice';
             const choices = askUser.choices ?? [];
-
-            // Strip sentinel from the visible agent message
-            const visibleText = sentinelSourceText.replace(/__ASK_USER__:\{[\s\S]*?\}/g, '').trim();
+            const visibleText = sentinelSourceText
+              .replace(/__ASK_USER__:\{[\s\S]*?\}/g, '')
+              .trim();
 
             execution.waitNodeExecution(node.id);
             await this.updateExecution(execution);
@@ -586,14 +581,14 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
             );
 
             this.logger.log(
-              `AGENT node ${node.id} paused — waiting for user input (type: ${questionType})`,
+              `AGENT node ${node.id} paused (round ${interactionRound}) — waiting for user input (type: ${questionType})`,
             );
 
             const userResponse = await new Promise<string>((resolve) => {
               this.promptEmitter.once(`resume_${execution.id}_${node.id}`, resolve);
             });
 
-            // Resume: re-run agent with user's answer injected
+            // ── Resume: re-run agent with user's answer ────────────────────
             execution.startNodeExecution(node.id, node.customName || node.type, input);
             await this.updateExecution(execution);
             this.workflowGateway.sendNodeUpdate(
@@ -616,6 +611,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
             if (!agentResult.success) {
               throw new Error(agentResult.error || 'Agent re-execution after user input failed');
             }
+            // Loop: scan the new agentResult for another __ASK_USER__
           }
         }
 

@@ -22,6 +22,7 @@ __ASK_USER__:{"question":"<your concise question>","type":"<type>","choices":["<
 | `multiple_choice` | User may select **several** options (provide ≥ 2 choices).                  |
 | `danger_choice`   | Destructive / irreversible action — user must confirm explicitly. Suggested choices: `["Confirm","Cancel"]`. |
 | `custom`          | Free-text answer — omit `"choices"` or set it to `[]`.                     |
+| `oauth_required`  | GitHub OAuth authorization required — renders a "Connect GitHub" button. Set `"choices":[]`. The system handles the auth flow automatically. |
 
 ## Rules
 

@@ -116,12 +116,13 @@ export class ToolClientService {
     }
   }
 
-  async executeTool(toolName: string, parameters: Record<string, any>): Promise<any> {
+  async executeTool(toolName: string, parameters: Record<string, any>, userId?: string): Promise<any> {
     try {
       const response = await firstValueFrom(
         this.httpService.post(`${this.toolServiceUrl}/api/tools/execute`, {
           toolName,
           parameters,
+          ...(userId ? { userId } : {}),
         }),
       );
 

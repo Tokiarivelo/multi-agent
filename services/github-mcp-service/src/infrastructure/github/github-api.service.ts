@@ -7,9 +7,15 @@ import { GithubRepository, GithubIssue, GithubPullRequest } from '../../domain/g
 export class GithubApiService {
   constructor(private readonly auth: GithubAuthService) {}
 
-  private async octokit(): Promise<Octokit> {
-    const token = await this.auth.getInstallationToken();
+  /** Returns an Octokit instance using the user's OAuth token when available,
+   *  falling back to the GitHub App installation token. */
+  async octokitFor(oauthToken?: string): Promise<Octokit> {
+    const token = oauthToken ?? (await this.auth.getInstallationToken());
     return new Octokit({ auth: token });
+  }
+
+  private async octokit(): Promise<Octokit> {
+    return this.octokitFor();
   }
 
   async searchRepositories(query: string, perPage = 10): Promise<GithubRepository[]> {
@@ -30,9 +36,10 @@ export class GithubApiService {
     repo: string,
     path: string,
     branch?: string,
+    gh?: Octokit,
   ): Promise<string | Array<{ name: string; path: string; type: string }>> {
-    const gh = await this.octokit();
-    const { data } = await gh.repos.getContent({
+    const client = gh ?? (await this.octokit());
+    const { data } = await client.repos.getContent({
       owner,
       repo,
       path,
@@ -56,17 +63,18 @@ export class GithubApiService {
     branch: string,
     files: Array<{ path: string; content: string }>,
     message: string,
+    gh?: Octokit,
   ): Promise<{ sha: string; url: string }> {
-    const gh = await this.octokit();
+    const client = gh ?? (await this.octokit());
 
-    const { data: ref } = await gh.git.getRef({ owner, repo, ref: `heads/${branch}` });
+    const { data: ref } = await client.git.getRef({ owner, repo, ref: `heads/${branch}` });
     const baseSha = ref.object.sha;
 
-    const { data: baseCommit } = await gh.git.getCommit({ owner, repo, commit_sha: baseSha });
+    const { data: baseCommit } = await client.git.getCommit({ owner, repo, commit_sha: baseSha });
 
     const blobs = await Promise.all(
       files.map(async (f) => {
-        const { data } = await gh.git.createBlob({
+        const { data } = await client.git.createBlob({
           owner,
           repo,
           content: Buffer.from(f.content).toString('base64'),
@@ -76,14 +84,14 @@ export class GithubApiService {
       }),
     );
 
-    const { data: tree } = await gh.git.createTree({
+    const { data: tree } = await client.git.createTree({
       owner,
       repo,
       tree: blobs,
       base_tree: baseCommit.tree.sha,
     });
 
-    const { data: commit } = await gh.git.createCommit({
+    const { data: commit } = await client.git.createCommit({
       owner,
       repo,
       message,
@@ -91,9 +99,19 @@ export class GithubApiService {
       parents: [baseSha],
     });
 
-    await gh.git.updateRef({ owner, repo, ref: `heads/${branch}`, sha: commit.sha });
+    await client.git.updateRef({ owner, repo, ref: `heads/${branch}`, sha: commit.sha });
 
     return { sha: commit.sha, url: commit.html_url };
+  }
+
+  async listBranches(
+    owner: string,
+    repo: string,
+    gh?: Octokit,
+  ): Promise<Array<{ name: string; sha: string; protected: boolean }>> {
+    const client = gh ?? (await this.octokit());
+    const { data } = await client.repos.listBranches({ owner, repo, per_page: 100 });
+    return data.map((b) => ({ name: b.name, sha: b.commit.sha, protected: b.protected }));
   }
 
   async createBranch(
@@ -101,10 +119,11 @@ export class GithubApiService {
     repo: string,
     branch: string,
     fromBranch = 'main',
+    gh?: Octokit,
   ): Promise<{ branch: string; sha: string }> {
-    const gh = await this.octokit();
-    const { data: ref } = await gh.git.getRef({ owner, repo, ref: `heads/${fromBranch}` });
-    await gh.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: ref.object.sha });
+    const client = gh ?? (await this.octokit());
+    const { data: ref } = await client.git.getRef({ owner, repo, ref: `heads/${fromBranch}` });
+    await client.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: ref.object.sha });
     return { branch, sha: ref.object.sha };
   }
 
@@ -113,9 +132,10 @@ export class GithubApiService {
     repo: string,
     state: 'open' | 'closed' | 'all' = 'open',
     labels?: string,
+    gh?: Octokit,
   ): Promise<GithubIssue[]> {
-    const gh = await this.octokit();
-    const { data } = await gh.issues.listForRepo({
+    const client = gh ?? (await this.octokit());
+    const { data } = await client.issues.listForRepo({
       owner,
       repo,
       state,
@@ -140,9 +160,10 @@ export class GithubApiService {
     title: string,
     body?: string,
     labels?: string[],
+    gh?: Octokit,
   ): Promise<{ number: number; url: string }> {
-    const gh = await this.octokit();
-    const { data } = await gh.issues.create({
+    const client = gh ?? (await this.octokit());
+    const { data } = await client.issues.create({
       owner,
       repo,
       title,
@@ -157,9 +178,10 @@ export class GithubApiService {
     repo: string,
     state: 'open' | 'closed' | 'all' = 'open',
     base?: string,
+    gh?: Octokit,
   ): Promise<GithubPullRequest[]> {
-    const gh = await this.octokit();
-    const { data } = await gh.pulls.list({
+    const client = gh ?? (await this.octokit());
+    const { data } = await client.pulls.list({
       owner,
       repo,
       state,
@@ -184,9 +206,10 @@ export class GithubApiService {
     body: string,
     head: string,
     base: string,
+    gh?: Octokit,
   ): Promise<{ number: number; url: string }> {
-    const gh = await this.octokit();
-    const { data } = await gh.pulls.create({
+    const client = gh ?? (await this.octokit());
+    const { data } = await client.pulls.create({
       owner,
       repo,
       title,
@@ -202,9 +225,10 @@ export class GithubApiService {
     repo: string,
     pullNumber: number,
     mergeMethod: 'merge' | 'squash' | 'rebase' = 'squash',
+    gh?: Octokit,
   ): Promise<{ merged: boolean; sha: string }> {
-    const gh = await this.octokit();
-    const { data } = await gh.pulls.merge({
+    const client = gh ?? (await this.octokit());
+    const { data } = await client.pulls.merge({
       owner,
       repo,
       pull_number: pullNumber,
@@ -217,9 +241,10 @@ export class GithubApiService {
     owner: string,
     repo: string,
     organization?: string,
+    gh?: Octokit,
   ): Promise<{ full_name: string; url: string }> {
-    const gh = await this.octokit();
-    const { data } = await gh.repos.createFork({
+    const client = gh ?? (await this.octokit());
+    const { data } = await client.repos.createFork({
       owner,
       repo,
       ...(organization ? { organization } : {}),

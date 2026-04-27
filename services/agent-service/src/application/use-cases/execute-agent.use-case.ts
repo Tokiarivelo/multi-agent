@@ -97,6 +97,32 @@ export class ExecuteAgentUseCase {
     );
   }
 
+  /**
+   * Extract the actual payload from a ToolExecutionResult wrapper.
+   * The tool-service wraps every response in { success, data|error, executionTime }.
+   * The LLM must receive only the meaningful content.
+   */
+  private unwrapToolResult(raw: unknown): string {
+    if (typeof raw === 'string') return raw;
+    if (raw === null || raw === undefined) return 'null';
+
+    if (typeof raw === 'object') {
+      const r = raw as Record<string, unknown>;
+
+      if (r['success'] === false) {
+        return `Tool error: ${r['error'] ?? 'Unknown error'}`;
+      }
+
+      if ('data' in r) {
+        const d = r['data'];
+        if (d === null || d === undefined) return 'null';
+        return typeof d === 'string' ? d : JSON.stringify(d, null, 2);
+      }
+    }
+
+    return JSON.stringify(raw, null, 2);
+  }
+
   async execute(agentId: string, dto: ExecuteAgentDto): Promise<AgentExecution> {
     const agent = await this.agentRepository.findById(agentId);
     if (!agent) throw new NotFoundException(`Agent with ID ${agentId} not found`);
@@ -193,6 +219,13 @@ export class ExecuteAgentUseCase {
         tools = await this.toolClient.getTools(allToolIds);
       }
 
+      this.logger.log(
+        `[tools] agentToolIds=${JSON.stringify(agentToolIds)} extraToolIds=${JSON.stringify(extraToolIds)} resolved=${tools.length}`,
+      );
+      if (tools.length > 0) {
+        this.logger.log(`[tools] schemas sent to LLM: ${JSON.stringify(tools)}`);
+      }
+
       // ── Execute primary agent ───────────────────────────────────────────
       const execId = nodeMetadata.executionId as string | undefined;
       const execNodeId = nodeMetadata.nodeId as string | undefined;
@@ -251,6 +284,11 @@ export class ExecuteAgentUseCase {
 
       let iterations = 0;
       const MAX_ITERATIONS = 5;
+      let needsGithubAuth = false;
+
+      this.logger.log(
+        `[llm-response] finishReason=${response.finishReason} toolCalls=${JSON.stringify(response.toolCalls ?? [])}`,
+      );
 
       while (response.toolCalls && response.toolCalls.length > 0 && iterations < MAX_ITERATIONS) {
         iterations++;
@@ -262,23 +300,30 @@ export class ExecuteAgentUseCase {
         });
 
         for (const toolCall of response.toolCalls) {
+          let toolContent: string;
           try {
-            const toolResult = await this.toolClient.executeTool(toolCall.name, toolCall.args);
-            context.conversationHistory.push({
-              role: 'tool',
-              content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
-              toolCallId: toolCall.id,
-              name: toolCall.name,
-            });
+            const raw = await this.toolClient.executeTool(toolCall.name, toolCall.args, ragUserId || undefined);
+            toolContent = this.unwrapToolResult(raw);
+            if (toolContent === '__GITHUB_AUTH_REQUIRED__') {
+              needsGithubAuth = true;
+              toolContent = 'GitHub authentication required.';
+            }
           } catch (err) {
-            context.conversationHistory.push({
-              role: 'tool',
-              content: `Error executing tool: ${err instanceof Error ? err.message : String(err)}`,
-              toolCallId: toolCall.id,
-              name: toolCall.name,
-            });
+            toolContent = `Tool error: ${err instanceof Error ? err.message : String(err)}`;
           }
+          this.logger.log(
+            `[tool-result] ${toolCall.name} → ${toolContent.slice(0, 200)}${toolContent.length > 200 ? '…' : ''}`,
+          );
+          context.conversationHistory.push({
+            role: 'tool',
+            content: toolContent,
+            toolCallId: toolCall.id,
+            name: toolCall.name,
+          });
+          if (needsGithubAuth) break;
         }
+
+        if (needsGithubAuth) break;
 
         this.agentExecutionService.validateTokenLimit(
           context.conversationHistory,
@@ -303,6 +348,11 @@ export class ExecuteAgentUseCase {
           iterations,
         );
       }
+
+      const githubAuthContent =
+        'Pour effectuer cette action, j\'accès à votre compte GitHub est requis.\n' +
+        '__ASK_USER__:{"question":"Autoriser l\'accès à votre compte GitHub ?","type":"oauth_required","choices":[]}';
+      const finalContent = needsGithubAuth ? githubAuthContent : response.content;
       const subAgentResults: any[] = [];
 
       // ── Execute sub-agents ──────────────────────────────────────────────
@@ -375,9 +425,9 @@ export class ExecuteAgentUseCase {
 
       // ── Persist and return ──────────────────────────────────────────────
       const outputPayload = JSON.stringify({
-        output: response.content,
+        output: finalContent,
         tokens: totalTokens,
-        toolCalls: response.toolCalls ?? [],
+        toolCalls: needsGithubAuth ? [] : (response.toolCalls ?? []),
         subAgentResults,
       });
 
@@ -401,7 +451,7 @@ export class ExecuteAgentUseCase {
           outputTokens: totalOutputTokens,
           totalTokens,
           inputPreview: dto.input.slice(0, 500),
-          outputPreview: response.content?.slice(0, 500),
+          outputPreview: finalContent?.slice(0, 500),
           success: true,
         })
         .catch((err) => this.logger.error('Failed to save token usage', err?.message));
