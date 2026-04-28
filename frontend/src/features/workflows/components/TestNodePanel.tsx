@@ -362,6 +362,7 @@ export function TestNodePanel({
                     nodeType={type}
                     testOutput={testResult.output}
                     testInput={testResult.input}
+                    currentNodeConfig={config as Record<string, unknown>}
                     currentToolIds={(config.toolIds as string[]) ?? []}
                     availableTools={availableTools}
                     onApplyFix={onApplyFix}

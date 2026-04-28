@@ -336,7 +336,7 @@ export class WorkflowAiService {
     executionInput?: unknown;
     executionError?: string;
   }): Promise<NodeAiResult> {
-    const sessionKey = `node:${opts.sessionId ?? opts.nodeType}`;
+    const sessionKey = `node:${opts.sessionId ?? uuidv4()}`;
     const session = this.getOrCreateSession(sessionKey, undefined, opts.modelId);
     const userId = opts.userId ?? 'system';
 

@@ -37,6 +37,8 @@ interface TestOutcomePanelProps {
   nodeType?: string;
   testOutput: unknown;
   testInput?: unknown;
+  /** Current config of the node being tested (used to compute config diffs) */
+  currentNodeConfig?: Record<string, unknown>;
   /** Tool IDs currently assigned to this node (AGENT nodes) */
   currentToolIds?: string[];
   /** All available tools in the workflow (for display names) */
@@ -59,6 +61,7 @@ export function TestOutcomePanel({
   nodeType,
   testOutput,
   testInput,
+  currentNodeConfig,
   currentToolIds = [],
   availableTools = [],
   onApplyFix,
@@ -384,7 +387,7 @@ export function TestOutcomePanel({
                       <span className="text-muted-foreground">{key}</span>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-red-500/70 line-through">
-                          {JSON.stringify((testInput as Record<string, unknown>)?.[key] ?? '…')}
+                          {JSON.stringify((currentNodeConfig as Record<string, unknown>)?.[key] ?? '…')}
                         </span>
                         <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
                         <span className="text-emerald-600 dark:text-emerald-400">

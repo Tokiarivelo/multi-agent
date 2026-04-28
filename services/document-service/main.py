@@ -26,6 +26,9 @@ app.add_middleware(
 
 SUPPORTED_FORMATS = ["pdf", "docx", "xlsx", "md", "csv", "html", "txt", "json"]
 
+# Workspace root – all server-side path operations are restricted to this directory.
+WORKSPACE_ROOT: str = os.environ.get("WORKSPACE_ROOT", "/workspace")
+
 MIME_TYPES = {
     "pdf": "application/pdf",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -442,12 +445,27 @@ class ParseImagePathRequest(BaseModel):
 
 # ─── Parse helpers ────────────────────────────────────────────────────────────
 
-def _safe_absolute_path(file_path: str) -> str:
-    if not os.path.isabs(file_path):
-        raise HTTPException(status_code=400, detail="path must be an absolute filesystem path")
-    if not os.path.isfile(file_path):
+def _safe_workspace_path(file_path: str) -> str:
+    """Resolve *file_path* inside WORKSPACE_ROOT and reject escapes via symlinks / '..'."""
+    # Resolve relative paths against WORKSPACE_ROOT; keep absolute paths as-is for
+    # resolution but still validate them against the workspace root below.
+    if os.path.isabs(file_path):
+        candidate = file_path
+    else:
+        candidate = os.path.join(WORKSPACE_ROOT, file_path)
+
+    # Resolve the workspace root itself to handle symlinks in the mount path.
+    real_root = os.path.realpath(WORKSPACE_ROOT)
+    real_candidate = os.path.realpath(candidate)
+
+    if not real_candidate.startswith(real_root + os.sep) and real_candidate != real_root:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: path is outside the allowed workspace root",
+        )
+    if not os.path.isfile(real_candidate):
         raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
-    return file_path
+    return real_candidate
 
 
 def _detect_ext(filename: str) -> str:
@@ -577,7 +595,7 @@ async def parse_document_upload(file: UploadFile = File(...)):
 @app.post("/api/documents/parse-path")
 def parse_document_path(req: ParsePathRequest):
     """Parse a file from an absolute server-side path."""
-    path = _safe_absolute_path(req.path)
+    path = _safe_workspace_path(req.path)
     with open(path, "rb") as f:
         content = f.read()
     try:
@@ -605,7 +623,7 @@ async def parse_image_upload(file: UploadFile = File(...)):
 @app.post("/api/documents/parse-image-path")
 def parse_image_path_endpoint(req: ParseImagePathRequest):
     """Parse an image from an absolute server-side path (OCR + metadata)."""
-    path = _safe_absolute_path(req.path)
+    path = _safe_workspace_path(req.path)
     with open(path, "rb") as f:
         content = f.read()
     try:
@@ -623,7 +641,7 @@ def read_text_file(
     encoding: str = Query("utf-8"),
 ):
     """Read a plain-text file and return its content."""
-    safe_path = _safe_absolute_path(path)
+    safe_path = _safe_workspace_path(path)
     try:
         with open(safe_path, "r", encoding=encoding, errors="replace") as f:
             content = f.read()

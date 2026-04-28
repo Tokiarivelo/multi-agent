@@ -595,6 +595,25 @@ export class BuiltInToolsService {
       : path.resolve(this.workspaceRoot, relativeOrAbsolutePath);
   }
 
+  /**
+   * Resolve *filePath* under workspaceRoot and throw if it would escape the root.
+   * Accepts relative paths (resolved under workspaceRoot) and absolute paths that
+   * are already inside the root.  Rejects anything outside.
+   */
+  private resolveWorkspacePath(filePath: string): string {
+    const resolved = path.isAbsolute(filePath)
+      ? path.normalize(filePath)
+      : path.resolve(this.workspaceRoot, filePath);
+
+    const root = path.resolve(this.workspaceRoot);
+    if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+      throw new Error(
+        `Access denied: path "${filePath}" is outside the allowed workspace root`,
+      );
+    }
+    return resolved;
+  }
+
   private async execGitCommand(command: string, cwd: string): Promise<any> {
     try {
       this.logger.log(`Executing Git command in [${cwd}]: ${command}`);
@@ -618,10 +637,11 @@ export class BuiltInToolsService {
    */
   private async documentRead(params: { path: string; encoding?: string }): Promise<any> {
     if (!this.enableFileOps) throw new Error('File operations are disabled');
+    const safePath = this.resolveWorkspacePath(params.path);
     try {
       const response = await firstValueFrom(
         this.httpService.post(`${this.documentServiceUrl}/api/documents/parse-path`, {
-          path: params.path,
+          path: safePath,
           encoding: params.encoding ?? 'utf-8',
         }),
       );
@@ -639,10 +659,11 @@ export class BuiltInToolsService {
    */
   private async documentParseImage(params: { path: string }): Promise<any> {
     if (!this.enableFileOps) throw new Error('File operations are disabled');
+    const safePath = this.resolveWorkspacePath(params.path);
     try {
       const response = await firstValueFrom(
         this.httpService.post(`${this.documentServiceUrl}/api/documents/parse-image-path`, {
-          path: params.path,
+          path: safePath,
         }),
       );
       return response.data;
@@ -655,8 +676,9 @@ export class BuiltInToolsService {
 
   /**
    * Generate a document (PDF, DOCX, XLSX, etc.) via the document-service.
-   * If outputPath is provided, saves the file to that absolute server-side path.
+   * If outputPath is provided, saves the file within workspaceRoot.
    * Otherwise returns base64-encoded content.
+   * Requires file operations to be enabled.
    */
   private async documentGenerate(params: {
     format: string;
@@ -666,6 +688,7 @@ export class BuiltInToolsService {
     table?: { headers: string[]; rows: any[][] };
     outputPath?: string;
   }): Promise<any> {
+    if (!this.enableFileOps) throw new Error('File operations are disabled');
     try {
       const response = await firstValueFrom(
         this.httpService.post(
@@ -687,12 +710,13 @@ export class BuiltInToolsService {
       const mimeType = response.headers['content-type'] as string;
 
       if (params.outputPath) {
-        const dir = path.dirname(params.outputPath);
+        const safeOutputPath = this.resolveWorkspacePath(params.outputPath);
+        const dir = path.dirname(safeOutputPath);
         await fs.mkdir(dir, { recursive: true });
-        await fs.writeFile(params.outputPath, Buffer.from(response.data as ArrayBuffer));
+        await fs.writeFile(safeOutputPath, Buffer.from(response.data as ArrayBuffer));
         return {
           success: true,
-          path: params.outputPath,
+          path: safeOutputPath,
           filename,
           size: (response.data as ArrayBuffer).byteLength,
         };

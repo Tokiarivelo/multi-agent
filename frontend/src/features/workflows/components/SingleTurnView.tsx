@@ -251,6 +251,9 @@ export function SingleTurnView({
             }
             testOutput={output}
             testInput={input}
+            currentNodeConfig={
+              (workflow.definition.nodes.find((n: { id: string; config?: Record<string, unknown> }) => n.id === selectedNodeId)?.config as Record<string, unknown>) ?? {}
+            }
             currentToolIds={
               (workflow.definition.nodes.find((n: { id: string; config?: { toolIds?: string[] } }) => n.id === selectedNodeId)?.config
                 ?.toolIds as string[]) ?? []
