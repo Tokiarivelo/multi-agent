@@ -89,7 +89,7 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3009/api/documents/health"]
+      test: ["CMD", "python", "-c", "import sys, urllib.request; resp = urllib.request.urlopen('http://localhost:3009/api/documents/health'); sys.exit(0 if resp.getcode() < 400 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
