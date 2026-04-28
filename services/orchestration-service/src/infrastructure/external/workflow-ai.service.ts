@@ -37,6 +37,16 @@ interface AiJsonResponse {
   description?: string;
   message?: string;
   definition?: GeneratedDefinition;
+  config?: Record<string, unknown>;
+  customName?: string;
+}
+
+export interface NodeAiResult {
+  sessionId: string;
+  message: string;
+  config?: Record<string, unknown>;
+  customName?: string;
+  history: AiMessage[];
 }
 
 export interface WorkflowAiResult {
@@ -127,6 +137,39 @@ Validation rules (CRITICAL):
 - The second edge (false/else branch) uses the negated expression or a catch-all
 
 IMPORTANT: Respond ONLY with valid JSON — no markdown fences, no prose before or after. Pure JSON only.`;
+
+// ─── Node Edit System Prompt ──────────────────────────────────────────────────
+
+const NODE_EDIT_SYSTEM_PROMPT = `You are an expert node configuration assistant for a multi-agent workflow automation platform.
+The user will describe changes to a specific workflow node's configuration.
+
+Node type configs:
+- AGENT: { agentId, inputMapping?, pipelineSteps?, strictMode?, inputFields?, outputFields? }
+- TOOL/MCP: { toolId, strictMode?, inputFields?, outputFields? }
+- CONDITIONAL: { condition (JS bool expression on "output") }
+- TRANSFORM: { script (JS or Python fn body), language ("javascript"|"python") }
+- PROMPT: { prompt (text, supports {{variable}}) }
+- TEXT: { text }
+- LOOP: { collection (dot-path e.g. "items"), itemScript?, filterScript?, maxIterations? }
+- SHELL: { command, cwd? }
+- GITHUB: { method, endpoint, token?, body? }
+- SLACK: { token, channel, message }
+- WHATSAPP: { token, phoneNumberId, to, message }
+- SUBWORKFLOW: { workflowId, inputMapping?, outputMapping? }
+- ORCHESTRATOR: { agentId, maxIterations?, maxRetries?, terminateWhen?, subAgentStrategy?, toolIds?, subAgents?, maxTokens? }
+
+RESPONSE FORMAT — always respond with ONLY valid JSON (no markdown fences):
+{
+  "message": "Brief description of changes made (or answer if no change requested)",
+  "config": { ...only the fields that need updating... },
+  "customName": "New node label (only if user asked to rename)"
+}
+
+Rules:
+- Only include "config" fields that need to change — the frontend merges them into the existing config
+- If the user asks a question without requesting a change, use "config": {} and answer in "message"
+- Never include agentId/toolId values — those are already set in the existing config
+- For CONDITIONAL, "condition" must be a valid JavaScript boolean expression where "output" is the previous node's output object`;
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
@@ -275,6 +318,72 @@ export class WorkflowAiService {
       description: parsed?.description,
       history: session.messages,
       provisionedResources,
+    };
+  }
+
+  // ─── Edit Node ───────────────────────────────────────────────────────────
+
+  async editNode(opts: {
+    nodeType: string;
+    nodeConfig: Record<string, unknown>;
+    customName?: string;
+    prompt: string;
+    modelId: string;
+    sessionId?: string;
+    userId?: string;
+    executionLogs?: string[];
+    executionOutput?: unknown;
+    executionInput?: unknown;
+    executionError?: string;
+  }): Promise<NodeAiResult> {
+    const sessionKey = `node:${opts.sessionId ?? uuidv4()}`;
+    const session = this.getOrCreateSession(sessionKey, undefined, opts.modelId);
+    const userId = opts.userId ?? 'system';
+
+    const contextPrefix = `Node type: ${opts.nodeType}\nCurrent config: ${JSON.stringify(opts.nodeConfig, null, 2)}${opts.customName ? `\nCurrent name: ${opts.customName}` : ''}${
+      opts.executionInput
+        ? `\nLast Execution Input: ${JSON.stringify(opts.executionInput, null, 2)}`
+        : ''
+    }${
+      opts.executionOutput
+        ? `\nLast Execution Output: ${JSON.stringify(opts.executionOutput, null, 2)}`
+        : ''
+    }${opts.executionError ? `\nLast Execution Error: ${opts.executionError}` : ''}${
+      opts.executionLogs && opts.executionLogs.length > 0
+        ? `\nLast Execution Logs:\n${opts.executionLogs.join('\n')}`
+        : ''
+    }\n\nUser request: `;
+
+    const userMessage: AiMessage = {
+      role: 'user',
+      content: contextPrefix + opts.prompt,
+      timestamp: new Date().toISOString(),
+    };
+    session.messages.push(userMessage);
+    session.updatedAt = new Date().toISOString();
+
+    const apiMessages = [
+      { role: 'system', content: NODE_EDIT_SYSTEM_PROMPT },
+      ...session.messages.map((m) => ({ role: m.role, content: m.content })),
+    ];
+
+    const response = await this.callCompletion(opts.modelId, apiMessages, userId);
+    const { parsed, raw } = this.parseJsonResponse(response.content);
+
+    const assistantMessage: AiMessage = {
+      role: 'assistant',
+      content: raw,
+      timestamp: new Date().toISOString(),
+    };
+    session.messages.push(assistantMessage);
+    session.updatedAt = new Date().toISOString();
+
+    return {
+      sessionId: session.id,
+      message: parsed?.message ?? response.content,
+      config: parsed?.config,
+      customName: parsed?.customName,
+      history: session.messages,
     };
   }
 

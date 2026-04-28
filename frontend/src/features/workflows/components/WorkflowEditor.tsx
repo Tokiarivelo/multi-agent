@@ -9,6 +9,7 @@ import {
   useDeleteWorkflow,
   useExecuteWorkflow,
   useCancelExecution,
+  useUpdateNode,
 } from '../hooks/useWorkflows';
 import { useWorkflowLogs } from '../hooks/useWorkflowLogs';
 import { Workflow, WorkflowNode } from '@/types';
@@ -31,7 +32,7 @@ interface WorkflowEditorProps {
 }
 
 export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -199,6 +200,20 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
     }
   };
 
+  const updateNode = useUpdateNode(workflow?.id ?? '');
+  const handleApplyNodeFix = (nodeId: string, fixedConfig: Record<string, unknown>) => {
+    updateNode.mutate({ nodeId, node: { config: fixedConfig } });
+  };
+
+  const handleEditNodeAi = (nodeId: string) => {
+    // Dispatch a custom event that WorkflowCanvas listens to
+    window.dispatchEvent(
+      new CustomEvent('workflow-node-action', {
+        detail: { nodeId, action: 'edit', initialAiOpen: true },
+      }),
+    );
+  };
+
   const handleExecute = () => {
     if (!workflow?.id) return;
     clearLogs();
@@ -233,6 +248,9 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   };
 
   const isSaving = createWorkflow.isPending || updateWorkflow.isPending;
+  const isWorkflowRunning =
+    !!(activeExecution || activeExecutionId) &&
+    (executionStatus === 'RUNNING' || executionStatus === 'PENDING' || executeWorkflow.isPending);
 
   return (
     <div className="flex flex-col h-full w-full pointer-events-none z-50 overflow-hidden relative">
@@ -268,11 +286,14 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
         outputLogsToFile={outputLogsToFile}
         isSaving={isSaving}
         isExecuting={executeWorkflow.isPending}
+        isRunning={isWorkflowRunning}
+        isCancelling={cancelExecution.isPending}
         panelOpen={panelOpen}
         fileInputRef={fileInputRef}
         onBack={() => router.push('/workflows')}
         onSave={handleSave}
         onExecute={handleExecute}
+        onCancel={handleCancelExecution}
         onToggleLogs={() => setLogsOpen((v) => !v)}
         onTogglePanel={() => setPanelOpen((v) => !v)}
         onDelete={() => deleteWorkflow.mutate(workflow!.id)}
@@ -315,6 +336,8 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
           onClear={clearLogs}
           onCancel={handleCancelExecution}
           onClose={() => setLogsOpen(false)}
+          onApplyNodeFix={handleApplyNodeFix}
+          onEditNodeAi={handleEditNodeAi}
         />
       )}
     </div>

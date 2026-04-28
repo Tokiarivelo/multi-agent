@@ -9,10 +9,6 @@ import {
   Maximize2,
   Minimize2,
   Code2,
-  Play,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
   GitFork,
   Bot,
   Wrench,
@@ -20,12 +16,10 @@ import {
   Layers,
   GripVertical,
   ChevronDown,
-  ChevronUp,
   ChevronRight,
-  Copy,
-  Check,
-  XCircle,
+  Sparkles,
 } from 'lucide-react';
+import { NodeAiPanel } from './NodeAiPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,20 +35,17 @@ import {
 } from '@/components/ui/select';
 
 import { NODE_TYPE_REGISTRY, NodeTypeMeta, NodeTypeId } from './nodeTypes';
-import { AddNodePayload, workflowsApi } from '../api/workflows.api';
+import { AddNodePayload } from '../api/workflows.api';
 import { v4 as uuidv4 } from 'uuid';
 import { useTheme } from 'next-themes';
-import { cn } from '@/lib/utils';
 import Editor from '@monaco-editor/react';
 import { Resizable } from 're-resizable';
-import { StructuredDataViewer } from './StructuredDataViewer';
 import { FileConfigEditor } from './FileConfigEditor';
 import { useWorkspaceStore, type FileNode } from '@/features/workspace/store/workspaceStore';
 import { SubWorkflowConfig } from './SubWorkflowConfig';
-import { useWorkflowLogs } from '../hooks/useWorkflowLogs';
 import { useWorkflowExecutionStore } from '../store/workflowExecution.store';
 import { DocPanel } from '@/components/shared/DocPanel';
-import { TestOutcomePanel } from './TestOutcomePanel';
+import { TestNodePanel } from './TestNodePanel';
 
 /** Sub-agent configuration inside an AGENT node */
 export interface SubAgentConfig {
@@ -577,6 +568,8 @@ export interface NodeEditorProps {
   executionId?: string | null;
   /** Pre-fill the Test Node input with this data (from last execution) */
   initialTestInput?: Record<string, unknown>;
+  /** Whether the AI panel should be open initially */
+  initialAiOpen?: boolean;
 }
 
 /** Inner form — keyed on `initialNode` so it remounts (and resets) cleanly */
@@ -591,8 +584,8 @@ function NodeEditorForm({
   tools = [],
   availableTypings,
   workflowId,
-  executionId,
   initialTestInput,
+  initialAiOpen = false,
 }: NodeEditorProps) {
   const { t, i18n } = useTranslation();
   const { resolvedTheme } = useTheme();
@@ -600,129 +593,43 @@ function NodeEditorForm({
   const isEdit = !!initialNode?.id;
 
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(initialAiOpen);
 
   const [type, setType] = useState<NodeTypeId>((initialNode?.type as NodeTypeId) ?? 'AGENT');
   const [config, setConfig] = useState<Record<string, unknown>>(initialNode?.config ?? {});
   const [customName, setCustomName] = useState<string>(initialNode?.customName ?? '');
 
-  // Test Node state
-  const [testInput, setTestInput] = useState<string>(
-    initialTestInput ? JSON.stringify(initialTestInput, null, 2) : '{}',
-  );
-  const [testRunning, setTestRunning] = useState(false);
-  const [testResult, setTestResult] = useState<{
-    input: unknown;
-    output: unknown;
-    error?: string;
-    logs: string[];
-  } | null>(null);
-  // Auto-expand Test Node panel if we have pre-filled input from last run
-  const [testPanelOpen, setTestPanelOpen] = useState(!!initialTestInput);
-  const [copiedLogId, setCopiedLogId] = useState<string | null>(null);
-  const [outputExpanded, setOutputExpanded] = useState(false);
-
-  // Generated execution ID for this test run — used to subscribe to live token updates
-  const [currentTestExecId, setCurrentTestExecId] = useState<string | null>(null);
-
-  // Subscribe to WebSocket room for the active test execution (no-op when null)
-  useWorkflowLogs({ executionId: currentTestExecId });
-
-  // Live token progress for this node during test execution
-  const testNodeId = initialNode?.id ?? null;
-  const testLiveTokens = useWorkflowExecutionStore((s) =>
-    testNodeId ? s.nodeTokenProgress[testNodeId] : undefined,
-  );
-
-  const handleCopyTestLog = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedLogId(id);
-    setTimeout(() => setCopiedLogId(null), 2000);
-  };
-
-  const runTest = async () => {
-    if (!workflowId) return;
-    // For new (unsaved) nodes we still need an ID to route the API call.
-    // The backend accepts any nodeId + type + config combination for testing.
-    const apiNodeId = initialNode?.id ?? uuidv4();
-    // Generate a stable execution ID for this test run so the WebSocket subscription
-    // is established before the agent starts streaming token progress.
-    const activeExecId = executionId ?? uuidv4();
-    setCurrentTestExecId(activeExecId);
-    setTestRunning(true);
-    setTestResult(null);
-    try {
-      let parsedInput: Record<string, unknown> = {};
-      try {
-        parsedInput = JSON.parse(testInput);
-      } catch {
-        parsedInput = {};
-      }
-
-      // Automatically inject cwd for testing if not manually provided
-      const activeWs = useWorkspaceStore.getState().getActiveWorkspace?.() ?? null;
-
-      if (activeWs?.nativePath && !parsedInput.cwd) {
-        parsedInput.cwd = activeWs.nativePath;
-      }
-
-      const result = await workflowsApi.testNode(
-        workflowId,
-        apiNodeId,
-        parsedInput,
-        type,
-        config,
-        activeExecId,
-      );
-
-      // Forward captured sandbox console.* calls to the real browser DevTools console
-      const nodeLabel = `[Node: ${initialNode?.customName ?? initialNode?.type ?? apiNodeId}]`;
-      result.logs.forEach((line) => {
-        if (line.startsWith('[ERROR]')) {
-          console.error(nodeLabel, line.replace(/^\[ERROR\]\s*/, ''));
-        } else if (line.startsWith('[WARN]')) {
-          console.warn(nodeLabel, line.replace(/^\[WARN\]\s*/, ''));
-        } else if (
-          line.startsWith('[LOG]') ||
-          line.startsWith('[INFO]') ||
-          line.startsWith('[DEBUG]')
-        ) {
-          console.log(nodeLabel, line.replace(/^\[\w+\]\s*/, ''));
-        }
-      });
-
-      setTestResult(result);
-    } catch (err) {
-      setTestResult({
-        input: testInput,
-        output: null,
-        error: err instanceof Error ? err.message : 'Unknown error',
-        logs: [],
-      });
-    } finally {
-      setTestRunning(false);
-      setCurrentTestExecId(null);
-    }
-  };
 
   const meta: NodeTypeMeta = NODE_TYPE_REGISTRY.find((n) => n.id === type) ?? NODE_TYPE_REGISTRY[0];
 
+  const activeWs = useWorkspaceStore((s) => s.getActiveWorkspace?.() ?? null);
+  const nodeExecutionData = useWorkflowExecutionStore((s) =>
+    initialNode?.id ? (s.nodeData[initialNode.id] as Record<string, unknown>) : null,
+  );
+
   const handleTypeChange = (t: NodeTypeId) => {
+    const newMeta = NODE_TYPE_REGISTRY.find((n) => n.id === t) ?? NODE_TYPE_REGISTRY[0];
+    const baseConfig = newMeta.defaultConfig;
+    // Auto-populate cwd for SHELL nodes at the moment the type is selected
+    const newConfig =
+      t === 'SHELL' && baseConfig.cwd === undefined && activeWs?.nativePath
+        ? { ...baseConfig, cwd: activeWs.nativePath }
+        : baseConfig;
     setType(t);
-    setConfig(meta.defaultConfig);
+    setConfig(newConfig);
   };
 
   const handleConfigChange = (key: string, value: unknown) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
 
-  const activeWs = useWorkspaceStore((s) => s.getActiveWorkspace?.() ?? null);
-
-  useEffect(() => {
-    if (type === 'SHELL' && config.cwd === undefined && activeWs?.nativePath) {
-      // Auto-populate with active workspace path if empty
-      handleConfigChange('cwd', activeWs.nativePath);
-    }
-  }, [type, config.cwd, activeWs?.nativePath]);
+  // Derive effective cwd without an effect: if the node is SHELL and cwd was never
+  // set (e.g. the node was loaded from persistence without it), fall back to the
+  // active workspace path at render time — no extra render cycle needed.
+  const effectiveCwd =
+    type === 'SHELL' && config.cwd === undefined
+      ? (activeWs?.nativePath ?? '')
+      : (config.cwd as string | undefined);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
@@ -773,9 +680,46 @@ function NodeEditorForm({
 
   return createPortal(
     <div
-      className="fixed top-4 right-4 z-50 h-[calc(100%-2rem)] flex flex-col pointer-events-auto shadow-2xl animate-in slide-in-from-right-8 duration-300"
+      className="fixed top-4 right-4 z-50 h-[calc(100%-2rem)] flex flex-row-reverse gap-2 pointer-events-auto animate-in slide-in-from-right-8 duration-300"
       onKeyDown={(e: React.KeyboardEvent) => e.stopPropagation()}
     >
+      {/* AI panel — slides in to the left of the node editor */}
+      {aiPanelOpen && isEdit && (
+        <div className="w-80 flex flex-col shadow-2xl rounded-2xl overflow-hidden border border-border/50 order-2">
+          <NodeAiPanel
+            nodeType={type}
+            config={config}
+            customName={customName}
+            onApply={(newConfig, newName) => {
+              setConfig(newConfig);
+              if (newName) setCustomName(newName);
+              setAiPanelOpen(false);
+            }}
+            onApplyDirectly={(newConfig, newName) => {
+              const finalName = newName ?? customName;
+              onSave({
+                ...initialNode,
+                type,
+                customName: finalName,
+                config: newConfig,
+              });
+              setAiPanelOpen(false);
+              onClose();
+            }}
+            onClose={() => setAiPanelOpen(false)}
+            executionData={
+              nodeExecutionData
+                ? {
+                    input: (nodeExecutionData as Record<string, unknown>).input,
+                    output: (nodeExecutionData as Record<string, unknown>).output,
+                    logs: (nodeExecutionData as Record<string, unknown>).logs as string[],
+                    error: (nodeExecutionData as Record<string, unknown>).error as string,
+                  }
+                : undefined
+            }
+          />
+        </div>
+      )}
       <Resizable
         defaultSize={{
           width: 400,
@@ -784,7 +728,7 @@ function NodeEditorForm({
         minWidth={320}
         maxWidth={800}
         enable={{ left: true }}
-        className="flex flex-col h-full"
+        className="flex flex-col h-full shadow-2xl"
       >
         <Card className="flex flex-col h-full bg-card/85 backdrop-blur-xl border border-border/50 shadow-none overflow-hidden rounded-2xl">
           <CardHeader className="flex-row items-center justify-between border-b border-border/50 py-4 shadow-sm">
@@ -798,9 +742,22 @@ function NodeEditorForm({
                     label: i18n.language.startsWith('fr') ? meta.labelFr : meta.label,
                   })}
             </CardTitle>
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-full">
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              {isEdit && (
+                <Button
+                  variant={aiPanelOpen ? 'secondary' : 'ghost'}
+                  size="icon"
+                  onClick={() => setAiPanelOpen((v) => !v)}
+                  className="h-8 w-8 rounded-full"
+                  title={t('workflows.nodeAi.title', 'AI Edit Node')}
+                >
+                  <Sparkles className="h-4 w-4 text-violet-500" />
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-full">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </CardHeader>
 
           <CardContent className="flex-1 overflow-y-auto p-4 space-y-5">
@@ -2453,7 +2410,7 @@ function NodeEditorForm({
                   </Label>
                   <Input
                     placeholder="e.g. /absolute/path/to/folder"
-                    value={(config.cwd as string) ?? ''}
+                    value={effectiveCwd ?? ''}
                     onChange={(e) => handleConfigChange('cwd', e.target.value)}
                     className="font-mono text-xs h-8"
                   />
@@ -2674,254 +2631,25 @@ function NodeEditorForm({
 
           {/* ─── Test Node Panel — available for both new and existing nodes ─── */}
           {workflowId && (
-            <div className="border-t border-border/50 bg-muted/10">
-              <Collapsible open={testPanelOpen} onOpenChange={setTestPanelOpen}>
-                <CollapsibleTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-between text-xs h-9 px-4 font-medium rounded-none hover:bg-muted/50"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Play className="h-3.5 w-3.5 text-emerald-500" />
-                      Test Node
-                      {initialTestInput && !testResult && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-400 font-normal">
-                          pre-filled from last run
-                        </span>
-                      )}
-                    </span>
-                    {testResult &&
-                      (testResult.error ? (
-                        <span className="flex items-center gap-1 text-destructive">
-                          <AlertCircle className="h-3 w-3" /> Failed
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-emerald-500">
-                          <CheckCircle2 className="h-3 w-3" /> Passed
-                        </span>
-                      ))}
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="px-4 pt-3 pb-4 space-y-3 animate-in slide-in-from-top-1">
-                  {/* Input Editor */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Manual Input (JSON)</Label>
-                    <div className="border border-border/50 rounded-md overflow-hidden">
-                      <Editor
-                        height="120px"
-                        language="json"
-                        theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
-                        value={testInput}
-                        onChange={(val) => setTestInput(val ?? '{}')}
-                        options={{
-                          minimap: { enabled: false },
-                          fontSize: 11,
-                          lineNumbersMinChars: 2,
-                          padding: { top: 8 },
-                          scrollBeyondLastLine: false,
-                          formatOnPaste: true,
-                          formatOnType: false,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <Button
-                    size="sm"
-                    onClick={runTest}
-                    disabled={testRunning}
-                    className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                  >
-                    {testRunning ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Running…
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-3.5 w-3.5" /> Run Node
-                      </>
-                    )}
-                  </Button>
-
-                  {/* Live token counter — visible while the test is streaming */}
-                  {testRunning && testLiveTokens && (
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono px-1">
-                      <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
-                      <span className="text-primary font-semibold">
-                        {testLiveTokens.totalTokens.toLocaleString()} tok
-                      </span>
-                      <span>
-                        ↑{testLiveTokens.inputTokens.toLocaleString()} ↓
-                        {testLiveTokens.outputTokens.toLocaleString()}
-                      </span>
-                      {testLiveTokens.iteration > 0 && (
-                        <span className="text-muted-foreground/60">
-                          iter {testLiveTokens.iteration}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Result */}
-                  {testResult && (
-                    <div className="space-y-2">
-                      {/* Output or Error */}
-                      <div
-                        className={cn(
-                          'rounded-md border p-3 text-xs font-mono relative group/output transition-all duration-200',
-                          testResult.error
-                            ? 'border-destructive/40 bg-destructive/5 text-destructive'
-                            : 'border-emerald-500/30 bg-emerald-500/5',
-                          !outputExpanded && 'max-h-40 overflow-auto',
-                        )}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="font-semibold text-muted-foreground flex items-center gap-2">
-                            {testResult.error ? (
-                              <>
-                                <XCircle className="h-3.5 w-3.5" />
-                                <span>Error</span>
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                <span>Output</span>
-                              </>
-                            )}
-                          </p>
-                          {!testResult.error && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-[10px] gap-1 opacity-60 hover:opacity-100 transition-opacity"
-                              onClick={() => setOutputExpanded(!outputExpanded)}
-                            >
-                              {outputExpanded ? (
-                                <>
-                                  <ChevronUp className="h-3 w-3" />
-                                  Collapse
-                                </>
-                              ) : (
-                                <>
-                                  <ChevronDown className="h-3 w-3" />
-                                  Expand
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                        <div
-                          className={cn(
-                            'w-full',
-                            testResult.error ? 'text-destructive font-mono text-sm' : 'mt-2',
-                          )}
-                        >
-                          {testResult.error ? (
-                            <pre className="whitespace-pre-wrap break-all">{testResult.error}</pre>
-                          ) : (
-                            <StructuredDataViewer data={testResult.output} />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Logs */}
-                      {testResult.logs.length > 0 && (
-                        <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs font-mono overflow-auto max-h-48 space-y-0.5 relative group/logs">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="font-semibold text-muted-foreground tracking-wide uppercase text-[10px]">
-                              Execution Logs
-                            </p>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-[10px] gap-1 opacity-0 group-hover/logs:opacity-100 transition-opacity"
-                              onClick={() => handleCopyTestLog(testResult.logs.join('\n'), 'all')}
-                            >
-                              {copiedLogId === 'all' ? (
-                                <Check className="h-3 w-3 text-emerald-500" />
-                              ) : (
-                                <Copy className="h-3 w-3" />
-                              )}
-                              Copy All
-                            </Button>
-                          </div>
-                          {testResult.logs.map((log, i) => {
-                            const isConsoleError = log.startsWith('[ERROR]');
-                            const isConsoleWarn = log.startsWith('[WARN]');
-                            const isConsoleLog = log.startsWith('[LOG]');
-                            const isConsoleInfo = log.startsWith('[INFO]');
-                            const isConsoleDebug = log.startsWith('[DEBUG]');
-
-                            return (
-                              <div
-                                key={i}
-                                className={cn(
-                                  'flex items-start gap-2 py-1 px-2 rounded-sm border-l-2 relative group/item transition-colors',
-                                  isConsoleError
-                                    ? 'bg-red-500/5 border-red-500/50 text-red-500 dark:text-red-400'
-                                    : isConsoleWarn
-                                      ? 'bg-amber-500/5 border-amber-500/50 text-amber-600 dark:text-amber-400'
-                                      : isConsoleLog || isConsoleInfo
-                                        ? 'bg-sky-500/5 border-sky-500/50 text-sky-600 dark:text-sky-400'
-                                        : isConsoleDebug
-                                          ? 'bg-violet-500/5 border-violet-500/50 text-violet-500 dark:text-violet-400'
-                                          : 'bg-muted/10 border-muted-foreground/30 text-muted-foreground',
-                                )}
-                              >
-                                <span className="font-mono text-[9px] uppercase font-bold shrink-0 w-8 opacity-70 mt-0.5">
-                                  {isConsoleError
-                                    ? 'ERR'
-                                    : isConsoleWarn
-                                      ? 'WRN'
-                                      : isConsoleLog
-                                        ? 'LOG'
-                                        : isConsoleInfo
-                                          ? 'INF'
-                                          : isConsoleDebug
-                                            ? 'DBG'
-                                            : 'SYS'}
-                                </span>
-                                <span className="break-all flex-1 pr-6 leading-relaxed">
-                                  {log.replace(/^\[(ERROR|WARN|LOG|INFO|DEBUG)\]\s*/, '')}
-                                </span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5 absolute right-1 top-1 opacity-0 group-hover/item:opacity-100 transition-opacity bg-background/40 hover:bg-background/80"
-                                  onClick={() => handleCopyTestLog(log, `log-${i}`)}
-                                  title="Copy log entry"
-                                >
-                                  {copiedLogId === `log-${i}` ? (
-                                    <Check className="h-3 w-3 text-emerald-500" />
-                                  ) : (
-                                    <Copy className="h-3 w-3 text-muted-foreground" />
-                                  )}
-                                </Button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* AI outcome check — only shown when node ran successfully */}
-                      {!testResult.error && workflowId && (
-                        <TestOutcomePanel
-                          workflowId={workflowId}
-                          nodeId={initialNode?.id ?? 'unsaved'}
-                          nodeName={initialNode?.customName ?? type}
-                          nodeType={type}
-                          testOutput={testResult.output}
-                          testInput={testResult.input}
-                          onApplyFix={(fixedConfig) =>
-                            setConfig((prev) => ({ ...prev, ...fixedConfig }))
-                          }
-                        />
-                      )}
-                    </div>
-                  )}
-                </CollapsibleContent>
-              </Collapsible>
-            </div>
+            <TestNodePanel
+              workflowId={workflowId}
+              nodeId={initialNode?.id ?? null}
+              type={type}
+              config={config}
+              customName={customName}
+              initialTestInput={initialTestInput ? JSON.stringify(initialTestInput, null, 2) : (initialNode?.config?.lastTestInput ? JSON.stringify(initialNode.config.lastTestInput, null, 2) : '{}')}
+              availableTools={tools}
+              onApplyFix={(fixedConfig) => {
+                const { customName: newName, type: newType, ...restConfig } = fixedConfig;
+                if (newName && typeof newName === 'string') {
+                  setCustomName(newName);
+                }
+                if (newType && typeof newType === 'string') {
+                  setType(newType as NodeTypeId);
+                }
+                setConfig((prev) => ({ ...prev, ...restConfig }));
+              }}
+            />
           )}
 
           <CardFooter className="border-t border-border/50 p-4 bg-muted/20 gap-2 justify-end">

@@ -417,6 +417,8 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  services/document-service: {}
+
   services/execution-service:
     dependencies:
       '@multi-agent/common':
@@ -792,7 +794,7 @@ importers:
         specifier: ^20.1.1
         version: 20.1.2
       axios:
-        specifier: ^1.6.0
+        specifier: ^1.13.6
         version: 1.15.0
       class-transformer:
         specifier: ^0.5.1

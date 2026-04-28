@@ -35,6 +35,10 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   AGENT_SERVICE_URL: string = 'http://localhost:3002';
+
+  @IsOptional()
+  @IsString()
+  DOCUMENT_SERVICE_URL: string = 'http://localhost:3009';
 }
 
 export function validate(config: Record<string, unknown>) {

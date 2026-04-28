@@ -286,7 +286,9 @@ export class WorkflowController {
 
   @Post(':id/nodes/:nodeId/analyze-test-outcome')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Analyze the functional outcome of a test node run' })
+  @ApiOperation({
+    summary: 'Analyze the functional outcome of a test node run with optional custom prompt',
+  })
   async analyzeTestOutcome(
     @Param('id') workflowId: string,
     @Param('nodeId') nodeId: string,
@@ -299,11 +301,19 @@ export class WorkflowController {
       nodeType?: string;
       nodeName?: string;
       forceLlm?: boolean;
+      /** Optional user-defined analysis instructions */
+      prompt?: string;
+      /** Current tool IDs on this node — returned alongside the result so the UI can display suggested changes */
+      currentTools?: string[];
+      /** Available tools in the workflow */
+      availableTools?: { id: string; name: string }[];
     },
   ) {
     const ctx = {
       executionId: `test-${workflowId}-${nodeId}`,
-      originalRequest: JSON.stringify(body.input ?? {}),
+      originalRequest: body.prompt
+        ? `${body.prompt}\n\nNode input: ${JSON.stringify(body.input ?? {})}`
+        : JSON.stringify(body.input ?? {}),
       nodeOutputs: [
         {
           nodeId,
@@ -320,7 +330,10 @@ export class WorkflowController {
       ctx,
       body.modelId,
       userId,
-      body.forceLlm ?? false,
+      body.forceLlm ?? !!body.prompt, // force LLM when user provided a custom prompt
+      body.prompt,
+      body.currentTools,
+      body.availableTools,
     );
 
     let healingLogId: string | undefined;
@@ -333,7 +346,7 @@ export class WorkflowController {
       );
     }
 
-    return { ...result, healingLogId };
+    return { ...result, healingLogId, currentTools: body.currentTools ?? [] };
   }
 
   // ─── Workspace helpers ────────────────────────────────────────────────────

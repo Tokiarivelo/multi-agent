@@ -21,6 +21,7 @@ import {
   FolderGit2,
   BarChart3,
   GitBranch,
+  FileDown,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -38,6 +39,7 @@ const navigation = [
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Workspace', href: '/workspace', icon: FolderGit2 },
   { name: 'GitHub', href: '/integrations/github', icon: GitBranch },
+  { name: 'Documents', href: '/documents', icon: FileDown },
 ];
 
 export function Sidebar() {

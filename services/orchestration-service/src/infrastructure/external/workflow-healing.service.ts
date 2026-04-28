@@ -172,6 +172,12 @@ Signs the task WAS accomplished:
 - The agent performed the requested action
 - The response contains actual content, not an error or apology
 
+FIX GUIDANCE — When suggesting a fixedConfig:
+- You may suggest changes to any node config fields.
+- To update the tools available to an AGENT node, set "toolIds" to an array of tool IDs in fixedConfig.
+- Only include fields that actually need to change.
+- If the workflow is missing a required step or node, mention that a new node should be added in the "suggestedAction" field (do not try to create a new node in fixedConfig).
+
 EXAMPLE of valid response when task failed:
 {"isFunctionalFailure":true,"confidence":0.9,"failureReason":"Agent could not find the requested PDF file","failedNodeId":"node-abc","failedNodeName":"File Reader","suggestedAction":"Check that the file path is correct and the file exists","fixedConfig":{},"strategy":"MANUAL_APPROVAL"}
 
@@ -185,7 +191,7 @@ Required JSON fields (no extra fields, no omissions):
 - failedNodeId: string (node id or "WORKFLOW")
 - failedNodeName: string
 - suggestedAction: string
-- fixedConfig: object (empty {} if no fix)
+- fixedConfig: object (empty {} if no fix; may include "toolIds" array for AGENT nodes)
 - strategy: one of "AUTO_FIX", "MANUAL_APPROVAL", "LOG_ONLY"`;
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -267,13 +273,16 @@ export class WorkflowHealingService {
   /**
    * Two-phase detection:
    * 1. Fast heuristic keyword scan — no LLM cost
-   * 2. LLM confirmation — only when heuristic fires OR forceLlm=true
+   * 2. LLM confirmation — only when heuristic fires OR forceLlm=true OR customPrompt provided
    */
   async detectFunctionalFailure(
     ctx: FunctionalFailureContext,
     modelId: string,
     userId: string,
     forceLlm = false,
+    customPrompt?: string,
+    currentTools?: string[],
+    availableTools?: { id: string; name: string }[],
   ): Promise<FunctionalFailureResult> {
     const heuristicResult = this.runHeuristicScan(ctx.nodeOutputs, ctx.finalOutput);
 
@@ -282,8 +291,12 @@ export class WorkflowHealingService {
         `suspiciousNode=${heuristicResult.suspiciousNodeId ?? 'none'}`,
     );
 
-    // Skip LLM if heuristic finds nothing and forceLlm is off
-    if (heuristicResult.matchCount < HEURISTIC_CONFIDENCE_THRESHOLD && !forceLlm) {
+    // A custom prompt always forces LLM analysis
+    const shouldCallLlm =
+      forceLlm || !!customPrompt || heuristicResult.matchCount >= HEURISTIC_CONFIDENCE_THRESHOLD;
+
+    // Skip LLM if heuristic finds nothing, no custom prompt, and forceLlm is off
+    if (!shouldCallLlm) {
       return {
         isFunctionalFailure: false,
         confidence: 0,
@@ -297,7 +310,13 @@ export class WorkflowHealingService {
     }
 
     // LLM analysis
-    const userMessage = this.buildFunctionalPrompt(ctx, heuristicResult);
+    const userMessage = this.buildFunctionalPrompt(
+      ctx,
+      heuristicResult,
+      customPrompt,
+      currentTools,
+      availableTools,
+    );
 
     let raw: string;
     try {
@@ -464,11 +483,22 @@ export class WorkflowHealingService {
   private buildFunctionalPrompt(
     ctx: FunctionalFailureContext,
     heuristic: ReturnType<WorkflowHealingService['runHeuristicScan']>,
+    customPrompt?: string,
+    currentTools?: string[],
+    availableTools?: { id: string; name: string }[],
   ): string {
     const outputLines = ctx.nodeOutputs.map((n, i) => {
       const text = this.extractText(n.output).slice(0, 500);
       return `[${i + 1}] ${n.nodeType} "${n.nodeName}" (${n.nodeId}) → "${text}"`;
     });
+
+    let toolContext = '';
+    if (availableTools && availableTools.length > 0) {
+      toolContext += `\n\nAvailable Tools:\n${availableTools.map((t) => `- [${t.id}] ${t.name}`).join('\n')}\n`;
+      if (currentTools) {
+        toolContext += `Current Tool IDs on node: ${currentTools.length > 0 ? currentTools.join(', ') : 'None'}\n`;
+      }
+    }
 
     return (
       `Determine if this workflow actually accomplished the user's task.\n\n` +
@@ -483,6 +513,10 @@ export class WorkflowHealingService {
             .join('\n') +
           '\n\n'
         : '') +
+      (customPrompt
+        ? `Additional analysis instructions from the user:\n"${customPrompt}"\n\n`
+        : '') +
+      toolContext +
       `Based on this analysis, determine whether the task was actually accomplished.`
     );
   }

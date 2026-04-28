@@ -1,0 +1,111 @@
+{
+  "name": "Trading Strategy Workflow",
+  "description": "Automated trading workflow that processes strategy files, performs backtesting analysis, adjusts based on P&L, and executes position trades",
+  "definition": {
+    "nodes": [
+      {
+        "id": "start",
+        "type": "START",
+        "customName": "Start Trading Workflow",
+        "config": {},
+        "position": {
+          "x": 100,
+          "y": 0
+        }
+      },
+      {
+        "id": "strategy-input-agent",
+        "type": "AGENT",
+        "customName": "Process Strategy Input File",
+        "config": {
+          "prompt": "Parse and validate the trading strategy from the input file: {{input.strategyFile}}. Extract key parameters including entry signals, exit signals, position size, and risk management rules.",
+          "agentId": "a4569fbf-e7be-4c11-988e-fe5b6f14a0b5"
+        },
+        "position": {
+          "x": 100,
+          "y": 200
+        }
+      },
+      {
+        "id": "backtest-agent",
+        "type": "AGENT",
+        "customName": "Perform Backtesting Analysis",
+        "config": {
+          "prompt": "Conduct backtesting analysis on the strategy: {{output.strategy}}. Analyze historical performance, calculate win rate, drawdown, Sharpe ratio, and other key metrics. Provide detailed backtesting report.",
+          "agentId": "a4569fbf-e7be-4c11-988e-fe5b6f14a0b5"
+        },
+        "position": {
+          "x": 100,
+          "y": 400
+        }
+      },
+      {
+        "id": "pl-adjustment-agent",
+        "type": "AGENT",
+        "customName": "Analyze and Adjust Based on P&L",
+        "config": {
+          "prompt": "Analyze the backtesting results: {{output.backtest}}. Identify profit and loss patterns, calculate required adjustments to strategy parameters (position size, stop loss, take profit levels). Recommend optimization changes.",
+          "agentId": "a4569fbf-e7be-4c11-988e-fe5b6f14a0b5"
+        },
+        "position": {
+          "x": 100,
+          "y": 600
+        }
+      },
+      {
+        "id": "position-executor-agent",
+        "type": "AGENT",
+        "customName": "Execute Trading Position",
+        "config": {
+          "prompt": "Based on the optimized strategy: {{output.adjustments}}, prepare and execute the trading position. Generate trade execution plan with entry price, position size, stop loss, and take profit levels.",
+          "agentId": "08db8572-948f-4881-8f17-bef9aafd1441"
+        },
+        "position": {
+          "x": 100,
+          "y": 800
+        }
+      },
+      {
+        "id": "end",
+        "type": "END",
+        "customName": "Trading Workflow Complete",
+        "config": {},
+        "position": {
+          "x": 100,
+          "y": 1000
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-start-to-strategy",
+        "source": "start",
+        "target": "strategy-input-agent"
+      },
+      {
+        "id": "edge-strategy-to-backtest",
+        "source": "strategy-input-agent",
+        "target": "backtest-agent"
+      },
+      {
+        "id": "edge-backtest-to-pl",
+        "source": "backtest-agent",
+        "target": "pl-adjustment-agent"
+      },
+      {
+        "id": "edge-pl-to-position",
+        "source": "pl-adjustment-agent",
+        "target": "position-executor-agent"
+      },
+      {
+        "id": "edge-position-to-end",
+        "source": "position-executor-agent",
+        "target": "end"
+      }
+    ],
+    "version": 1,
+    "inputSchema": [],
+    "outputSchema": []
+  },
+  "status": "DRAFT"
+}

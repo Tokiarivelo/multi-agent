@@ -32,7 +32,7 @@ export class WorkflowExecutionService {
     const nextNodes: string[] = [];
     for (const edge of outgoingEdges) {
       if (edge.condition) {
-        if (this.evaluateCondition(edge.condition, execution)) {
+        if (this.evaluateCondition(edge.condition, execution, currentNodeId)) {
           nextNodes.push(edge.target);
         }
       } else {
@@ -53,10 +53,16 @@ export class WorkflowExecutionService {
     return node?.type === NodeType.END;
   }
 
-  private evaluateCondition(condition: string, execution: WorkflowExecution): boolean {
+  private evaluateCondition(
+    condition: string,
+    execution: WorkflowExecution,
+    sourceNodeId?: string,
+  ): boolean {
     try {
-      const lastNodeExecution = execution.nodeExecutions[execution.nodeExecutions.length - 1];
-      const output = lastNodeExecution?.output;
+      const nodeExecution = sourceNodeId
+        ? execution.nodeExecutions.findLast((n) => n.nodeId === sourceNodeId)
+        : execution.nodeExecutions[execution.nodeExecutions.length - 1];
+      const output = nodeExecution?.output;
 
       const conditionFunction = new Function('output', `return ${condition}`);
       return conditionFunction(output);

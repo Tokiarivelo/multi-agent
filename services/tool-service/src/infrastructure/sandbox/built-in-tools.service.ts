@@ -18,6 +18,7 @@ export class BuiltInToolsService {
   private readonly enableFileOps: boolean;
 
   private readonly workspaceRoot: string;
+  private readonly documentServiceUrl: string;
 
   constructor(
     private readonly httpService: HttpService,
@@ -34,6 +35,10 @@ export class BuiltInToolsService {
       process.env.NODE_ENV === 'development' ? '../..' : '.',
     );
     this.workspaceRoot = this.configService.get<string>('WORKSPACE_ROOT') || defaultRoot;
+    this.documentServiceUrl = this.configService.get<string>(
+      'DOCUMENT_SERVICE_URL',
+      'http://localhost:3009',
+    );
 
     this.logger.log(`Workspace root initialized to: ${this.workspaceRoot}`);
   }
@@ -82,6 +87,12 @@ export class BuiltInToolsService {
         return this.trelloGetLists(parameters as any);
       case 'trello_move_card':
         return this.trelloMoveCard(parameters as any);
+      case 'document_read':
+        return this.documentRead(parameters as any);
+      case 'document_parse_image':
+        return this.documentParseImage(parameters as any);
+      case 'document_generate':
+        return this.documentGenerate(parameters as any);
       default:
         if (code) {
           return this.executeCustomCode(code, parameters);
@@ -584,6 +595,25 @@ export class BuiltInToolsService {
       : path.resolve(this.workspaceRoot, relativeOrAbsolutePath);
   }
 
+  /**
+   * Resolve *filePath* under workspaceRoot and throw if it would escape the root.
+   * Accepts relative paths (resolved under workspaceRoot) and absolute paths that
+   * are already inside the root.  Rejects anything outside.
+   */
+  private resolveWorkspacePath(filePath: string): string {
+    const resolved = path.isAbsolute(filePath)
+      ? path.normalize(filePath)
+      : path.resolve(this.workspaceRoot, filePath);
+
+    const root = path.resolve(this.workspaceRoot);
+    if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+      throw new Error(
+        `Access denied: path "${filePath}" is outside the allowed workspace root`,
+      );
+    }
+    return resolved;
+  }
+
   private async execGitCommand(command: string, cwd: string): Promise<any> {
     try {
       this.logger.log(`Executing Git command in [${cwd}]: ${command}`);
@@ -596,6 +626,113 @@ export class BuiltInToolsService {
         code: error.code || 1,
         error: error.message,
       };
+    }
+  }
+
+  // ─── Document Service tools ───────────────────────────────────────────────
+
+  /**
+   * Parse any supported file (PDF, DOCX, XLSX, CSV, TXT, MD, HTML, JSON)
+   * via the document-service. Requires an absolute server-side path.
+   */
+  private async documentRead(params: { path: string; encoding?: string }): Promise<any> {
+    if (!this.enableFileOps) throw new Error('File operations are disabled');
+    const safePath = this.resolveWorkspacePath(params.path);
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.documentServiceUrl}/api/documents/parse-path`, {
+          path: safePath,
+          encoding: params.encoding ?? 'utf-8',
+        }),
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new Error(
+        `document_read failed for "${params.path}": ${error.response?.data?.detail ?? error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Parse an image file (JPEG, PNG, GIF, WebP) and return OCR text + metadata.
+   * Requires an absolute server-side path.
+   */
+  private async documentParseImage(params: { path: string }): Promise<any> {
+    if (!this.enableFileOps) throw new Error('File operations are disabled');
+    const safePath = this.resolveWorkspacePath(params.path);
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.documentServiceUrl}/api/documents/parse-image-path`, {
+          path: safePath,
+        }),
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new Error(
+        `document_parse_image failed for "${params.path}": ${error.response?.data?.detail ?? error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Generate a document (PDF, DOCX, XLSX, etc.) via the document-service.
+   * If outputPath is provided, saves the file within workspaceRoot.
+   * Otherwise returns base64-encoded content.
+   * Requires file operations to be enabled.
+   */
+  private async documentGenerate(params: {
+    format: string;
+    title?: string;
+    author?: string;
+    sections?: Array<{ heading?: string; body?: string; level?: number }>;
+    table?: { headers: string[]; rows: any[][] };
+    outputPath?: string;
+  }): Promise<any> {
+    if (!this.enableFileOps) throw new Error('File operations are disabled');
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.documentServiceUrl}/api/documents/generate`,
+          {
+            format: params.format,
+            title: params.title ?? 'Document',
+            author: params.author,
+            sections: params.sections,
+            table: params.table,
+          },
+          { responseType: 'arraybuffer' },
+        ),
+      );
+
+      const contentDisposition = (response.headers['content-disposition'] as string) ?? '';
+      const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+      const filename = filenameMatch?.[1] ?? `document.${params.format}`;
+      const mimeType = response.headers['content-type'] as string;
+
+      if (params.outputPath) {
+        const safeOutputPath = this.resolveWorkspacePath(params.outputPath);
+        const dir = path.dirname(safeOutputPath);
+        await fs.mkdir(dir, { recursive: true });
+        await fs.writeFile(safeOutputPath, Buffer.from(response.data as ArrayBuffer));
+        return {
+          success: true,
+          path: safeOutputPath,
+          filename,
+          size: (response.data as ArrayBuffer).byteLength,
+        };
+      }
+
+      return {
+        success: true,
+        filename,
+        mimeType,
+        size: (response.data as ArrayBuffer).byteLength,
+        base64: Buffer.from(response.data as ArrayBuffer).toString('base64'),
+      };
+    } catch (error: any) {
+      throw new Error(
+        `document_generate failed: ${error.response?.data?.detail ?? error.message}`,
+      );
     }
   }
 }

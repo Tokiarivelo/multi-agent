@@ -20,11 +20,19 @@ import { ExecutionStatus as PrismaExecutionStatus } from '@prisma/client';
 import { EventEmitter } from 'events';
 import { WorkflowHealingService } from './workflow-healing.service';
 
+class ExecutionCancelledError extends Error {
+  constructor(executionId: string) {
+    super(`Execution ${executionId} was cancelled`);
+    this.name = 'ExecutionCancelledError';
+  }
+}
+
 @Injectable()
 export class WorkflowExecutorService implements IWorkflowExecutor {
   private readonly logger = new Logger(WorkflowExecutorService.name);
   private readonly maxRetries: number;
   private readonly promptEmitter = new EventEmitter();
+  private readonly cancelledExecutions = new Set<string>();
 
   constructor(
     @Inject(WORKFLOW_REPOSITORY)
@@ -122,19 +130,30 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         });
       }
     } catch (error) {
-      this.logger.error(
-        `Execution ${execution.id} failed`,
-        error instanceof Error ? error.stack : String(error),
-      );
-      execution.fail(error instanceof Error ? error.message : 'Unknown error');
-      await this.updateExecution(execution);
-      this.workflowGateway.sendExecutionUpdate(execution);
+      if (error instanceof ExecutionCancelledError) {
+        this.logger.log(`Execution ${execution.id} cancelled`);
+        if (execution.status !== ExecutionStatus.CANCELLED) {
+          execution.cancel();
+          await this.updateExecution(execution);
+          this.workflowGateway.sendExecutionUpdate(execution);
+        }
+      } else {
+        this.logger.error(
+          `Execution ${execution.id} failed`,
+          error instanceof Error ? error.stack : String(error),
+        );
+        execution.fail(error instanceof Error ? error.message : 'Unknown error');
+        await this.updateExecution(execution);
+        this.workflowGateway.sendExecutionUpdate(execution);
 
-      this.saveExecutionLogs(
-        execution,
-        workflow.id,
-        context || { variables: { ...execution.input } },
-      );
+        this.saveExecutionLogs(
+          execution,
+          workflow.id,
+          context || { variables: { ...execution.input } },
+        );
+      }
+    } finally {
+      this.cancelledExecutions.delete(execution.id);
     }
   }
 
@@ -175,6 +194,10 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     execution: WorkflowExecution,
     context: any,
   ): Promise<void> {
+    if (this.cancelledExecutions.has(execution.id)) {
+      throw new ExecutionCancelledError(execution.id);
+    }
+
     const node = workflow.definition.nodes.find((n: any) => n.id === nodeId);
     if (!node) {
       throw new Error(`Node ${nodeId} not found`);
@@ -588,7 +611,11 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
               this.promptEmitter.once(`resume_${execution.id}_${node.id}`, resolve);
             });
 
-            // ── Resume: re-run agent with user's answer ────────────────────
+            if (userResponse === '__CANCELLED__' || this.cancelledExecutions.has(execution.id)) {
+              throw new ExecutionCancelledError(execution.id);
+            }
+
+            // Resume: re-run agent with user's answer injected
             execution.startNodeExecution(node.id, node.customName || node.type, input);
             await this.updateExecution(execution);
             this.workflowGateway.sendNodeUpdate(
@@ -823,6 +850,10 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
               resolve(data);
             });
           });
+
+          if (userInput === '__CANCELLED__' || this.cancelledExecutions.has(execution.id)) {
+            throw new ExecutionCancelledError(execution.id);
+          }
 
           // Resume status
           execution.startNodeExecution(node.id, node.customName || node.type, input);
@@ -1511,7 +1542,19 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       throw new Error(`Execution ${executionId} not found`);
     }
 
-    if (execution.isRunning()) {
+    // Signal the running async execution to stop at next node boundary
+    this.cancelledExecutions.add(executionId);
+
+    // Unblock any nodes currently waiting for user input
+    const waitingNodeIds = (execution.nodeExecutions as any[])
+      .filter((n: any) => n.status === 'WAITING_INPUT')
+      .map((n: any) => n.nodeId as string);
+
+    for (const nodeId of waitingNodeIds) {
+      this.promptEmitter.emit(`resume_${executionId}_${nodeId}`, '__CANCELLED__');
+    }
+
+    if (execution.isRunning() || execution.status === ExecutionStatus.PENDING) {
       execution.cancel();
       await this.updateExecution(execution);
       this.workflowGateway.sendExecutionUpdate(execution);

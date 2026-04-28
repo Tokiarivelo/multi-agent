@@ -26,6 +26,8 @@ export interface WorkflowExecutionPanelProps {
   onClear: () => void;
   onCancel: () => void;
   onClose: () => void;
+  onApplyNodeFix?: (nodeId: string, fixedConfig: Record<string, unknown>) => void;
+  onEditNodeAi?: (nodeId: string) => void;
 }
 
 export function WorkflowExecutionPanel(props: WorkflowExecutionPanelProps) {
@@ -44,6 +46,8 @@ export function WorkflowExecutionPanel(props: WorkflowExecutionPanelProps) {
     onClear,
     onCancel,
     onClose,
+    onApplyNodeFix,
+    onEditNodeAi,
   } = props;
   const [height, setHeight] = useState(350);
 
@@ -135,6 +139,8 @@ export function WorkflowExecutionPanel(props: WorkflowExecutionPanelProps) {
               nodeStatuses={nodeStatuses}
               nodeData={nodeData}
               nodeTurns={nodeTurns}
+              onApplyNodeFix={onApplyNodeFix}
+              onEditNodeAi={onEditNodeAi}
             />
           </ScrollArea>
         </TabsContent>

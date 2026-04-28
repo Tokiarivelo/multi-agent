@@ -8,6 +8,7 @@ import { agents } from './agents';
 import { github } from './github';
 import { tools } from './tools';
 import { healing } from './healing';
+import { documents } from './documents';
 
 export const fr = {
   ...workflows,
@@ -20,4 +21,5 @@ export const fr = {
   ...github,
   ...tools,
   ...healing,
+  ...documents,
 };

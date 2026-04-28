@@ -1,0 +1,303 @@
+{
+  "name": "Automated Code Review and Testing Pipeline",
+  "description": "A comprehensive workflow that automatically reviews code changes, runs tests, and manages the development workflow through Git and GitHub integration.",
+  "definition": {
+    "nodes": [
+      {
+        "id": "start",
+        "type": "START",
+        "config": {},
+        "position": {
+          "x": 100,
+          "y": 0
+        },
+        "customName": "Start Pipeline"
+      },
+      {
+        "id": "get-git-status",
+        "type": "TOOL",
+        "config": {
+          "toolId": "c482b465-93cc-4098-a228-a04432a18512",
+          "description": "Check the current working tree status to identify modified files"
+        },
+        "position": {
+          "x": 100,
+          "y": 200
+        },
+        "customName": "Check Git Status"
+      },
+      {
+        "id": "read-changed-files",
+        "type": "TOOL",
+        "config": {
+          "toolId": "0327eaa6-9158-4c2b-9afa-194da58aeb07",
+          "description": "Read the content of changed files for code review analysis"
+        },
+        "position": {
+          "x": 100,
+          "y": 400
+        },
+        "customName": "Read Changed Files"
+      },
+      {
+        "id": "code-review-agent",
+        "type": "AGENT",
+        "config": {
+          "prompt": "Review the following code changes for quality, best practices, security, and potential issues:\n\n{{input.fileContent}}\n\nProvide a detailed code review with findings and recommendations.",
+          "agentId": "08db8572-948f-4881-8f17-bef9aafd1441"
+        },
+        "position": {
+          "x": 100,
+          "y": 600
+        },
+        "customName": "Code Review Analysis"
+      },
+      {
+        "id": "check-review-quality",
+        "type": "CONDITIONAL",
+        "config": {
+          "condition": "output.issues && output.issues.length === 0"
+        },
+        "position": {
+          "x": 100,
+          "y": 800
+        },
+        "customName": "Review Quality Check"
+      },
+      {
+        "id": "run-tests",
+        "type": "TOOL",
+        "config": {
+          "toolId": "250a643c-a6c9-42d7-9c2e-d8f6327acff1",
+          "description": "Run automated test suite to validate code changes"
+        },
+        "position": {
+          "x": 350,
+          "y": 1000
+        },
+        "customName": "Execute Tests"
+      },
+      {
+        "id": "check-test-results",
+        "type": "CONDITIONAL",
+        "config": {
+          "condition": "output.exitCode === 0 && output.testsPassed === true"
+        },
+        "position": {
+          "x": 350,
+          "y": 1200
+        },
+        "customName": "Test Results Validation"
+      },
+      {
+        "id": "stage-changes",
+        "type": "TOOL",
+        "config": {
+          "toolId": "87c1d23a-faa6-4eaa-9c8f-223fc3821711",
+          "description": "Add reviewed and tested changes to the git staging area"
+        },
+        "position": {
+          "x": 350,
+          "y": 1400
+        },
+        "customName": "Stage Changes"
+      },
+      {
+        "id": "commit-changes",
+        "type": "TOOL",
+        "config": {
+          "toolId": "2ebc189e-49fe-4cbc-89be-284507386edc",
+          "description": "Commit the staged changes with a descriptive message"
+        },
+        "position": {
+          "x": 350,
+          "y": 1600
+        },
+        "customName": "Commit Changes"
+      },
+      {
+        "id": "push-to-remote",
+        "type": "TOOL",
+        "config": {
+          "toolId": "18fd5b33-101b-4706-aafa-a64038bf7413",
+          "description": "Push committed changes to the remote repository"
+        },
+        "position": {
+          "x": 350,
+          "y": 1800
+        },
+        "customName": "Push to Remote"
+      },
+      {
+        "id": "create-github-pr",
+        "type": "TOOL",
+        "config": {
+          "toolId": "84d0690c-88e6-4c45-b361-7bd6a362abe3",
+          "description": "Create a pull request on GitHub with review findings and test results"
+        },
+        "position": {
+          "x": 350,
+          "y": 2000
+        },
+        "customName": "Create GitHub PR"
+      },
+      {
+        "id": "log-failure-review",
+        "type": "TEXT",
+        "config": {
+          "text": "Code review identified issues that need to be addressed before proceeding with tests and commit."
+        },
+        "position": {
+          "x": -150,
+          "y": 1000
+        },
+        "customName": "Log Review Issues"
+      },
+      {
+        "id": "log-test-failure",
+        "type": "TEXT",
+        "config": {
+          "text": "Tests failed. Code changes do not meet quality standards and cannot be committed."
+        },
+        "position": {
+          "x": 600,
+          "y": 1400
+        },
+        "customName": "Log Test Failures"
+      },
+      {
+        "id": "notify-success",
+        "type": "TOOL",
+        "config": {
+          "toolId": "7113a021-5aba-4be9-a1fb-bdf68bec9186",
+          "description": "Send notification to Slack about successful code review, tests, and commit"
+        },
+        "position": {
+          "x": 350,
+          "y": 2200
+        },
+        "customName": "Notify Success"
+      },
+      {
+        "id": "end-success",
+        "type": "END",
+        "config": {},
+        "position": {
+          "x": 350,
+          "y": 2400
+        },
+        "customName": "Pipeline Complete"
+      },
+      {
+        "id": "end-review-failed",
+        "type": "END",
+        "config": {},
+        "position": {
+          "x": -150,
+          "y": 1200
+        },
+        "customName": "Pipeline Halted - Review Issues"
+      },
+      {
+        "id": "end-tests-failed",
+        "type": "END",
+        "config": {},
+        "position": {
+          "x": 600,
+          "y": 1600
+        },
+        "customName": "Pipeline Halted - Test Failures"
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-start-to-git-status",
+        "source": "start",
+        "target": "get-git-status"
+      },
+      {
+        "id": "edge-git-status-to-read-files",
+        "source": "get-git-status",
+        "target": "read-changed-files"
+      },
+      {
+        "id": "edge-read-files-to-review",
+        "source": "read-changed-files",
+        "target": "code-review-agent"
+      },
+      {
+        "id": "edge-review-to-quality-check",
+        "source": "code-review-agent",
+        "target": "check-review-quality"
+      },
+      {
+        "id": "edge-quality-check-pass",
+        "source": "check-review-quality",
+        "target": "run-tests",
+        "condition": "output.issues && output.issues.length === 0"
+      },
+      {
+        "id": "edge-quality-check-fail",
+        "source": "check-review-quality",
+        "target": "log-failure-review",
+        "condition": "!(output.issues && output.issues.length === 0)"
+      },
+      {
+        "id": "edge-log-review-fail-to-end",
+        "source": "log-failure-review",
+        "target": "end-review-failed"
+      },
+      {
+        "id": "edge-run-tests-to-check-results",
+        "source": "run-tests",
+        "target": "check-test-results"
+      },
+      {
+        "id": "edge-test-results-pass",
+        "source": "check-test-results",
+        "target": "stage-changes",
+        "condition": "output.exitCode === 0 && output.testsPassed === true"
+      },
+      {
+        "id": "edge-test-results-fail",
+        "source": "check-test-results",
+        "target": "log-test-failure",
+        "condition": "!(output.exitCode === 0 && output.testsPassed === true)"
+      },
+      {
+        "id": "edge-log-test-fail-to-end",
+        "source": "log-test-failure",
+        "target": "end-tests-failed"
+      },
+      {
+        "id": "edge-stage-to-commit",
+        "source": "stage-changes",
+        "target": "commit-changes"
+      },
+      {
+        "id": "edge-commit-to-push",
+        "source": "commit-changes",
+        "target": "push-to-remote"
+      },
+      {
+        "id": "edge-push-to-github-pr",
+        "source": "push-to-remote",
+        "target": "create-github-pr"
+      },
+      {
+        "id": "edge-github-pr-to-notify",
+        "source": "create-github-pr",
+        "target": "notify-success"
+      },
+      {
+        "id": "edge-notify-to-end",
+        "source": "notify-success",
+        "target": "end-success"
+      }
+    ],
+    "version": 1,
+    "inputSchema": [],
+    "outputSchema": []
+  },
+  "status": "ACTIVE"
+}
