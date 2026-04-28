@@ -27,7 +27,7 @@ export function DocumentGeneratorForm({ formats, onSubmit, loading }: Props) {
     if (formats.length > 0 && !formats.some((f) => f.id === format)) {
       setFormat(formats[0].id);
     }
-  }, [formats]);
+  }, [formats, format]);
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [sections, setSections] = useState<DocumentSection[]>([{ heading: '', body: '', level: 1 }]);

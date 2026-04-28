@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowDownToLine,
@@ -44,6 +45,15 @@ export function SingleTurnView({
   const { data: workflow } = useWorkflow(workflowId);
   const { data: toolsData } = useTools(1, 100);
   const availableTools = toolsData?.data ?? [];
+
+  // Memoize the node lookup to avoid repeated array traversals on each render.
+  const selectedNode = useMemo(
+    () => workflow?.definition.nodes.find((n: { id: string }) => n.id === selectedNodeId),
+    [workflow?.definition.nodes, selectedNodeId],
+  );
+  const selectedNodeType = (selectedNode as { type?: string } | undefined)?.type ?? 'AGENT';
+  const selectedNodeConfig = (selectedNode as { config?: Record<string, unknown> } | undefined)?.config ?? {};
+  const selectedNodeToolIds = (selectedNodeConfig.toolIds as string[] | undefined) ?? [];
   const input = raw?.input as Record<string, unknown> | string | undefined;
   const output = raw?.output as Record<string, unknown> | string | undefined;
   const consoleLogs = raw?.logs as string[] | undefined;
@@ -245,19 +255,11 @@ export function SingleTurnView({
             workflowId={workflowId}
             nodeId={selectedNodeId}
             nodeName={selectedNodeName || undefined}
-            nodeType={
-              (workflow.definition.nodes.find((n: { id: string; type: string }) => n.id === selectedNodeId)?.type as string) ||
-              'AGENT'
-            }
+            nodeType={selectedNodeType}
             testOutput={output}
             testInput={input}
-            currentNodeConfig={
-              (workflow.definition.nodes.find((n: { id: string; config?: Record<string, unknown> }) => n.id === selectedNodeId)?.config as Record<string, unknown>) ?? {}
-            }
-            currentToolIds={
-              (workflow.definition.nodes.find((n: { id: string; config?: { toolIds?: string[] } }) => n.id === selectedNodeId)?.config
-                ?.toolIds as string[]) ?? []
-            }
+            currentNodeConfig={selectedNodeConfig}
+            currentToolIds={selectedNodeToolIds}
             availableTools={availableTools}
             onApplyFix={onApplyFix}
           />
