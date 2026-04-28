@@ -38,3 +38,7 @@ Thumbs.db
 
 # everything-claude-code
 everything-claude-code/
+# Python
+__pycache__/
+*.pyc
+*.pyo
