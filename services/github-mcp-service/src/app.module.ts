@@ -9,6 +9,8 @@ import { GithubOauthController } from '@presentation/controllers/github-oauth.co
 import {
   SearchRepositoriesTool,
   GetFileContentsTool,
+  ListBranchesTool,
+  RepositoryTool,
   PushFilesTool,
   CreateBranchTool,
   ListIssuesTool,
@@ -33,6 +35,8 @@ import {
     GithubApiService,
     SearchRepositoriesTool,
     GetFileContentsTool,
+    ListBranchesTool,
+    RepositoryTool,
     PushFilesTool,
     CreateBranchTool,
     ListIssuesTool,

@@ -1,8 +1,10 @@
-import { Controller, Post, Body, HttpCode, Get, Logger } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, Get, Logger, Headers } from '@nestjs/common';
 import { McpToolHandler, McpToolResult } from '@domain/github-tool.interface';
 import {
   SearchRepositoriesTool,
   GetFileContentsTool,
+  ListBranchesTool,
+  RepositoryTool,
   PushFilesTool,
   CreateBranchTool,
   ListIssuesTool,
@@ -48,6 +50,8 @@ export class McpController {
   constructor(
     searchRepos: SearchRepositoriesTool,
     getFile: GetFileContentsTool,
+    listBranches: ListBranchesTool,
+    repository: RepositoryTool,
     pushFiles: PushFilesTool,
     createBranch: CreateBranchTool,
     listIssues: ListIssuesTool,
@@ -60,6 +64,8 @@ export class McpController {
     const handlers: McpToolHandler[] = [
       searchRepos,
       getFile,
+      listBranches,
+      repository,
       pushFiles,
       createBranch,
       listIssues,
@@ -80,14 +86,19 @@ export class McpController {
 
   @Post()
   @HttpCode(200)
-  async handle(@Body() body: unknown): Promise<JsonRpcSuccess | JsonRpcError> {
+  async handle(
+    @Body() body: unknown,
+    @Headers('x-github-token') githubToken?: string,
+  ): Promise<JsonRpcSuccess | JsonRpcError> {
     const req = body as JsonRpcRequest;
 
     if (!req || typeof req !== 'object' || req.jsonrpc !== '2.0' || !req.method) {
       return this.error(null, JSON_RPC_ERRORS.INVALID_REQUEST, 'Invalid JSON-RPC request');
     }
 
-    this.logger.debug(`RPC method="${req.method}" id=${req.id}`);
+    this.logger.debug(
+      `RPC method="${req.method}" id=${req.id} oauth=${githubToken ? 'yes' : 'no'}`,
+    );
 
     try {
       switch (req.method) {
@@ -105,7 +116,10 @@ export class McpController {
             return this.error(req.id, JSON_RPC_ERRORS.METHOD_NOT_FOUND, `Unknown tool: ${name}`);
           }
 
-          const result: McpToolResult = await tool.execute(args ?? {});
+          // Inject the OAuth token so the tool executes as the user, not the GitHub App
+          const argsWithToken = githubToken ? { ...args, __githubToken: githubToken } : args;
+
+          const result: McpToolResult = await tool.execute(argsWithToken ?? {});
           return this.success(req.id, result);
         }
 
@@ -117,7 +131,14 @@ export class McpController {
           );
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Internal error';
+      let message: string;
+      if (err instanceof Error) {
+        const httpStatus = (err as any).status as number | undefined;
+        const base = err.message || 'Unknown error';
+        message = httpStatus ? `${base} [HTTP ${httpStatus}]` : base;
+      } else {
+        message = String(err) || 'Internal error';
+      }
       this.logger.error(`RPC error: ${message}`);
       return this.error(req.id, JSON_RPC_ERRORS.INTERNAL_ERROR, message);
     }

@@ -75,7 +75,7 @@ export class PrismaToolRepository implements ToolRepository {
     };
   }
 
-  async update(id: string, updates: Partial<ToolEntity>): Promise<ToolEntity> {
+  async update(id: string, updates: Partial<ToolEntity> & { mcpConfig?: any; repoFullName?: string }): Promise<ToolEntity> {
     const updated = await this.prisma.tool.update({
       where: { id },
       data: {
@@ -85,6 +85,8 @@ export class PrismaToolRepository implements ToolRepository {
         ...(updates.parameters && { parameters: updates.parameters as any }),
         ...(updates.code !== undefined && { code: updates.code }),
         ...(updates.icon !== undefined && { icon: updates.icon }),
+        ...(updates.mcpConfig !== undefined && { mcpConfig: updates.mcpConfig }),
+        ...(updates.repoFullName !== undefined && { repoFullName: updates.repoFullName }),
       },
     });
 

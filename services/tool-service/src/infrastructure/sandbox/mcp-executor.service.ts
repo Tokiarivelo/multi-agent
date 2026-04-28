@@ -41,7 +41,9 @@ export class McpExecutorService {
       params: { name: config.toolName, arguments: parameters },
     };
 
-    this.logger.log(`MCP call → ${config.serverUrl} tool="${config.toolName}" transport=${config.transport}`);
+    this.logger.log(
+      `MCP call → ${config.serverUrl} tool="${config.toolName}" transport=${config.transport} params=${JSON.stringify(parameters)}`,
+    );
 
     try {
       const response = await firstValueFrom(

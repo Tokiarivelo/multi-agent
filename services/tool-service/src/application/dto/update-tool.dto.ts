@@ -1,7 +1,7 @@
 import { IsString, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ToolCategory } from '@domain/tool.entity';
-import { ToolParameterDto } from './create-tool.dto';
+import { McpConfigDto, ToolParameterDto } from './create-tool.dto';
 
 export class UpdateToolDto {
   @IsOptional()
@@ -33,4 +33,9 @@ export class UpdateToolDto {
   @IsOptional()
   @IsString()
   repoFullName?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => McpConfigDto)
+  mcpConfig?: McpConfigDto;
 }
