@@ -134,9 +134,26 @@ interface SelectContentProps {
 
 function SelectContent({ children, className }: SelectContentProps) {
   const { open } = useSelectCtx();
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (open) {
+      // Small delay to allow animation/rendering to complete
+      const timer = setTimeout(() => {
+        ref.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
+
   if (!open) return null;
+
   return (
     <div
+      ref={ref}
       className={cn(
         'absolute top-full z-50 mt-1 w-full min-w-32 overflow-hidden rounded-lg border border-border/60',
         'bg-popover text-popover-foreground shadow-xl shadow-black/10',

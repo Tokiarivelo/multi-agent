@@ -331,12 +331,28 @@ export class WorkflowAiService {
     modelId: string;
     sessionId?: string;
     userId?: string;
+    executionLogs?: string[];
+    executionOutput?: unknown;
+    executionInput?: unknown;
+    executionError?: string;
   }): Promise<NodeAiResult> {
     const sessionKey = `node:${opts.sessionId ?? opts.nodeType}`;
     const session = this.getOrCreateSession(sessionKey, undefined, opts.modelId);
     const userId = opts.userId ?? 'system';
 
-    const contextPrefix = `Node type: ${opts.nodeType}\nCurrent config: ${JSON.stringify(opts.nodeConfig, null, 2)}${opts.customName ? `\nCurrent name: ${opts.customName}` : ''}\n\nUser request: `;
+    const contextPrefix = `Node type: ${opts.nodeType}\nCurrent config: ${JSON.stringify(opts.nodeConfig, null, 2)}${opts.customName ? `\nCurrent name: ${opts.customName}` : ''}${
+      opts.executionInput
+        ? `\nLast Execution Input: ${JSON.stringify(opts.executionInput, null, 2)}`
+        : ''
+    }${
+      opts.executionOutput
+        ? `\nLast Execution Output: ${JSON.stringify(opts.executionOutput, null, 2)}`
+        : ''
+    }${opts.executionError ? `\nLast Execution Error: ${opts.executionError}` : ''}${
+      opts.executionLogs && opts.executionLogs.length > 0
+        ? `\nLast Execution Logs:\n${opts.executionLogs.join('\n')}`
+        : ''
+    }\n\nUser request: `;
 
     const userMessage: AiMessage = {
       role: 'user',

@@ -42,6 +42,10 @@ export class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
+  DOCUMENT_SERVICE_URL?: string = 'http://localhost:3009';
+
+  @IsString()
+  @IsOptional()
   GITHUB_MCP_SERVICE_URL?: string = 'http://localhost:3010';
 
   @IsString()

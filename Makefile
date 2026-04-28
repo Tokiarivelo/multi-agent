@@ -1,6 +1,6 @@
 # Makefile for Multi-Agent Platform Kubernetes Deployment
 
-.PHONY: help setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-tools seed-agents seed-all test-subworkflow
+.PHONY: help install install-py setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-tools seed-agents seed-all test-subworkflow dev-document
 
 # Default target
 .DEFAULT_GOAL := help
@@ -19,6 +19,18 @@ help: ## Show this help message
 	@echo ''
 	@echo 'Targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+install: ## Install all dependencies (Node via pnpm + Python for document-service)
+	@echo "$(GREEN)Installing Node dependencies…$(NC)"
+	pnpm install
+	@echo "$(GREEN)Installing Python dependencies for document-service…$(NC)"
+	pip install -r services/document-service/requirements.txt
+	@echo "$(GREEN)All dependencies installed!$(NC)"
+
+install-py: ## Install Python dependencies for document-service only
+	@echo "$(GREEN)Installing Python dependencies for document-service…$(NC)"
+	pip install -r services/document-service/requirements.txt
+	@echo "$(GREEN)Python dependencies installed!$(NC)"
 
 check-node: ## Check if Node version is 24
 	@node -v | grep -q "v24" || (echo "$(RED)Error: Node 24 is required. Current version: $$(node -v)$(NC)"; exit 1)
@@ -155,6 +167,10 @@ test-gateway-watch: ## Run gateway-service tests in watch mode
 dev-agent: ## Start agent-service in dev/watch mode
 	@echo "$(GREEN)Starting agent-service in dev mode…$(NC)"
 	cd services/agent-service && pnpm dev
+
+dev-document: ## Start document-service in dev/watch mode (Python)
+	@echo "$(GREEN)Starting document-service in dev mode…$(NC)"
+	cd services/document-service && uvicorn main:app --host 0.0.0.0 --port 3009 --reload
 
 test-agent: ## Run agent-service tests
 	@echo "$(GREEN)Running agent-service tests…$(NC)"

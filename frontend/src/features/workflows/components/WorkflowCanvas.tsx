@@ -242,6 +242,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
   const [newNodePosition, setNewNodePosition] = useState<{ x: number; y: number } | undefined>(
     undefined,
   );
+  const [initialAiOpen, setInitialAiOpen] = useState(false);
 
   const addNodeMutation = useAddNode(workflow.id);
   const updateNodeMutation = useUpdateNode(workflow.id);
@@ -366,13 +367,15 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
   /* Listen for node quick-action events (edit / delete) dispatched from WorkflowFlowNode */
   useEffect(() => {
     const handleNodeAction = (e: Event) => {
-      const { nodeId, action } = (e as CustomEvent<{
+      const { nodeId, action, initialAiOpen: iaOpen } = (e as CustomEvent<{
         nodeId: string;
         action: 'edit' | 'delete' | 'duplicate';
+        initialAiOpen?: boolean;
       }>).detail;
 
       if (action === 'edit') {
         setEditingNodeId(nodeId);
+        setInitialAiOpen(iaOpen ?? false);
         setEditorOpen(true);
         return;
       }
@@ -1343,6 +1346,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
         availableTypings={computeAvailableTypings(editingNodeId)}
         workflowId={workflow?.id}
         executionId={activeExecutionId}
+        initialAiOpen={initialAiOpen}
         initialTestInput={editingNodeLastInput}
       />
     </div>

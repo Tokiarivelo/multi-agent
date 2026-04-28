@@ -162,6 +162,8 @@ export const workflows = {
   'workflows.nodeAi.pendingWithName': 'Config + nom prêts à appliquer',
   'workflows.nodeAi.apply': 'Appliquer',
   'workflows.nodeAi.applied': 'Config du nœud mise à jour',
+  'workflows.nodeAi.appliedDirectly': 'Nœud mis à jour directement',
+  'workflows.nodeAi.applyAndSave': 'Appliquer et Enregistrer',
   'workflows.nodeAi.error': 'Échec de la requête IA',
   'workflows.waitingInput.title': "L'agent a besoin de votre saisie",
   'workflows.waitingInput.dangerTitle': 'Action dangereuse — Confirmation requise',

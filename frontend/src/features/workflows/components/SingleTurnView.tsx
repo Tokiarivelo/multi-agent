@@ -10,15 +10,24 @@ import {
   Terminal,
   Wrench,
   Workflow as WorkflowIcon,
+  Sparkles,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CollapsibleSection } from './CollapsibleSection';
+import { TestOutcomePanel } from './TestOutcomePanel';
+import { useWorkflow } from '../hooks/useWorkflows';
+import { useTools } from '@/features/tools/hooks/useTools';
+import { useSearchParams } from 'next/navigation';
 
 export interface SingleTurnViewProps {
   selectedNodeId: string;
   selectedNodeName: string | null;
   nodeStatus: string;
   raw: Record<string, unknown> | undefined;
+  onApplyFix?: (fixedConfig: Record<string, unknown>) => void;
+  onEditAi?: () => void;
 }
 
 export function SingleTurnView({
@@ -26,7 +35,15 @@ export function SingleTurnView({
   selectedNodeName,
   nodeStatus,
   raw,
+  onApplyFix,
+  onEditAi,
 }: SingleTurnViewProps) {
+  const { t } = useTranslation();
+  const searchParams = useSearchParams();
+  const workflowId = searchParams.get('workflowId');
+  const { data: workflow } = useWorkflow(workflowId);
+  const { data: toolsData } = useTools(1, 100);
+  const availableTools = toolsData?.data ?? [];
   const input = raw?.input as Record<string, unknown> | string | undefined;
   const output = raw?.output as Record<string, unknown> | string | undefined;
   const consoleLogs = raw?.logs as string[] | undefined;
@@ -84,6 +101,17 @@ export function SingleTurnView({
           >
             {nodeStatus}
           </Badge>
+          {onEditAi && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-7 w-7 rounded-full text-violet-500 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30 border-violet-200 dark:border-violet-800"
+              onClick={onEditAi}
+              title={t('workflows.nodeAi.title')}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -204,6 +232,33 @@ export function SingleTurnView({
             {output !== undefined ? JSON.stringify(output, null, 2) : 'No output recorded.'}
           </pre>
         </CollapsibleSection>
+      )}
+
+      {/* AI Analyzer */}
+      {(nodeStatus === 'COMPLETED' || nodeStatus === 'FAILED') && workflowId && workflow && (
+        <div className="mt-2 pt-2 border-t border-border/50">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+            <Sparkles className="h-3 w-3 text-violet-500" />
+            {t('healing.test.analyzeExecution')}
+          </p>
+          <TestOutcomePanel
+            workflowId={workflowId}
+            nodeId={selectedNodeId}
+            nodeName={selectedNodeName || undefined}
+            nodeType={
+              (workflow.definition.nodes.find((n: { id: string; type: string }) => n.id === selectedNodeId)?.type as string) ||
+              'AGENT'
+            }
+            testOutput={output}
+            testInput={input}
+            currentToolIds={
+              (workflow.definition.nodes.find((n: { id: string; config?: { toolIds?: string[] } }) => n.id === selectedNodeId)?.config
+                ?.toolIds as string[]) ?? []
+            }
+            availableTools={availableTools}
+            onApplyFix={onApplyFix}
+          />
+        </div>
       )}
     </div>
   );

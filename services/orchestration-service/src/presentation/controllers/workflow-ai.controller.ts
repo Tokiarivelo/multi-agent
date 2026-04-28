@@ -63,6 +63,10 @@ export class WorkflowAiController {
       prompt: string;
       modelId: string;
       sessionId?: string;
+      executionLogs?: string[];
+      executionOutput?: unknown;
+      executionInput?: unknown;
+      executionError?: string;
     },
     @Query('userId') userId?: string,
   ): Promise<NodeAiResult> {
@@ -78,6 +82,10 @@ export class WorkflowAiController {
       modelId: body.modelId,
       sessionId: body.sessionId,
       userId: userId ?? 'system',
+      executionLogs: body.executionLogs,
+      executionOutput: body.executionOutput,
+      executionInput: body.executionInput,
+      executionError: body.executionError,
     });
   }
 

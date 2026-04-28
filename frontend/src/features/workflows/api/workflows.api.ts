@@ -255,6 +255,10 @@ export const workflowsApi = {
     prompt: string;
     modelId: string;
     sessionId?: string;
+    executionLogs?: string[];
+    executionOutput?: unknown;
+    executionInput?: unknown;
+    executionError?: string;
   }): Promise<NodeAiResult> => {
     const { data } = await apiClient.post<NodeAiResult>('/api/workflows/ai/nodes/edit', payload);
     return data;

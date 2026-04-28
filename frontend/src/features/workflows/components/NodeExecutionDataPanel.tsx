@@ -11,6 +11,8 @@ export interface NodeExecutionDataPanelProps {
   nodeStatuses: Record<string, string>;
   nodeData: Record<string, unknown>;
   nodeTurns: Record<string, NodeTurn[]>;
+  onApplyNodeFix?: (nodeId: string, fixedConfig: Record<string, unknown>) => void;
+  onEditNodeAi?: (nodeId: string) => void;
 }
 
 export function NodeExecutionDataPanel({
@@ -19,6 +21,8 @@ export function NodeExecutionDataPanel({
   nodeStatuses,
   nodeData,
   nodeTurns,
+  onApplyNodeFix,
+  onEditNodeAi,
 }: NodeExecutionDataPanelProps) {
   const { t } = useTranslation();
 
@@ -58,6 +62,8 @@ export function NodeExecutionDataPanel({
       selectedNodeName={selectedNodeName}
       nodeStatus={nodeStatuses[selectedNodeId]}
       raw={nodeData[selectedNodeId] as Record<string, unknown> | undefined}
+      onApplyFix={onApplyNodeFix ? (fix) => onApplyNodeFix(selectedNodeId, fix) : undefined}
+      onEditAi={onEditNodeAi ? () => onEditNodeAi(selectedNodeId) : undefined}
     />
   );
 }

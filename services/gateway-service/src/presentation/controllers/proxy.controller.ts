@@ -62,6 +62,12 @@ export class ProxyController {
           case 'files':
             target = this.configService.get<string>('FILE_SERVICE_URL', 'http://localhost:3008');
             break;
+          case 'documents':
+            target = this.configService.get<string>(
+              'DOCUMENT_SERVICE_URL',
+              'http://localhost:3009',
+            );
+            break;
           case 'github':
             target = this.configService.get<string>(
               'GITHUB_MCP_SERVICE_URL',
@@ -180,6 +186,7 @@ export class ProxyController {
       case 'vectors':
       case 'collections':
       case 'files':
+      case 'documents':
       case 'auth':
       case 'users':
       case 'github':

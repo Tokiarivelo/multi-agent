@@ -16,10 +16,25 @@ interface NodeAiPanelProps {
   config: Record<string, unknown>;
   customName: string;
   onApply: (config: Record<string, unknown>, customName?: string) => void;
+  onApplyDirectly?: (config: Record<string, unknown>, customName?: string) => void;
   onClose: () => void;
+  executionData?: {
+    input?: unknown;
+    output?: unknown;
+    logs?: string[];
+    error?: string;
+  };
 }
 
-export function NodeAiPanel({ nodeType, config, customName, onApply, onClose }: NodeAiPanelProps) {
+export function NodeAiPanel({
+  nodeType,
+  config,
+  customName,
+  onApply,
+  onApplyDirectly,
+  onClose,
+  executionData,
+}: NodeAiPanelProps) {
   const { t } = useTranslation();
 
   const [modelId, setModelId] = useState('');
@@ -51,6 +66,10 @@ export function NodeAiPanel({ nodeType, config, customName, onApply, onClose }: 
         prompt: trimmed,
         modelId,
         sessionId,
+        executionLogs: executionData?.logs,
+        executionOutput: executionData?.output,
+        executionInput: executionData?.input,
+        executionError: executionData?.error,
       });
 
       setSessionId(result.sessionId);
@@ -163,6 +182,23 @@ export function NodeAiPanel({ nodeType, config, customName, onApply, onClose }: 
             <CheckCheck className="h-3.5 w-3.5" />
             {t('workflows.nodeAi.apply', 'Apply')}
           </Button>
+          {onApplyDirectly && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 text-xs gap-1 shrink-0 bg-violet-600 hover:bg-violet-700 text-white"
+              onClick={() => {
+                if (!pendingResult) return;
+                const merged = { ...config, ...(pendingResult.config ?? {}) };
+                onApplyDirectly(merged, pendingResult.customName);
+                setPendingResult(null);
+                toast.success(t('workflows.nodeAi.appliedDirectly', 'Node updated directly'));
+              }}
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              {t('workflows.nodeAi.applyAndSave', 'Apply & Save')}
+            </Button>
+          )}
         </div>
       )}
 

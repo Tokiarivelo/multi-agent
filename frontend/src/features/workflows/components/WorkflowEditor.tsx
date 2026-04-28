@@ -9,6 +9,7 @@ import {
   useDeleteWorkflow,
   useExecuteWorkflow,
   useCancelExecution,
+  useUpdateNode,
 } from '../hooks/useWorkflows';
 import { useWorkflowLogs } from '../hooks/useWorkflowLogs';
 import { Workflow, WorkflowNode } from '@/types';
@@ -199,6 +200,20 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
     }
   };
 
+  const updateNode = useUpdateNode(workflow?.id ?? '');
+  const handleApplyNodeFix = (nodeId: string, fixedConfig: Record<string, unknown>) => {
+    updateNode.mutate({ nodeId, node: { config: fixedConfig } });
+  };
+
+  const handleEditNodeAi = (nodeId: string) => {
+    // Dispatch a custom event that WorkflowCanvas listens to
+    window.dispatchEvent(
+      new CustomEvent('workflow-node-action', {
+        detail: { nodeId, action: 'edit', initialAiOpen: true },
+      }),
+    );
+  };
+
   const handleExecute = () => {
     if (!workflow?.id) return;
     clearLogs();
@@ -321,6 +336,8 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
           onClear={clearLogs}
           onCancel={handleCancelExecution}
           onClose={() => setLogsOpen(false)}
+          onApplyNodeFix={handleApplyNodeFix}
+          onEditNodeAi={handleEditNodeAi}
         />
       )}
     </div>

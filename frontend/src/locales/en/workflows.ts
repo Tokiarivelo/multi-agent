@@ -159,6 +159,8 @@ export const workflows = {
   'workflows.nodeAi.pendingWithName': 'Config + name changes ready',
   'workflows.nodeAi.apply': 'Apply',
   'workflows.nodeAi.applied': 'Node config updated',
+  'workflows.nodeAi.appliedDirectly': 'Node updated directly',
+  'workflows.nodeAi.applyAndSave': 'Apply & Save',
   'workflows.nodeAi.error': 'AI request failed',
   'workflows.waitingInput.title': 'Agent Needs Your Input',
   'workflows.waitingInput.dangerTitle': 'Dangerous Action — Confirmation Required',
