@@ -12,7 +12,7 @@ services:
       - PORT=3002
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/agent_service
       - MODEL_SERVICE_URL=http://model-service:3001
-      - TOOL_SERVICE_URL=http://tool-service:3003
+      - TOOL_SERVICE_URL=http://tool-sandbox-rs:3030
     depends_on:
       - postgres
     networks:

@@ -1,6 +1,9 @@
 # Makefile for Multi-Agent Platform Kubernetes Deployment
 
-.PHONY: help install install-py setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-tools seed-agents seed-all test-subworkflow dev-document
+.PHONY: help install install-py setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-tools seed-agents seed-all test-subworkflow dev-document dev-sandbox-rs build-rust test-sandbox-rs benchmark-gateway benchmark-sandbox test-contract-sandbox
+
+# Ensure ~/go/bin (air) is available
+export PATH := $(HOME)/go/bin:$(PATH)
 
 # Default target
 .DEFAULT_GOAL := help
@@ -20,17 +23,32 @@ help: ## Show this help message
 	@echo 'Targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-install: ## Install all dependencies (Node via pnpm + Python for document-service)
+install: ## Install all dependencies (Node via pnpm + Python for document-service + Go for gateway-service-go)
 	@echo "$(GREEN)Installing Node dependencies…$(NC)"
 	pnpm install
 	@echo "$(GREEN)Installing Python dependencies for document-service…$(NC)"
 	pip install -r services/document-service/requirements.txt
+	@echo "$(GREEN)Installing Go dependencies for gateway-service-go…$(NC)"
+	@if command -v go >/dev/null 2>&1; then \
+		cd services/gateway-service-go && go mod tidy && go mod download; \
+		echo "$(GREEN)Go dependencies installed!$(NC)"; \
+	else \
+		echo "$(YELLOW)Go not found — skipping gateway-service-go deps. Install Go 1.22+ to enable.$(NC)"; \
+	fi
 	@echo "$(GREEN)All dependencies installed!$(NC)"
 
 install-py: ## Install Python dependencies for document-service only
 	@echo "$(GREEN)Installing Python dependencies for document-service…$(NC)"
 	pip install -r services/document-service/requirements.txt
 	@echo "$(GREEN)Python dependencies installed!$(NC)"
+
+dev-all: ## Run all services locally in development mode (Node, Python, Go)
+	@echo "$(GREEN)Starting all services in dev mode...$(NC)"
+	@trap 'kill 0' SIGINT; \
+	pnpm -r --parallel dev & \
+	$(MAKE) dev-document & \
+	$(MAKE) dev-gateway-go & \
+	wait
 
 check-node: ## Check if Node version is 24
 	@node -v | grep -q "v24" || (echo "$(RED)Error: Node 24 is required. Current version: $$(node -v)$(NC)"; exit 1)
@@ -163,6 +181,49 @@ test-gateway: ## Run gateway-service tests
 
 test-gateway-watch: ## Run gateway-service tests in watch mode
 	cd services/gateway-service && pnpm test:watch
+
+dev-gateway-go: ## Start Go gateway in dev mode (hot-reload via air)
+	@echo "$(GREEN)Starting Go gateway-service in dev mode (watch)…$(NC)"
+	cd services/gateway-service-go && air
+
+test-gateway-go: ## Run Go gateway tests
+	@echo "$(GREEN)Running Go gateway-service tests…$(NC)"
+	cd services/gateway-service-go && go test ./...
+
+build-go: ## Build Go gateway binary
+	@echo "$(GREEN)Building Go gateway-service…$(NC)"
+	cd services/gateway-service-go && go build -o gateway cmd/server/main.go
+
+swagger-gateway-go: ## Generate Swagger docs for Go gateway
+	@echo "$(GREEN)Generating Swagger docs for Go gateway-service…$(NC)"
+	cd services/gateway-service-go && swag init --dir cmd/server,internal --output internal/docs
+
+dev-sandbox-rs: ## Start Rust tool sandbox in dev mode (requires cargo-watch)
+	@echo "$(GREEN)Starting tool-sandbox-rs in dev mode…$(NC)"
+	cd services/tool-sandbox-rs && cargo run
+
+build-rust: ## Build Rust tool sandbox (release binary)
+	@echo "$(GREEN)Building tool-sandbox-rs (release)…$(NC)"
+	cd services/tool-sandbox-rs && cargo build --release
+	@echo "$(GREEN)Binary: services/tool-sandbox-rs/target/release/tool-sandbox$(NC)"
+
+test-sandbox-rs: ## Run Rust tool sandbox tests
+	@echo "$(GREEN)Running tool-sandbox-rs tests…$(NC)"
+	cd services/tool-sandbox-rs && cargo test
+
+benchmark-gateway: ## Benchmark Go gateway throughput (requires hey)
+	@echo "$(GREEN)Benchmarking Go gateway (100k requests, 50 concurrent)…$(NC)"
+	hey -n 100000 -c 50 http://localhost:3000/health
+
+benchmark-sandbox: ## Benchmark Rust sandbox throughput (requires hey)
+	@echo "$(GREEN)Benchmarking Rust tool-sandbox (100k requests, 50 concurrent)…$(NC)"
+	hey -n 100000 -c 50 http://localhost:3030/health
+
+test-contract-sandbox: ## Smoke-test tool-sandbox-rs API contract (requires service on :3030)
+	@echo "$(GREEN)Contract-testing tool-sandbox-rs API…$(NC)"
+	@curl -sf http://localhost:3030/health | jq -e '.status == "ok"' && echo "health ✓" || (echo "health FAILED"; exit 1)
+	@curl -sf http://localhost:3030/api/tools?limit=1 | jq -e '.data | arrays' > /dev/null && echo "list ✓" || (echo "list FAILED"; exit 1)
+	@echo "$(GREEN)All contract checks passed!$(NC)"
 
 dev-agent: ## Start agent-service in dev/watch mode
 	@echo "$(GREEN)Starting agent-service in dev mode…$(NC)"
@@ -324,7 +385,7 @@ dev-frontend: ## Develop frontend locally with port-forward
 check-health: ## Check health of all services
 	@echo "$(GREEN)Checking service health...$(NC)"
 	@echo ""
-	@for svc in gateway-service orchestration-service agent-service tool-service model-service vector-service execution-service frontend; do \
+	@for svc in gateway-service orchestration-service agent-service tool-sandbox-rs model-service vector-service execution-service frontend; do \
 		echo "$(YELLOW)Checking $$svc...$(NC)"; \
 		kubectl get pods -n multi-agent -l app=$$svc -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.phase}{"\t"}{range .status.containerStatuses[*]}{.ready}{" "}{end}{"\n"}{end}'; \
 		echo ""; \

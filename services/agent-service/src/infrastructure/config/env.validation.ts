@@ -1,5 +1,5 @@
 import { plainToClass } from 'class-transformer';
-import { IsString, IsNumber, IsOptional, validateSync, Min, Max } from 'class-validator';
+import { IsString, IsNumber, IsOptional, validateSync, Min, Max, IsUrl } from 'class-validator';
 
 class EnvironmentVariables {
   @IsString()
@@ -19,9 +19,9 @@ class EnvironmentVariables {
   @IsOptional()
   MODEL_SERVICE_URL?: string = 'http://localhost:3001';
 
-  @IsString()
   @IsOptional()
-  TOOL_SERVICE_URL?: string = 'http://localhost:3003';
+  @IsUrl({ require_tld: false })
+  TOOL_SERVICE_URL?: string = 'http://localhost:3030';
 
   @IsString()
   @IsOptional()

@@ -169,7 +169,7 @@ NODE_ENV=development
 PORT=3002
 DATABASE_URL=postgresql://...
 AGENT_SERVICE_URL=http://agent-service:3003
-TOOL_SERVICE_URL=http://tool-service:3004
+TOOL_SERVICE_URL=http://tool-sandbox-rs:3006
 MAX_RETRY_ATTEMPTS=3
 EXECUTION_TIMEOUT=300000
 ```

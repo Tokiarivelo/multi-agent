@@ -1,0 +1,38 @@
+[package]
+name = "tool-sandbox-rs"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "tool-sandbox"
+path = "src/main.rs"
+
+[dependencies]
+axum          = { version = "0.7", features = ["json", "multipart"] }
+tokio         = { version = "1",   features = ["full"] }
+serde         = { version = "1",   features = ["derive"] }
+serde_json    = "1"
+reqwest       = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+sqlx          = { version = "0.8",  default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "json", "macros"] }
+scraper       = "=0.19.0"
+tracing       = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tower-http    = { version = "0.5", features = ["cors"] }
+anyhow        = "1"
+thiserror     = "1"
+dotenvy       = "0.15"
+base64        = "0.22"
+rquickjs      = { version = "0.8", default-features = false }
+uuid          = { version = "1", features = ["v4"] }
+wasmtime      = "18"
+wasmtime-wasi = "18"
+bytes         = "1"
+# ── OpenAPI / Swagger ─────────────────────────────────────────────────────────
+utoipa        = { version = "4", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "7", features = ["axum"] }
+
+# ── Rust 1.85 compatibility pins ──────────────────────────────────────────────
+# url 2.5+ pulls idna 1.1 → idna_adapter 1.2.2 (requires rustc 1.86)
+url  = ">=2.4, <2.5"
+# home 0.5.12 requires rustc 1.88 (comes from sqlx-core for .sqlx dir detection)
+home = "=0.5.9"

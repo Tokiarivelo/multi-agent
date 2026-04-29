@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "build": "nest build",
-    "dev": "nest start --watch",
+    "dev-legacy": "nest start --watch",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

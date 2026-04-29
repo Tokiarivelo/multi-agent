@@ -28,7 +28,7 @@ export class ToolClientService {
   ) {
     this.toolServiceUrl = this.configService.get<string>(
       'TOOL_SERVICE_URL',
-      'http://localhost:3003',
+      'http://localhost:3006',
     );
   }
 
@@ -116,7 +116,11 @@ export class ToolClientService {
     }
   }
 
-  async executeTool(toolName: string, parameters: Record<string, any>, userId?: string): Promise<any> {
+  async executeTool(
+    toolName: string,
+    parameters: Record<string, any>,
+    userId?: string,
+  ): Promise<any> {
     try {
       const response = await firstValueFrom(
         this.httpService.post(`${this.toolServiceUrl}/api/tools/execute`, {

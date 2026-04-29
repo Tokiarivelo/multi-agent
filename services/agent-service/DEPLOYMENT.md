@@ -16,12 +16,14 @@ cp .env.example .env
 ```
 
 Required environment variables:
+
 - `DATABASE_URL` - PostgreSQL connection string
 - `MODEL_SERVICE_URL` - URL of the model service
 - `TOOL_SERVICE_URL` - URL of the tool service
 - `PORT` - Service port (default: 3002)
 
 Optional environment variables:
+
 - `OPENAI_API_KEY` - OpenAI API key (can be fetched from model-service)
 - `ANTHROPIC_API_KEY` - Anthropic API key (can be fetched from model-service)
 - `MAX_TOKENS_PER_REQUEST` - Maximum tokens per request (default: 4000)
@@ -59,6 +61,7 @@ pnpm run start:dev
 ```
 
 The service will be available at:
+
 - API: http://localhost:3002/api
 - Health: http://localhost:3002/api/health
 - WebSocket: ws://localhost:3002/agent-execution
@@ -97,7 +100,7 @@ docker run -d \
   -p 3002:3002 \
   -e DATABASE_URL=postgresql://user:pass@host:5432/db \
   -e MODEL_SERVICE_URL=http://model-service:3001 \
-  -e TOOL_SERVICE_URL=http://tool-service:3003 \
+  -e TOOL_SERVICE_URL=http://tool-sandbox-rs:3006 \
   --name agent-service \
   agent-service:latest
 ```
@@ -151,9 +154,9 @@ kind: ConfigMap
 metadata:
   name: agent-service-config
 data:
-  MODEL_SERVICE_URL: "http://model-service:3001"
-  TOOL_SERVICE_URL: "http://tool-service:3003"
-  PORT: "3002"
+  MODEL_SERVICE_URL: 'http://model-service:3001'
+  TOOL_SERVICE_URL: 'http://tool-sandbox-rs:3006'
+  PORT: '3002'
 ```
 
 ### 2. Create Secret
@@ -165,9 +168,9 @@ metadata:
   name: agent-service-secrets
 type: Opaque
 stringData:
-  DATABASE_URL: "postgresql://user:pass@postgres:5432/agent_service"
-  OPENAI_API_KEY: "your-key"
-  ANTHROPIC_API_KEY: "your-key"
+  DATABASE_URL: 'postgresql://user:pass@postgres:5432/agent_service'
+  OPENAI_API_KEY: 'your-key'
+  ANTHROPIC_API_KEY: 'your-key'
 ```
 
 ### 3. Create Deployment
@@ -188,27 +191,27 @@ spec:
         app: agent-service
     spec:
       containers:
-      - name: agent-service
-        image: agent-service:latest
-        ports:
-        - containerPort: 3002
-        envFrom:
-        - configMapRef:
-            name: agent-service-config
-        - secretRef:
-            name: agent-service-secrets
-        livenessProbe:
-          httpGet:
-            path: /api/health
-            port: 3002
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /api/health
-            port: 3002
-          initialDelaySeconds: 5
-          periodSeconds: 5
+        - name: agent-service
+          image: agent-service:latest
+          ports:
+            - containerPort: 3002
+          envFrom:
+            - configMapRef:
+                name: agent-service-config
+            - secretRef:
+                name: agent-service-secrets
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3002
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3002
+            initialDelaySeconds: 5
+            periodSeconds: 5
 ```
 
 ### 4. Create Service
@@ -222,9 +225,9 @@ spec:
   selector:
     app: agent-service
   ports:
-  - protocol: TCP
-    port: 3002
-    targetPort: 3002
+    - protocol: TCP
+      port: 3002
+      targetPort: 3002
   type: LoadBalancer
 ```
 
@@ -259,6 +262,7 @@ curl http://localhost:3002/api/health
 ```
 
 Expected response:
+
 ```json
 {
   "status": "ok",
@@ -270,6 +274,7 @@ Expected response:
 ### Application Logs
 
 Logs are written to stdout/stderr. In production, use a log aggregation service like:
+
 - ELK Stack (Elasticsearch, Logstash, Kibana)
 - Grafana Loki
 - CloudWatch (AWS)
@@ -278,6 +283,7 @@ Logs are written to stdout/stderr. In production, use a log aggregation service 
 ### Metrics
 
 Consider integrating:
+
 - Prometheus for metrics collection
 - Grafana for visualization
 - New Relic / Datadog for APM
@@ -318,6 +324,7 @@ psql -U postgres agent_service < backup.sql
 ### Automated Backups
 
 Set up automated backups using:
+
 - Cloud provider managed backups (RDS, Cloud SQL)
 - Cron jobs with pg_dump
 - Backup tools like pgBackRest
@@ -363,6 +370,7 @@ Set up automated backups using:
 ## Support
 
 For issues and questions:
+
 - Check logs: `docker-compose logs -f` or `pm2 logs`
 - Review API documentation: `API.md`
 - Check examples: `EXAMPLES.md`

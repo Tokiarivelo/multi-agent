@@ -655,5 +655,10 @@ def read_text_file(
         raise HTTPException(status_code=422, detail=str(e))
 
 
+from logger import get_nest_log_config, get_logger
+
+logger = get_logger("Bootstrap")
+
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=3009, reload=False)
+    logger.info("🚀 Document Service is starting on: http://0.0.0.0:3009")
+    uvicorn.run("main:app", host="0.0.0.0", port=3009, reload=False, log_config=get_nest_log_config())

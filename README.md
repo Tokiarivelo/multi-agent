@@ -42,15 +42,15 @@ Multi-Agent Platform is an enterprise-grade AI orchestration system that enables
 └────────────────────────────────┬────────────────────────────────────┘
                                  │ HTTP/WebSocket
 ┌────────────────────────────────▼────────────────────────────────────┐
-│                      Gateway Service (NestJS)                        │
-│                  Port 3000 - API Gateway + Auth                      │
+│                     Gateway Service (Go/Axum)                        │
+│               Port 3000 - Reverse Proxy + JWT Auth                   │
 └──┬────────┬────────┬────────┬────────┬────────┬────────┬────────────┘
    │        │        │        │        │        │        │
-   │        │        │        │        │        │        │
-┌──▼───┐ ┌─▼───┐ ┌──▼───┐ ┌──▼───┐ ┌──▼───┐ ┌─▼───┐ ┌──▼────┐
-│Agent │ │Orch.│ │Exec. │ │Model │ │Tool  │ │Vector│ │Execution│
-│:3002 │ │:3003│ │:3004 │ │:3005 │ │:3006 │ │:3007 │ │ :3004   │
-└──┬───┘ └──┬──┘ └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘ └────────┘
+┌──▼───┐ ┌─▼───┐ ┌──▼───┐ ┌──▼───┐ ┌──▼───┐ ┌─▼───┐ ┌──▼───┐
+│Agent │ │Orch.│ │Exec. │ │Model │ │Tool  │ │Vector│ │Doc.  │
+│:3002 │ │:3003│ │:3004 │ │:3005 │ │:3030 │ │:3007 │ │:3009 │
+│NestJS│ │NestJS│ │NestJS│ │NestJS│ │ Rust │ │NestJS│ │Python│
+└──┬───┘ └──┬──┘ └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘ └──────┘
    │        │        │        │        │        │
    └────────┴────────┴────────┴────────┴────────┘
                      │
@@ -67,16 +67,17 @@ Multi-Agent Platform is an enterprise-grade AI orchestration system that enables
 
 ### Service Overview
 
-| Service           | Port | Purpose                                      |
-| ----------------- | ---- | -------------------------------------------- |
-| **Gateway**       | 3000 | API gateway, authentication, authorization   |
-| **Frontend**      | 3001 | Next.js web interface                        |
-| **Agent**         | 3002 | AI agent management & LangChain execution    |
-| **Orchestration** | 3003 | Workflow orchestration engine                |
-| **Execution**     | 3004 | Execution tracking & audit logs              |
-| **Model**         | 3005 | LLM provider management & API key encryption |
-| **Tool**          | 3006 | Tool registry & sandboxed execution          |
-| **Vector**        | 3007 | Vector storage & semantic search             |
+| Service              | Port | Lang    | Purpose                                           |
+| -------------------- | ---- | ------- | ------------------------------------------------- |
+| **Gateway**          | 3000 | Go      | Reverse proxy, JWT auth, rate-limiting            |
+| **Frontend**         | 3001 | Next.js | Web interface                                     |
+| **Agent**            | 3002 | NestJS  | AI agent management & LangChain execution         |
+| **Orchestration**    | 3003 | NestJS  | Workflow orchestration engine                     |
+| **Execution**        | 3004 | NestJS  | Execution tracking & audit logs                   |
+| **Model**            | 3005 | NestJS  | LLM provider management & API key encryption      |
+| **Tool Sandbox**     | 3030 | Rust    | Tool registry, QuickJS sandbox, MCP proxy         |
+| **Vector**           | 3007 | NestJS  | Vector storage & semantic search                  |
+| **Document**         | 3009 | Python  | PDF parsing, image OCR, document generation       |
 
 For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -106,10 +107,11 @@ For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
   - Multi-provider model selection
 
 - ✅ **Tool Ecosystem**
-  - Web scraping (Cheerio)
-  - HTTP API calls
-  - File operations
-  - Custom JavaScript execution (sandboxed)
+  - Web scraping (Rust scraper crate)
+  - HTTP API calls with configurable domain allowlist
+  - File and shell operations (workspace-sandboxed)
+  - Custom JavaScript execution (QuickJS, per-invocation isolation)
+  - MCP tool proxy (GitHub, Trello, custom)
   - Rate limiting and security controls
 
 - ✅ **Vector Search**
@@ -123,7 +125,7 @@ For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 - 🔐 **Authentication**: JWT-based with Passport strategy
 - 🔐 **Authorization**: Role-based access control (ADMIN, USER, VIEWER)
 - 🔐 **API Key Encryption**: AES-256-GCM encryption with per-user keys
-- 🔐 **Sandboxed Execution**: isolated-vm for secure code execution
+- 🔐 **Sandboxed Execution**: QuickJS (via Rust/rquickjs) — isolated JS runtime per invocation with hard CPU + wall-clock timeouts
 - 🔐 **Rate Limiting**: Per-service request throttling
 - 🔐 **CORS**: Configurable cross-origin resource sharing
 
@@ -133,8 +135,10 @@ For detailed security documentation, see [SECURITY.md](SECURITY.md).
 
 ### Backend
 
-- **Framework**: NestJS 10.3
-- **Runtime**: Node.js 20+
+- **Framework**: NestJS 10.3 (TypeScript microservices)
+- **Gateway**: Go 1.22+ with net/http + gorilla/mux (high-throughput reverse proxy)
+- **Tool Sandbox**: Rust 1.85+ with Axum 0.7 + QuickJS (isolated JS execution)
+- **Runtime**: Node.js 24+
 - **Language**: TypeScript 5.3
 - **Database**: PostgreSQL 16 with Prisma ORM
 - **Messaging**: NATS 2.10 with JetStream
@@ -190,8 +194,10 @@ multi-agent/
 
 ## 📋 Prerequisites
 
-- **Node.js**: >= 20.0.0
+- **Node.js**: >= 24.0.0
 - **pnpm**: >= 8.0.0
+- **Go**: >= 1.22 (for gateway-service-go)
+- **Rust**: >= 1.85 (for tool-sandbox-rs)
 - **Docker**: >= 24.0.0
 - **Docker Compose**: >= 2.0.0
 - **Kubernetes** (optional): minikube or Docker Desktop
@@ -209,8 +215,9 @@ cd multi-agent
 ### 2. Install Dependencies
 
 ```bash
-pnpm install
+make install
 ```
+*(This installs Node, Python, and Go dependencies for all services)*
 
 ### 3. Setup Environment Variables
 
@@ -247,16 +254,17 @@ pnpm prisma:migrate
 pnpm dev
 ```
 
-This starts all services in development mode with hot-reload:
+This starts all services in development mode with hot-reload (including Python and Go services):
 
-- Gateway: http://localhost:3000
+- Gateway (Go): http://localhost:3000
 - Frontend: http://localhost:3001
 - Agent Service: http://localhost:3002
 - Orchestration Service: http://localhost:3003
 - Execution Service: http://localhost:3004
 - Model Service: http://localhost:3005
-- Tool Service: http://localhost:3006
+- Tool Sandbox (Rust): http://localhost:3030 · Swagger UI: http://localhost:3030/docs/
 - Vector Service: http://localhost:3007
+- Document Service (Python): http://localhost:3009
 
 ### 7. Access the Application
 
@@ -264,6 +272,7 @@ Open your browser and navigate to:
 
 - **Frontend**: http://localhost:3001
 - **API Gateway**: http://localhost:3000
+- **API Gateway (Go Migration)**: http://localhost:3020
 - **API Documentation**: http://localhost:3000/api (Swagger)
 
 ## 💻 Development
@@ -273,13 +282,13 @@ For detailed development guide, see [DEVELOPMENT.md](DEVELOPMENT.md).
 ### Quick Commands
 
 ```bash
-# Install all dependencies
-pnpm install
+# Install all dependencies (Node, Python, Go)
+make install
 
 # Run all services in development mode
 pnpm dev
 
-# Build all services
+# Build all TS services
 pnpm build
 
 # Run tests

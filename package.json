@@ -5,7 +5,8 @@
   "description": "Production-ready AI workflow orchestration platform",
   "scripts": {
     "build": "pnpm -r build",
-    "dev": "pnpm -r --parallel dev",
+    "dev:node": "pnpm -r --parallel dev",
+    "dev": "make dev-all",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",

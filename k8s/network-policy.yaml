@@ -143,7 +143,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app: tool-service
+              app: tool-sandbox-rs
       ports:
         - protocol: TCP
           port: 3003
@@ -222,7 +222,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app: tool-service
+              app: tool-sandbox-rs
       ports:
         - protocol: TCP
           port: 3003
@@ -262,12 +262,12 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: tool-service-policy
+  name: tool-sandbox-rs-policy
   namespace: multi-agent
 spec:
   podSelector:
     matchLabels:
-      app: tool-service
+      app: tool-sandbox-rs
   policyTypes:
     - Ingress
     - Egress

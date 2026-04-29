@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { DocumentFormat, DocumentSection, TableData } from '../api/documents.api';
@@ -23,11 +23,13 @@ export function DocumentGeneratorForm({ formats, onSubmit, loading }: Props) {
   const [format, setFormat] = useState(formats[0]?.id ?? 'pdf');
 
   // Keep the selected format in sync when the formats list loads asynchronously.
-  useEffect(() => {
+  const [prevFormats, setPrevFormats] = useState(formats);
+  if (formats !== prevFormats) {
+    setPrevFormats(formats);
     if (formats.length > 0 && !formats.some((f) => f.id === format)) {
       setFormat(formats[0].id);
     }
-  }, [formats, format]);
+  }
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [sections, setSections] = useState<DocumentSection[]>([{ heading: '', body: '', level: 1 }]);

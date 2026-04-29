@@ -86,7 +86,7 @@ CORS_ORIGIN=*
 
 # External Services
 AGENT_SERVICE_URL=http://localhost:3002
-TOOL_SERVICE_URL=http://localhost:3003
+TOOL_SERVICE_URL=http://localhost:3006
 EXECUTION_SERVICE_URL=http://localhost:3004
 
 # Execution Settings
@@ -311,7 +311,7 @@ docker build -t orchestration-service .
 docker run -p 3001:3001 \
   -e DATABASE_URL=postgresql://user:password@host:5432/db \
   -e AGENT_SERVICE_URL=http://agent-service:3002 \
-  -e TOOL_SERVICE_URL=http://tool-service:3003 \
+  -e TOOL_SERVICE_URL=http://tool-sandbox-rs:3006 \
   orchestration-service
 ```
 

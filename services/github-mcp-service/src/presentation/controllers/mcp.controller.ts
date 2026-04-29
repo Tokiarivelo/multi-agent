@@ -133,7 +133,7 @@ export class McpController {
     } catch (err: unknown) {
       let message: string;
       if (err instanceof Error) {
-        const httpStatus = (err as any).status as number | undefined;
+        const httpStatus = 'status' in err ? (err as { status?: number }).status : undefined;
         const base = err.message || 'Unknown error';
         message = httpStatus ? `${base} [HTTP ${httpStatus}]` : base;
       } else {

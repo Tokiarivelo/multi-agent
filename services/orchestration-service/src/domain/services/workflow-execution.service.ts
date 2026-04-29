@@ -60,7 +60,7 @@ export class WorkflowExecutionService {
   ): boolean {
     try {
       const nodeExecution = sourceNodeId
-        ? execution.nodeExecutions.findLast((n) => n.nodeId === sourceNodeId)
+        ? [...execution.nodeExecutions].reverse().find((n) => n.nodeId === sourceNodeId)
         : execution.nodeExecutions[execution.nodeExecutions.length - 1];
       const output = nodeExecution?.output;
 

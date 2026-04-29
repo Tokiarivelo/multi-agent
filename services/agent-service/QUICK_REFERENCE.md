@@ -291,7 +291,7 @@ agent-service/
 ```env
 DATABASE_URL=postgresql://...
 MODEL_SERVICE_URL=http://localhost:3001
-TOOL_SERVICE_URL=http://localhost:3003
+TOOL_SERVICE_URL=http://localhost:3006
 PORT=3002
 ```
 

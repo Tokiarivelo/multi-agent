@@ -42,3 +42,14 @@ everything-claude-code/
 __pycache__/
 *.pyc
 *.pyo
+
+# Rust
+target/
+**/*.rs.bk
+
+# Go
+gateway
+tmp/
+vendor/
+**/*.test
+**/*.out
