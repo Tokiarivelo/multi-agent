@@ -52,6 +52,8 @@ pub async fn dispatch_builtin(
         "document_read" => integrations::document_read(client, config, &params).await,
         "document_parse_image" => integrations::document_parse_image(client, config, &params).await,
         "document_generate" => integrations::document_generate(client, config, &params).await,
+        "document_delete" => integrations::document_delete(client, config, &params).await,
+        "document_write" => integrations::document_write(client, config, &params).await,
 
         _ => anyhow::bail!("Unknown built-in tool: {}", tool_name),
     }

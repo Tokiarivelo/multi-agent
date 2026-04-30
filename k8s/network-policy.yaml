@@ -146,7 +146,7 @@ spec:
               app: tool-sandbox-rs
       ports:
         - protocol: TCP
-          port: 3003
+          port: 3030
     - to:
         - podSelector:
             matchLabels:
@@ -225,7 +225,7 @@ spec:
               app: tool-sandbox-rs
       ports:
         - protocol: TCP
-          port: 3003
+          port: 3030
     # Allow to PostgreSQL
     - to:
         - podSelector:
@@ -278,14 +278,14 @@ spec:
               app: agent-service
       ports:
         - protocol: TCP
-          port: 3003
+          port: 3030
     - from:
         - podSelector:
             matchLabels:
               app: orchestration-service
       ports:
         - protocol: TCP
-          port: 3003
+          port: 3030
   egress:
     # Allow to PostgreSQL
     - to:

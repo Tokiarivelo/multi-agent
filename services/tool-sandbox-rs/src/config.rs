@@ -33,9 +33,9 @@ impl Config {
 
         Ok(Config {
             port: env::var("PORT")
-                .unwrap_or_else(|_| "3006".to_string())
+                .unwrap_or_else(|_| "3030".to_string())
                 .parse()
-                .unwrap_or(3006),
+                .unwrap_or(3030),
             database_url: env::var("DATABASE_URL")
                 .map_err(|_| anyhow::anyhow!("DATABASE_URL is required"))?,
             tool_execution_timeout_ms: env::var("TOOL_EXECUTION_TIMEOUT")

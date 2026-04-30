@@ -8,8 +8,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: 3006
-      targetPort: 3006
+    - port: 3030
+      targetPort: 3030
       protocol: TCP
       name: http
   selector:
@@ -42,7 +42,7 @@ spec:
           image: tool-sandbox-rs:latest
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 3006
+            - containerPort: 3030
               name: http
               protocol: TCP
           resources:
@@ -55,7 +55,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 3006
+              port: 3030
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -63,7 +63,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
-              port: 3006
+              port: 3030
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
@@ -77,7 +77,7 @@ spec:
             - name: NODE_ENV
               value: "production"
             - name: PORT
-              value: "3006"
+              value: "3030"
             # Service dependencies
             - name: DOCUMENT_SERVICE_URL
               valueFrom:

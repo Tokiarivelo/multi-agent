@@ -27,7 +27,7 @@ app.add_middleware(
 SUPPORTED_FORMATS = ["pdf", "docx", "xlsx", "md", "csv", "html", "txt", "json"]
 
 # Workspace root – all server-side path operations are restricted to this directory.
-WORKSPACE_ROOT: str = os.environ.get("WORKSPACE_ROOT", "/workspace")
+WORKSPACE_ROOT: str = os.environ.get("WORKSPACE_ROOT", os.getcwd())
 
 MIME_TYPES = {
     "pdf": "application/pdf",
@@ -443,18 +443,35 @@ class ParseImagePathRequest(BaseModel):
     path: str
 
 
+class WriteFileRequest(BaseModel):
+    path: str
+    content: str
+    encoding: Optional[str] = "utf-8"
+
+
+class DeleteFileRequest(BaseModel):
+    path: str
+
+
+class WriteFileRequest(BaseModel):
+    path: str
+    content: str
+    encoding: Optional[str] = "utf-8"
+
+
+class DeleteFileRequest(BaseModel):
+    path: str
+
+
 # ─── Parse helpers ────────────────────────────────────────────────────────────
 
-def _safe_workspace_path(file_path: str) -> str:
+def _safe_workspace_path(file_path: str, check_exists: bool = True) -> str:
     """Resolve *file_path* inside WORKSPACE_ROOT and reject escapes via symlinks / '..'."""
-    # Resolve relative paths against WORKSPACE_ROOT; keep absolute paths as-is for
-    # resolution but still validate them against the workspace root below.
     if os.path.isabs(file_path):
         candidate = file_path
     else:
         candidate = os.path.join(WORKSPACE_ROOT, file_path)
 
-    # Resolve the workspace root itself to handle symlinks in the mount path.
     real_root = os.path.realpath(WORKSPACE_ROOT)
     real_candidate = os.path.realpath(candidate)
 
@@ -463,7 +480,7 @@ def _safe_workspace_path(file_path: str) -> str:
             status_code=403,
             detail="Access denied: path is outside the allowed workspace root",
         )
-    if not os.path.isfile(real_candidate):
+    if check_exists and not os.path.exists(real_candidate):
         raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
     return real_candidate
 
@@ -651,6 +668,38 @@ def read_text_file(
             "content": content,
             "size": os.path.getsize(safe_path),
         }
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@app.post("/api/documents/write")
+def write_text_file(req: WriteFileRequest):
+    """Write a plain-text file to the workspace."""
+    safe_path = _safe_workspace_path(req.path, check_exists=False)
+    try:
+        os.makedirs(os.path.dirname(safe_path), exist_ok=True)
+        with open(safe_path, "w", encoding=req.encoding or "utf-8") as f:
+            f.write(req.content)
+        return {
+            "success": True,
+            "path": safe_path,
+            "size": len(req.content),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@app.post("/api/documents/delete")
+def delete_workspace_file(req: DeleteFileRequest):
+    """Delete a file from the workspace."""
+    safe_path = _safe_workspace_path(req.path, check_exists=True)
+    try:
+        if os.path.isdir(safe_path):
+            import shutil
+            shutil.rmtree(safe_path)
+        else:
+            os.remove(safe_path)
+        return {"success": True, "path": safe_path}
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
 

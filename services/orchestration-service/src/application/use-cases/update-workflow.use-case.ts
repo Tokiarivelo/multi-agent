@@ -22,10 +22,23 @@ export class UpdateWorkflowUseCase {
     if (!workflow) {
       throw new NotFoundException(`Workflow ${id} not found`);
     }
+
+    let updatedDefinition = dto.definition ?? workflow.definition;
+
+    if (updatedDefinition && updatedDefinition.nodes && updatedDefinition.edges) {
+      const nodeIds = new Set(updatedDefinition.nodes.map((n) => n.id));
+      updatedDefinition = {
+        ...updatedDefinition,
+        edges: updatedDefinition.edges.filter(
+          (e) => nodeIds.has(e.source) && nodeIds.has(e.target),
+        ),
+      };
+    }
+
     return this.workflowRepository.update(id, {
       name: dto.name ?? workflow.name,
       description: dto.description ?? workflow.description,
-      definition: dto.definition ?? workflow.definition,
+      definition: updatedDefinition,
       status: dto.status ?? workflow.status,
     });
   }

@@ -37,7 +37,7 @@ func (l *Logger) formatMessage(level string, color string, message string, args 
 		formattedMessage = message
 	}
 	
-	return fmt.Sprintf("%s[Nest] %d  - %s     %s %s[%s]%s %s%s",
+	return fmt.Sprintf("%s[GatewayService] %d  - %s     %s %s[%s]%s %s%s",
 		ColorGreen, pid, now, level, ColorYellow, l.context, color, formattedMessage, ColorReset)
 }
 
@@ -78,13 +78,20 @@ func GinLogger(context string) gin.HandlerFunc {
 			param.Latency = param.Latency.Truncate(time.Second)
 		}
 
-		msg := fmt.Sprintf("%s%s%s %s %s %d %s %s %s",
+		msg := fmt.Sprintf("%s%s%s %s %s %d %s %s",
 			methodColor, param.Method, resetColor,
 			param.Path,
 			statusColor, param.StatusCode, resetColor,
 			param.Latency,
-			param.ErrorMessage,
 		)
+
+		if target, ok := param.Keys["proxyTarget"].(string); ok {
+			msg = fmt.Sprintf("%s -> %s%s%s", msg, ColorCyan, target, ColorReset)
+		}
+
+		if param.ErrorMessage != "" {
+			msg = fmt.Sprintf("%s %sERROR: %s%s", msg, ColorRed, param.ErrorMessage, ColorReset)
+		}
 		
 		return l.formatMessage("LOG", ColorGreen, msg) + "\n"
 	})

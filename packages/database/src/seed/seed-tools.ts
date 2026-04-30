@@ -330,6 +330,64 @@ const tools = [
     ],
     code: null,
   },
+  {
+    name: 'document_read',
+    description: 'Read and parse a document (PDF, DOCX, XLSX, CSV, JSON, HTML, TXT) and return structured text/data.',
+    category: ToolCategory.FILE,
+    isBuiltIn: true,
+    parameters: [
+      { name: 'path', type: 'string', description: 'Path to the file in the workspace', required: true },
+      { name: 'encoding', type: 'string', description: 'File encoding', required: false, default: 'utf-8' }
+    ],
+    code: null,
+  },
+  {
+    name: 'document_generate',
+    description: 'Generate a document in various formats (PDF, DOCX, XLSX, MD, CSV, HTML, TXT, JSON) and optionally save it to the workspace.',
+    category: ToolCategory.FILE,
+    isBuiltIn: true,
+    parameters: [
+      { name: 'format', type: 'string', description: 'Output format (pdf, docx, xlsx, md, csv, html, txt, json)', required: true },
+      { name: 'title', type: 'string', description: 'Document title', required: false },
+      { name: 'author', type: 'string', description: 'Document author', required: false },
+      { name: 'sections', type: 'array', description: 'Document sections (heading, body, level)', required: false },
+      { name: 'table', type: 'object', description: 'Document table (headers, rows)', required: false },
+      { name: 'outputPath', type: 'string', description: 'Optional path to save the generated document in the workspace', required: false }
+    ],
+    code: null,
+  },
+  {
+    name: 'document_parse_image',
+    description: 'Extract text (OCR) and metadata from an image file.',
+    category: ToolCategory.FILE,
+    isBuiltIn: true,
+    parameters: [
+      { name: 'path', type: 'string', description: 'Path to the image in the workspace', required: true }
+    ],
+    code: null,
+  },
+  {
+    name: 'document_delete',
+    description: 'Delete a file or directory from the workspace.',
+    category: ToolCategory.FILE,
+    isBuiltIn: true,
+    parameters: [
+      { name: 'path', type: 'string', description: 'Path to the file or directory to delete', required: true }
+    ],
+    code: null,
+  },
+  {
+    name: 'document_write',
+    description: 'Write plain-text content to a file in the workspace.',
+    category: ToolCategory.FILE,
+    isBuiltIn: true,
+    parameters: [
+      { name: 'path', type: 'string', description: 'Path where the file should be created/updated', required: true },
+      { name: 'content', type: 'string', description: 'Content to write', required: true },
+      { name: 'encoding', type: 'string', description: 'File encoding', required: false, default: 'utf-8' }
+    ],
+    code: null,
+  },
 ];
 
 async function main() {

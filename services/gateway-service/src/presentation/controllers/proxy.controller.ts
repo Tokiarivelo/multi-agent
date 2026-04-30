@@ -53,7 +53,7 @@ export class ProxyController {
             target = this.configService.get<string>('MODEL_SERVICE_URL', 'http://localhost:3005');
             break;
           case 'tools':
-            target = this.configService.get<string>('TOOL_SERVICE_URL', 'http://localhost:3006');
+            target = this.configService.get<string>('TOOL_SERVICE_URL', 'http://localhost:3030');
             break;
           case 'vectors':
           case 'collections':

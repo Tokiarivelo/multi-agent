@@ -33,7 +33,19 @@ class NestFormatter(logging.Formatter):
             context = "HTTP"
 
         msg = super().format(record)
-        return f"{self.COLOR_GREEN}[Nest] {pid}  - {now}     {level_name} {self.COLOR_YELLOW}[{context}]{level_color} {msg}{self.COLOR_RESET}"
+        
+        # Capture extra fields for explicit logging
+        base_attrs = ('args', 'asctime', 'created', 'exc_info', 'exc_text', 'filename', 
+                     'funcName', 'levelname', 'levelno', 'lineno', 'module', 
+                     'msecs', 'msg', 'name', 'pathname', 'process', 'processName', 
+                     'relativeCreated', 'stack_info', 'thread', 'threadName')
+        extra = {k: v for k, v in record.__dict__.items() if k not in base_attrs}
+        
+        if extra:
+            import json
+            msg += f" {self.COLOR_CYAN}{json.dumps(extra)}{self.COLOR_RESET}"
+            
+        return f"{self.COLOR_GREEN}[DocumentService] {pid}  - {now}     {level_name} {self.COLOR_YELLOW}[{context}]{level_color} {msg}{self.COLOR_RESET}"
 
 def get_nest_log_config():
     return {

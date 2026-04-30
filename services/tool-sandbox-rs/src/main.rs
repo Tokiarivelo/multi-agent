@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
                 .delete(api::crud::delete),
         )
         // ── Swagger UI ────────────────────────────────────────────────────────
-        // Serves the interactive API explorer at http://localhost:3006/docs/
+        // Serves the interactive API explorer at http://localhost:3030/docs/
         .merge(SwaggerUi::new("/docs").url("/docs/openapi.json", ApiDoc::openapi()))
         .layer(CorsLayer::permissive())
         .with_state(state);

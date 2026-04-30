@@ -12,7 +12,7 @@ func testConfig() *config.Config {
 		AgentServiceURL:         "http://agent:3002",
 		ExecutionServiceURL:     "http://execution:3004",
 		ModelServiceURL:         "http://model:3005",
-		ToolServiceURL:          "http://tool:3006",
+		ToolServiceURL:          "http://tool:3030",
 		VectorServiceURL:        "http://vector:3007",
 		FileServiceURL:          "http://file:3008",
 		DocumentServiceURL:      "http://document:3009",

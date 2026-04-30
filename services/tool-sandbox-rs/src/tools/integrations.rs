@@ -478,6 +478,64 @@ pub async fn document_generate(
     }))
 }
 
+pub async fn document_delete(
+    client: &Client,
+    config: &Config,
+    params: &Value,
+) -> anyhow::Result<Value> {
+    if !config.enable_file_operations {
+        anyhow::bail!("File operations are disabled");
+    }
+    let path = require_str(params, "path")?;
+    let safe = resolve_workspace_path(config, path)?;
+
+    let resp = client
+        .post(format!("{}/api/documents/delete", config.document_service_url))
+        .json(&json!({ "path": safe.to_string_lossy() }))
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("document_delete failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        anyhow::bail!("document_delete failed: {}", text);
+    }
+
+    Ok(resp.json().await?)
+}
+
+pub async fn document_write(
+    client: &Client,
+    config: &Config,
+    params: &Value,
+) -> anyhow::Result<Value> {
+    if !config.enable_file_operations {
+        anyhow::bail!("File operations are disabled");
+    }
+    let path = require_str(params, "path")?;
+    let content = require_str(params, "content")?;
+    let encoding = params.get("encoding").and_then(|v| v.as_str()).unwrap_or("utf-8");
+    let safe = resolve_workspace_path(config, path)?;
+
+    let resp = client
+        .post(format!("{}/api/documents/write", config.document_service_url))
+        .json(&json!({
+            "path": safe.to_string_lossy(),
+            "content": content,
+            "encoding": encoding
+        }))
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("document_write failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        anyhow::bail!("document_write failed: {}", text);
+    }
+
+    Ok(resp.json().await?)
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 fn require_str<'a>(params: &'a Value, key: &str) -> anyhow::Result<&'a str> {

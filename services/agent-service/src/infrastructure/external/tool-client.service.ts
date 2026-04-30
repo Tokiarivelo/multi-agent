@@ -28,7 +28,7 @@ export class ToolClientService {
   ) {
     this.toolServiceUrl = this.configService.get<string>(
       'TOOL_SERVICE_URL',
-      'http://localhost:3006',
+      'http://localhost:3030',
     );
   }
 

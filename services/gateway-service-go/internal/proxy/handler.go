@@ -62,6 +62,8 @@ func (h *Handler) Proxy(c *gin.Context) {
 		return
 	}
 
+	c.Set("proxyTarget", targetBase)
+
 	// Append userId from JWT context if not already present.
 	if userID, exists := c.Get("userId"); exists && userID != "" {
 		if !strings.Contains(c.Request.URL.RawQuery, "userId=") {
@@ -106,7 +108,10 @@ func buildReverseProxy(target *url.URL) *httputil.ReverseProxy {
 		return nil
 	}
 
-	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		// Log the error to the console for better visibility
+		fmt.Printf("\033[31m[Proxy Error] %s %s -> %v\033[0m\n", r.Method, r.URL.Path, err)
+		
 		http.Error(w, fmt.Sprintf(`{"error":"upstream error: %s"}`, err.Error()),
 			http.StatusBadGateway)
 	}
