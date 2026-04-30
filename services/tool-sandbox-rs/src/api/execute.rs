@@ -188,6 +188,7 @@ async fn run(state: &AppState, req: &ExecuteRequest) -> anyhow::Result<Value> {
             &state.config,
             &tool.name,
             params,
+            req.user_id.clone(),
             timeout_ms,
         )
         .await;

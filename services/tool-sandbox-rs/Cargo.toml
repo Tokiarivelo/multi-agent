@@ -12,7 +12,7 @@ axum          = { version = "0.7", features = ["json", "multipart"] }
 tokio         = { version = "1",   features = ["full"] }
 serde         = { version = "1",   features = ["derive"] }
 serde_json    = "1"
-reqwest       = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest       = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 sqlx          = { version = "0.8",  default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "json", "macros"] }
 scraper       = "=0.19.0"
 tracing       = "0.1"

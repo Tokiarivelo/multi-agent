@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+import httpx
 
 app = FastAPI(
     title="Document Generation Service",
@@ -28,6 +29,7 @@ SUPPORTED_FORMATS = ["pdf", "docx", "xlsx", "md", "csv", "html", "txt", "json"]
 
 # Workspace root – all server-side path operations are restricted to this directory.
 WORKSPACE_ROOT: str = os.environ.get("WORKSPACE_ROOT", os.getcwd())
+FILE_SERVICE_URL: str = os.environ.get("FILE_SERVICE_URL", "http://localhost:3008")
 
 MIME_TYPES = {
     "pdf": "application/pdf",
@@ -447,16 +449,7 @@ class WriteFileRequest(BaseModel):
     path: str
     content: str
     encoding: Optional[str] = "utf-8"
-
-
-class DeleteFileRequest(BaseModel):
-    path: str
-
-
-class WriteFileRequest(BaseModel):
-    path: str
-    content: str
-    encoding: Optional[str] = "utf-8"
+    userId: Optional[str] = None
 
 
 class DeleteFileRequest(BaseModel):
@@ -467,6 +460,19 @@ class DeleteFileRequest(BaseModel):
 
 def _safe_workspace_path(file_path: str, check_exists: bool = True) -> str:
     """Resolve *file_path* inside WORKSPACE_ROOT and reject escapes via symlinks / '..'."""
+    path, is_safe = _resolve_path(file_path)
+    if not is_safe:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: path is outside the allowed workspace root",
+        )
+    if check_exists and not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+    return path
+
+
+def _resolve_path(file_path: str) -> tuple[str, bool]:
+    """Resolve *file_path* and check if it is within WORKSPACE_ROOT."""
     if os.path.isabs(file_path):
         candidate = file_path
     else:
@@ -475,14 +481,53 @@ def _safe_workspace_path(file_path: str, check_exists: bool = True) -> str:
     real_root = os.path.realpath(WORKSPACE_ROOT)
     real_candidate = os.path.realpath(candidate)
 
-    if not real_candidate.startswith(real_root + os.sep) and real_candidate != real_root:
-        raise HTTPException(
-            status_code=403,
-            detail="Access denied: path is outside the allowed workspace root",
+    is_safe = real_candidate.startswith(real_root + os.sep) or real_candidate == real_root
+    return real_candidate, is_safe
+
+
+async def _upload_to_cloud(
+    filename: str,
+    content: bytes,
+    user_id: str,
+    mime_type: str = "text/plain",
+) -> dict:
+    """Upload content to cloud storage using presigned PUT URL (best practice).
+
+    Two-step flow:
+    1. POST /api/files/initiate-upload → receives presigned PUT URL + file record.
+    2. PUT bytes directly to MinIO via presigned URL (no buffering through file-service).
+    """
+    async with httpx.AsyncClient() as http:
+        # Step 1: initiate upload — get presigned PUT URL
+        init_resp = await http.post(
+            f"{FILE_SERVICE_URL}/api/files/initiate-upload",
+            params={"userId": user_id},
+            json={"originalName": filename, "mimeType": mime_type, "size": len(content)},
+            timeout=15.0,
         )
-    if check_exists and not os.path.exists(real_candidate):
-        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
-    return real_candidate
+        if not init_resp.is_success:
+            raise HTTPException(
+                status_code=init_resp.status_code,
+                detail=f"Cloud upload initiation failed: {init_resp.text}",
+            )
+        data = init_resp.json()
+        upload_url: str = data["uploadUrl"]
+        record: dict = data["record"]
+
+        # Step 2: PUT bytes directly to MinIO presigned URL (bypasses file-service buffer)
+        put_resp = await http.put(
+            upload_url,
+            content=content,
+            headers={"Content-Type": mime_type},
+            timeout=60.0,
+        )
+        if not put_resp.is_success:
+            raise HTTPException(
+                status_code=put_resp.status_code,
+                detail=f"Cloud upload PUT failed: {put_resp.text}",
+            )
+
+    return {"url": record["url"], "fileId": record.get("id", ""), "storedAs": record.get("storedName", filename)}
 
 
 def _detect_ext(filename: str) -> str:
@@ -673,16 +718,37 @@ def read_text_file(
 
 
 @app.post("/api/documents/write")
-def write_text_file(req: WriteFileRequest):
-    """Write a plain-text file to the workspace."""
-    safe_path = _safe_workspace_path(req.path, check_exists=False)
+async def write_text_file(req: WriteFileRequest):
+    """Write a plain-text file to the workspace or cloud if outside."""
+    path, is_safe = _resolve_path(req.path)
+
+    if not is_safe:
+        if not req.userId:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: path is outside workspace and no userId provided for cloud upload",
+            )
+        enc = req.encoding or "utf-8"
+        content_bytes = req.content.encode(enc)
+        upload = await _upload_to_cloud(os.path.basename(path), content_bytes, req.userId)
+        return {
+            "success": True,
+            "path": path,
+            "url": upload["url"],
+            "fileId": upload["fileId"],
+            "storedAs": upload["storedAs"],
+            "type": "cloud",
+            "size": len(content_bytes),
+        }
+
     try:
-        os.makedirs(os.path.dirname(safe_path), exist_ok=True)
-        with open(safe_path, "w", encoding=req.encoding or "utf-8") as f:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding=req.encoding or "utf-8") as f:
             f.write(req.content)
         return {
             "success": True,
-            "path": safe_path,
+            "path": path,
+            "type": "local",
             "size": len(req.content),
         }
     except Exception as e:

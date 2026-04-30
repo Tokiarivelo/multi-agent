@@ -2,7 +2,7 @@ use base64::Engine;
 use reqwest::Client;
 use serde_json::{json, Value};
 
-use crate::{config::Config, tools::file::resolve_workspace_path};
+use crate::{config::Config, tools::file::{resolve_workspace_path, upload_to_cloud}};
 
 // ─── GitHub ──────────────────────────────────────────────────────────────────
 
@@ -399,6 +399,7 @@ pub async fn document_generate(
     client: &Client,
     config: &Config,
     params: &Value,
+    user_id: Option<String>,
 ) -> anyhow::Result<Value> {
     if !config.enable_file_operations {
         anyhow::bail!("File operations are disabled");
@@ -412,6 +413,7 @@ pub async fn document_generate(
         "author":   params.get("author"),
         "sections": params.get("sections"),
         "table":    params.get("table"),
+        "userId":   user_id,
     });
 
     let resp = client
@@ -451,21 +453,35 @@ pub async fn document_generate(
         .map_err(|e| anyhow::anyhow!("document_generate failed: {}", e))?;
 
     if let Some(out_path) = output_path {
-        let safe = resolve_workspace_path(config, out_path)?;
-        if let Some(parent) = safe.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .map_err(|e| anyhow::anyhow!("document_generate failed: {}", e))?;
+        // Check if path is in workspace
+        let resolved_res = resolve_workspace_path(config, out_path);
+
+        match resolved_res {
+            Ok(safe) => {
+                if let Some(parent) = safe.parent() {
+                    tokio::fs::create_dir_all(parent)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("document_generate failed: {}", e))?;
+                }
+                tokio::fs::write(&safe, &bytes)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("document_generate failed: {}", e))?;
+                return Ok(json!({
+                    "success":  true,
+                    "path":     safe.to_string_lossy(),
+                    "filename": filename,
+                    "size":     bytes.len(),
+                    "type":     "local"
+                }));
+            }
+            Err(_) => {
+                // Out of workspace, upload to cloud
+                let uid = user_id.ok_or_else(|| {
+                    anyhow::anyhow!("Access denied: outputPath is outside workspace and no userId provided")
+                })?;
+                return upload_to_cloud(client, config, out_path, &filename, &bytes, &uid).await;
+            }
         }
-        tokio::fs::write(&safe, &bytes)
-            .await
-            .map_err(|e| anyhow::anyhow!("document_generate failed: {}", e))?;
-        return Ok(json!({
-            "success":  true,
-            "path":     safe.to_string_lossy(),
-            "filename": filename,
-            "size":     bytes.len(),
-        }));
     }
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
@@ -508,21 +524,25 @@ pub async fn document_write(
     client: &Client,
     config: &Config,
     params: &Value,
+    user_id: Option<String>,
 ) -> anyhow::Result<Value> {
     if !config.enable_file_operations {
         anyhow::bail!("File operations are disabled");
     }
     let path = require_str(params, "path")?;
     let content = require_str(params, "content")?;
-    let encoding = params.get("encoding").and_then(|v| v.as_str()).unwrap_or("utf-8");
-    let safe = resolve_workspace_path(config, path)?;
+    let encoding = params
+        .get("encoding")
+        .and_then(|v| v.as_str())
+        .unwrap_or("utf-8");
 
     let resp = client
         .post(format!("{}/api/documents/write", config.document_service_url))
         .json(&json!({
-            "path": safe.to_string_lossy(),
+            "path": path,
             "content": content,
-            "encoding": encoding
+            "encoding": encoding,
+            "userId": user_id
         }))
         .send()
         .await

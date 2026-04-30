@@ -55,6 +55,79 @@ pub fn resolve_workspace_path(config: &Config, file_path: &str) -> anyhow::Resul
     Ok(resolved)
 }
 
+pub async fn upload_to_cloud(
+    client: &Client,
+    config: &Config,
+    original_path: &str,
+    filename: &str,
+    content: &[u8],
+    user_id: &str,
+) -> anyhow::Result<Value> {
+    let file_service_url = &config.file_service_url;
+
+    // ── Step 1: initiate upload — get presigned PUT URL ───────────────────────
+    let init_resp = client
+        .post(format!("{}/api/files/initiate-upload", file_service_url))
+        .query(&[("userId", user_id)])
+        .json(&json!({
+            "originalName": filename,
+            "mimeType":     "application/octet-stream",
+            "size":         content.len()
+        }))
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Cloud upload initiation failed: {}", e))?;
+
+    if !init_resp.status().is_success() {
+        let text = init_resp.text().await.unwrap_or_default();
+        anyhow::bail!("Cloud upload initiation failed: {}", text);
+    }
+
+    let init_data: Value = init_resp
+        .json()
+        .await
+        .map_err(|e| anyhow::anyhow!("Cloud upload initiation failed to parse response: {}", e))?;
+
+    let upload_url = init_data["uploadUrl"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing uploadUrl in initiate-upload response"))?;
+    let download_url = init_data["record"]["url"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let file_id = init_data["record"]["id"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let stored_as = init_data["record"]["storedName"]
+        .as_str()
+        .unwrap_or(filename)
+        .to_string();
+
+    // ── Step 2: PUT bytes directly to MinIO (no buffering through file-service) ─
+    let put_resp = client
+        .put(upload_url)
+        .body(content.to_vec())
+        .header("Content-Type", "application/octet-stream")
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Cloud upload PUT failed: {}", e))?;
+
+    if !put_resp.status().is_success() {
+        let text = put_resp.text().await.unwrap_or_default();
+        anyhow::bail!("Cloud upload PUT failed: {}", text);
+    }
+
+    Ok(json!({
+        "success":  true,
+        "url":      download_url,
+        "path":     original_path,
+        "storedAs": stored_as,
+        "fileId":   file_id,
+        "type":     "cloud"
+    }))
+}
+
 pub async fn file_read(config: &Config, params: &Value) -> anyhow::Result<Value> {
     if !config.enable_file_operations {
         anyhow::bail!("File operations are disabled");
@@ -112,7 +185,12 @@ pub async fn pdf_read(client: &Client, config: &Config, params: &Value) -> anyho
         .map_err(|e| anyhow::anyhow!("PDF read failed: {}", e))
 }
 
-pub async fn file_write(config: &Config, params: &Value) -> anyhow::Result<Value> {
+pub async fn file_write(
+    client: &Client,
+    config: &Config,
+    params: &Value,
+    user_id: Option<String>,
+) -> anyhow::Result<Value> {
     if !config.enable_file_operations {
         anyhow::bail!("File operations are disabled");
     }
@@ -125,7 +203,20 @@ pub async fn file_write(config: &Config, params: &Value) -> anyhow::Result<Value
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("content is required"))?;
 
-    let resolved = PathBuf::from(path_str);
+    let resolved = resolve_path(config, path_str, None);
+    let root = normalize_path(Path::new(&config.workspace_root));
+
+    if !resolved.starts_with(&root) {
+        let uid = user_id.ok_or_else(|| {
+            anyhow::anyhow!("Access denied: path is outside workspace and no userId provided")
+        })?;
+        let filename = Path::new(path_str)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("file.txt");
+        return upload_to_cloud(client, config, path_str, filename, content.as_bytes(), &uid).await;
+    }
+
     if let Some(parent) = resolved.parent() {
         fs::create_dir_all(parent)
             .await
@@ -135,7 +226,7 @@ pub async fn file_write(config: &Config, params: &Value) -> anyhow::Result<Value
         .await
         .map_err(|e| anyhow::anyhow!("File write failed: {}", e))?;
 
-    Ok(json!({ "success": true }))
+    Ok(json!({ "success": true, "path": resolved.to_string_lossy(), "type": "local" }))
 }
 
 pub async fn workspace_read(config: &Config, params: &Value) -> anyhow::Result<Value> {
@@ -146,7 +237,12 @@ pub async fn workspace_read(config: &Config, params: &Value) -> anyhow::Result<V
     file_read(config, &json!({ "path": file_path })).await
 }
 
-pub async fn workspace_write(config: &Config, params: &Value) -> anyhow::Result<Value> {
+pub async fn workspace_write(
+    client: &Client,
+    config: &Config,
+    params: &Value,
+    user_id: Option<String>,
+) -> anyhow::Result<Value> {
     if !config.enable_file_operations {
         anyhow::bail!("File operations are disabled");
     }
@@ -159,15 +255,30 @@ pub async fn workspace_write(config: &Config, params: &Value) -> anyhow::Result<
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("content is required"))?;
 
-    let resolved = resolve_workspace_path(config, file_path)?;
-    if let Some(parent) = resolved.parent() {
-        fs::create_dir_all(parent)
-            .await
-            .map_err(|e| anyhow::anyhow!("Workspace write failed: {}", e))?;
-    }
-    fs::write(&resolved, content)
-        .await
-        .map_err(|e| anyhow::anyhow!("Workspace write failed: {}", e))?;
+    let resolved_res = resolve_workspace_path(config, file_path);
 
-    Ok(json!({ "success": true, "path": resolved.to_string_lossy() }))
+    match resolved_res {
+        Ok(resolved) => {
+            if let Some(parent) = resolved.parent() {
+                fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Workspace write failed: {}", e))?;
+            }
+            fs::write(&resolved, content)
+                .await
+                .map_err(|e| anyhow::anyhow!("Workspace write failed: {}", e))?;
+
+            Ok(json!({ "success": true, "path": resolved.to_string_lossy(), "type": "local" }))
+        }
+        Err(_) => {
+            let uid = user_id.ok_or_else(|| {
+                anyhow::anyhow!("Access denied: path is outside workspace and no userId provided")
+            })?;
+            let filename = Path::new(file_path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("file.txt");
+            upload_to_cloud(client, config, file_path, filename, content.as_bytes(), &uid).await
+        }
+    }
 }

@@ -14,6 +14,7 @@ pub async fn dispatch_builtin(
     config: &Config,
     tool_name: &str,
     params: Value,
+    user_id: Option<String>,
     _timeout_ms: u64,
 ) -> anyhow::Result<Value> {
     match tool_name {
@@ -25,9 +26,9 @@ pub async fn dispatch_builtin(
         // File system
         "file_read" => file::file_read(config, &params).await,
         "pdf_read" => file::pdf_read(client, config, &params).await,
-        "file_write" => file::file_write(config, &params).await,
+        "file_write" => file::file_write(client, config, &params, user_id).await,
         "workspace_read" => file::workspace_read(config, &params).await,
-        "workspace_write" => file::workspace_write(config, &params).await,
+        "workspace_write" => file::workspace_write(client, config, &params, user_id).await,
 
         // Shell
         "shell_execute" => shell::shell_execute(config, &params).await,
@@ -51,9 +52,9 @@ pub async fn dispatch_builtin(
         // Document (proxy to document-service)
         "document_read" => integrations::document_read(client, config, &params).await,
         "document_parse_image" => integrations::document_parse_image(client, config, &params).await,
-        "document_generate" => integrations::document_generate(client, config, &params).await,
+        "document_generate" => integrations::document_generate(client, config, &params, user_id).await,
         "document_delete" => integrations::document_delete(client, config, &params).await,
-        "document_write" => integrations::document_write(client, config, &params).await,
+        "document_write" => integrations::document_write(client, config, &params, user_id).await,
 
         _ => anyhow::bail!("Unknown built-in tool: {}", tool_name),
     }

@@ -9,6 +9,7 @@ pub struct Config {
     pub allowed_domains: Vec<String>,
     pub document_service_url: String,
     pub workspace_root: String,
+    pub file_service_url: String,
 }
 
 impl Config {
@@ -49,6 +50,8 @@ impl Config {
             allowed_domains,
             document_service_url: env::var("DOCUMENT_SERVICE_URL")
                 .unwrap_or_else(|_| "http://localhost:3009".to_string()),
+            file_service_url: env::var("FILE_SERVICE_URL")
+                .unwrap_or_else(|_| "http://localhost:3008".to_string()),
             workspace_root,
         })
     }
