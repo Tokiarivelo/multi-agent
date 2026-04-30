@@ -16,14 +16,12 @@ export class CreateWorkflowUseCase {
   async execute(dto: CreateWorkflowDto, userId: string): Promise<Workflow> {
     const status = dto.status || WorkflowStatus.DRAFT;
     let definition = dto.definition ?? { nodes: [], edges: [], version: 1 };
-    
+
     if (definition && definition.nodes && definition.edges) {
       const nodeIds = new Set(definition.nodes.map((n: any) => n.id));
       definition = {
         ...definition,
-        edges: definition.edges.filter(
-          (e: any) => nodeIds.has(e.source) && nodeIds.has(e.target)
-        ),
+        edges: definition.edges.filter((e: any) => nodeIds.has(e.source) && nodeIds.has(e.target)),
       };
     }
 
