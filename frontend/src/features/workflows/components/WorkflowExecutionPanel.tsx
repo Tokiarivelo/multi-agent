@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { Terminal, FileJson, X, Workflow as WorkflowIcon } from 'lucide-react';
+import { Terminal, FileJson, X, Workflow as WorkflowIcon, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -10,6 +10,7 @@ import { SubWorkflowExecutionPanel } from './SubWorkflowExecutionPanel';
 import { NodeExecutionDataPanel } from './NodeExecutionDataPanel';
 import { NodeTurn } from '../store/workflowExecution.store';
 import { ExecutionLogLine } from '../hooks/useWorkflowLogs';
+import { AgentThinkingPanel } from './AgentThinkingPanel';
 
 export interface WorkflowExecutionPanelProps {
   logs: ExecutionLogLine[];
@@ -89,6 +90,10 @@ export function WorkflowExecutionPanel(props: WorkflowExecutionPanelProps) {
               <Terminal className="h-3.5 w-3.5" />
               Execution Logs
             </TabsTrigger>
+            <TabsTrigger value="thinking" className="gap-2 text-xs">
+              <Brain className="h-3.5 w-3.5 text-amber-500" />
+              Agent Thinking
+            </TabsTrigger>
             <TabsTrigger value="node-data" className="gap-2 text-xs">
               <FileJson className="h-3.5 w-3.5" />
               Node Execution Data
@@ -143,6 +148,16 @@ export function WorkflowExecutionPanel(props: WorkflowExecutionPanelProps) {
               onEditNodeAi={onEditNodeAi}
             />
           </ScrollArea>
+        </TabsContent>
+
+        <TabsContent
+          value="thinking"
+          className="flex-1 min-h-0 m-0 border-0 overflow-hidden outline-none flex flex-col"
+        >
+          <AgentThinkingPanel
+            selectedNodeId={selectedNodeId}
+            selectedNodeName={selectedNodeName}
+          />
         </TabsContent>
 
         <TabsContent

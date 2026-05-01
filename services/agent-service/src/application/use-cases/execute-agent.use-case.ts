@@ -81,6 +81,74 @@ export class ExecuteAgentUseCase {
     }).catch((err) => this.logger.warn(`token-progress POST failed: ${err?.message}`));
   }
 
+  /**
+   * Scan tool results for file URLs that the LLM omitted from its response.
+   * Appends a download section only when at least one URL is missing.
+   */
+  private appendMissingFileLinks(
+    content: string,
+    toolCalls: Array<{ name: string; result: string; error: boolean }>,
+  ): string {
+    const missing: Array<{ filename: string; url: string }> = [];
+
+    for (const tc of toolCalls) {
+      if (tc.error) continue;
+      try {
+        const parsed: unknown = JSON.parse(tc.result);
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          'url' in parsed &&
+          typeof (parsed as Record<string, unknown>)['url'] === 'string'
+        ) {
+          const url = (parsed as Record<string, unknown>)['url'] as string;
+          if (url && !content.includes(url)) {
+            const filename =
+              typeof (parsed as Record<string, unknown>)['filename'] === 'string'
+                ? ((parsed as Record<string, unknown>)['filename'] as string)
+                : 'file';
+            missing.push({ filename, url });
+          }
+        }
+      } catch {
+        // result is not JSON — skip
+      }
+    }
+
+    if (missing.length === 0) return content;
+
+    const section =
+      `\n\n---\n**Download link${missing.length > 1 ? 's' : ''}:**\n` +
+      missing.map((f) => `- [${f.filename}](${f.url})`).join('\n');
+
+    return content + section;
+  }
+
+  /** Fire-and-forget HTTP POST to orchestration for real-time thinking/planning stream. */
+  private reportThinkingStep(
+    executionId: string,
+    nodeId: string,
+    thinking: {
+      step: string;
+      thought?: string;
+      plan?: string[];
+      toolCalls?: any[];
+    },
+  ): void {
+    if (!this.orchestrationCallbackUrl || !executionId || !nodeId) return;
+
+    const url = `${this.orchestrationCallbackUrl}/internal/thinking-step`;
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        executionId,
+        nodeId,
+        ...thinking,
+      }),
+    }).catch((err) => this.logger.warn(`thinking-step POST failed: ${err?.message}`));
+  }
+
   // ─── Compact handoff helper ──────────────────────────────────────────────
   /** Summarize a long conversation into a single compact paragraph to save tokens */
   private async compactContext(messages: ConversationMessage[], role: string): Promise<string> {
@@ -198,9 +266,12 @@ export class ExecuteAgentUseCase {
       const askUserRulesBlock =
         '\n\n[INTERACTIVE QUESTION PROTOCOL — MANDATORY]\n' + loadPrompt('ask-user-protocol.md');
 
+      const fileDownloadRulesBlock =
+        '\n\n[FILE DOWNLOAD PROTOCOL — MANDATORY]\n' + loadPrompt('file-download-protocol.md');
+
       const context = this.agentExecutionService.buildContext(
         messages,
-        (agent.systemPrompt ?? '') + workspaceContextBlock + askUserRulesBlock,
+        (agent.systemPrompt ?? '') + workspaceContextBlock + askUserRulesBlock + fileDownloadRulesBlock,
       );
       this.agentExecutionService.validateTokenLimit(
         context.conversationHistory,
@@ -261,6 +332,11 @@ export class ExecuteAgentUseCase {
         };
       };
 
+      this.reportThinkingStep(execId!, execNodeId!, {
+        step: 'planning',
+        thought: 'Analyzing request and preparing execution plan...',
+      });
+
       let response = await this.langchainProvider.execute(
         context.conversationHistory,
         tools.length > 0 ? tools : undefined,
@@ -285,6 +361,14 @@ export class ExecuteAgentUseCase {
       let iterations = 0;
       const MAX_ITERATIONS = 5;
       let needsGithubAuth = false;
+      const allToolCalls: Array<{
+        id: string;
+        name: string;
+        args: unknown;
+        result: string;
+        error: boolean;
+        iteration: number;
+      }> = [];
 
       this.logger.log(
         `[llm-response] finishReason=${response.finishReason} toolCalls=${JSON.stringify(response.toolCalls ?? [])}`,
@@ -299,8 +383,15 @@ export class ExecuteAgentUseCase {
           toolCalls: response.toolCalls,
         });
 
+        this.reportThinkingStep(execId!, execNodeId!, {
+          step: `iteration_${iterations}`,
+          thought: response.content || 'Executing tools based on reasoning...',
+          toolCalls: response.toolCalls.map(tc => ({ name: tc.name, args: tc.args })),
+        });
+
         for (const toolCall of response.toolCalls) {
           let toolContent: string;
+          let isError = false;
           try {
             const raw = await this.toolClient.executeTool(toolCall.name, toolCall.args, ragUserId || undefined);
             toolContent = this.unwrapToolResult(raw);
@@ -309,11 +400,20 @@ export class ExecuteAgentUseCase {
               toolContent = 'GitHub authentication required.';
             }
           } catch (err) {
+            isError = true;
             toolContent = `Tool error: ${err instanceof Error ? err.message : String(err)}`;
           }
           this.logger.log(
             `[tool-result] ${toolCall.name} → ${toolContent.slice(0, 200)}${toolContent.length > 200 ? '…' : ''}`,
           );
+          allToolCalls.push({
+            id: toolCall.id,
+            name: toolCall.name,
+            args: toolCall.args,
+            result: toolContent,
+            error: isError,
+            iteration: iterations,
+          });
           context.conversationHistory.push({
             role: 'tool',
             content: toolContent,
@@ -352,7 +452,9 @@ export class ExecuteAgentUseCase {
       const githubAuthContent =
         'Pour effectuer cette action, j\'accès à votre compte GitHub est requis.\n' +
         '__ASK_USER__:{"question":"Autoriser l\'accès à votre compte GitHub ?","type":"oauth_required","choices":[]}';
-      const finalContent = needsGithubAuth ? githubAuthContent : response.content;
+      const finalContent = needsGithubAuth
+        ? githubAuthContent
+        : this.appendMissingFileLinks(response.content ?? '', allToolCalls);
       const subAgentResults: any[] = [];
 
       // ── Execute sub-agents ──────────────────────────────────────────────
@@ -427,7 +529,7 @@ export class ExecuteAgentUseCase {
       const outputPayload = JSON.stringify({
         output: finalContent,
         tokens: totalTokens,
-        toolCalls: needsGithubAuth ? [] : (response.toolCalls ?? []),
+        toolCalls: needsGithubAuth ? [] : allToolCalls,
         subAgentResults,
       });
 

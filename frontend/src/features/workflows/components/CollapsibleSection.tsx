@@ -20,6 +20,8 @@ export interface CollapsibleSectionProps {
   count?: number;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  /** Extra action buttons rendered in the header (e.g. fullscreen toggle). */
+  actions?: React.ReactNode;
 }
 
 export function CollapsibleSection({
@@ -29,28 +31,36 @@ export function CollapsibleSection({
   count,
   children,
   defaultOpen = true,
+  actions,
 }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
     <div className={`rounded-lg border ${ACCENT_MAP[accent]} overflow-hidden`}>
-      <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-        onClick={() => setOpen((v) => !v)}
-      >
-        {icon}
-        <span className="text-xs font-semibold flex-1">{title}</span>
-        {count !== undefined && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-current/10 opacity-70 font-mono">
-            {count}
-          </span>
+      <div className="w-full flex items-center px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+        <button
+          className="flex items-center gap-2 flex-1 text-left min-w-0"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {icon}
+          <span className="text-xs font-semibold flex-1 truncate">{title}</span>
+          {count !== undefined && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-current/10 opacity-70 font-mono shrink-0">
+              {count}
+            </span>
+          )}
+          {open ? (
+            <ChevronDown className="h-3 w-3 opacity-60 shrink-0" />
+          ) : (
+            <ChevronRight className="h-3 w-3 opacity-60 shrink-0" />
+          )}
+        </button>
+        {actions && (
+          <div className="flex items-center ml-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {actions}
+          </div>
         )}
-        {open ? (
-          <ChevronDown className="h-3 w-3 opacity-60" />
-        ) : (
-          <ChevronRight className="h-3 w-3 opacity-60" />
-        )}
-      </button>
+      </div>
       {open && <div className="px-3 pb-3 pt-1 border-t border-current/10">{children}</div>}
     </div>
   );

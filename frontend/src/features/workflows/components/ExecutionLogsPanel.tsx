@@ -29,6 +29,7 @@ const LOG_TYPE_CLASSES: Record<ExecutionLogLine['type'], string> = {
   node_update: 'text-foreground',
   execution_update: 'text-violet-600 dark:text-violet-400 font-medium',
   error: 'text-destructive font-medium',
+  thinking: 'text-amber-600 dark:text-amber-400 font-medium italic',
 };
 
 const STATUS_VARIANT: Record<

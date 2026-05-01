@@ -1,12 +1,14 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
   Bot,
   ExternalLink,
+  Maximize2,
   MessageSquare,
   Terminal,
   Wrench,
@@ -14,9 +16,10 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CollapsibleSection } from './CollapsibleSection';
+import { FullscreenDataModal } from './FullscreenDataModal';
+import { StructuredDataViewer } from './StructuredDataViewer';
 import { TestOutcomePanel } from './TestOutcomePanel';
 import { useWorkflow } from '../hooks/useWorkflows';
 import { useTools } from '@/features/tools/hooks/useTools';
@@ -29,6 +32,20 @@ export interface SingleTurnViewProps {
   raw: Record<string, unknown> | undefined;
   onApplyFix?: (fixedConfig: Record<string, unknown>) => void;
   onEditAi?: () => void;
+}
+
+function FullscreenButton({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-5 w-5 opacity-60 hover:opacity-100 transition-opacity"
+      onClick={onClick}
+      title={title}
+    >
+      <Maximize2 className="h-3 w-3" />
+    </Button>
+  );
 }
 
 export function SingleTurnView({
@@ -46,14 +63,17 @@ export function SingleTurnView({
   const { data: toolsData } = useTools(1, 100);
   const availableTools = toolsData?.data ?? [];
 
-  // Memoize the node lookup to avoid repeated array traversals on each render.
+  const [fullscreen, setFullscreen] = useState<{ title: string; data: unknown } | null>(null);
+
   const selectedNode = useMemo(
     () => workflow?.definition.nodes.find((n: { id: string }) => n.id === selectedNodeId),
     [workflow?.definition.nodes, selectedNodeId],
   );
   const selectedNodeType = (selectedNode as { type?: string } | undefined)?.type ?? 'AGENT';
-  const selectedNodeConfig = (selectedNode as { config?: Record<string, unknown> } | undefined)?.config ?? {};
+  const selectedNodeConfig =
+    (selectedNode as { config?: Record<string, unknown> } | undefined)?.config ?? {};
   const selectedNodeToolIds = (selectedNodeConfig.toolIds as string[] | undefined) ?? [];
+
   const input = raw?.input as Record<string, unknown> | string | undefined;
   const output = raw?.output as Record<string, unknown> | string | undefined;
   const consoleLogs = raw?.logs as string[] | undefined;
@@ -61,7 +81,7 @@ export function SingleTurnView({
   const agentText =
     typeof output === 'object' && output !== null
       ? (((output as Record<string, unknown>).output as string | undefined) ??
-        ((output as Record<string, unknown>).text as string | undefined))
+          ((output as Record<string, unknown>).text as string | undefined))
       : typeof output === 'string'
         ? output
         : undefined;
@@ -69,7 +89,7 @@ export function SingleTurnView({
   const toolCalls =
     typeof output === 'object' && output !== null
       ? ((output as Record<string, unknown>).toolCalls as
-          | Array<{ name: string; arguments?: unknown; result?: unknown }>
+          | Array<{ name: string; args?: unknown; arguments?: unknown; result?: unknown }>
           | undefined)
       : undefined;
 
@@ -90,8 +110,19 @@ export function SingleTurnView({
   const subWfName = outputObj?._subWorkflowName as string | undefined;
   const subWfId = outputObj?._subWorkflowId as string | undefined;
 
+  const openFullscreen = (title: string, data: unknown) => setFullscreen({ title, data });
+
   return (
     <div className="flex flex-col gap-3 p-4">
+      {fullscreen && (
+        <FullscreenDataModal
+          open
+          onClose={() => setFullscreen(null)}
+          title={fullscreen.title}
+          data={fullscreen.data}
+        />
+      )}
+
       <div className="flex items-center justify-between">
         <span className="font-semibold text-sm">
           Node:{' '}
@@ -106,7 +137,11 @@ export function SingleTurnView({
           )}
           <Badge
             variant={
-              nodeStatus === 'COMPLETED' ? 'success' : nodeStatus === 'FAILED' ? 'destructive' : 'secondary'
+              nodeStatus === 'COMPLETED'
+                ? 'success'
+                : nodeStatus === 'FAILED'
+                  ? 'destructive'
+                  : 'secondary'
             }
           >
             {nodeStatus}
@@ -125,62 +160,143 @@ export function SingleTurnView({
         </div>
       </div>
 
-      <CollapsibleSection title="Input" icon={<ArrowDownToLine className="h-3.5 w-3.5" />} accent="sky" defaultOpen={false}>
-        <pre className="text-[11px] font-mono overflow-auto max-h-40 text-foreground/80 mt-1 whitespace-pre-wrap break-all">
-          {input !== undefined ? JSON.stringify(input, null, 2) : 'No input recorded.'}
-        </pre>
+      <CollapsibleSection
+        title="Input"
+        icon={<ArrowDownToLine className="h-3.5 w-3.5" />}
+        accent="sky"
+        defaultOpen={false}
+        actions={
+          input !== undefined ? (
+            <FullscreenButton
+              title={t('workflows.fullscreen.viewFullscreen')}
+              onClick={() => openFullscreen('Input', input)}
+            />
+          ) : undefined
+        }
+      >
+        <div className="mt-1">
+          {input !== undefined ? (
+            <StructuredDataViewer data={input} />
+          ) : (
+            <span className="text-[11px] text-muted-foreground italic">No input recorded.</span>
+          )}
+        </div>
       </CollapsibleSection>
 
       {agentText && (
-        <CollapsibleSection title="Agent Response" icon={<MessageSquare className="h-3.5 w-3.5" />} accent="emerald">
-          <p className="text-xs leading-relaxed text-foreground/80 mt-1 whitespace-pre-wrap">{agentText}</p>
+        <CollapsibleSection
+          title="Agent Response"
+          icon={<MessageSquare className="h-3.5 w-3.5" />}
+          accent="emerald"
+          actions={
+            <FullscreenButton
+              title={t('workflows.fullscreen.viewFullscreen')}
+              onClick={() => openFullscreen('Agent Response', agentText)}
+            />
+          }
+        >
+          <div className="mt-1">
+            <StructuredDataViewer data={agentText} />
+          </div>
         </CollapsibleSection>
       )}
 
       {toolCalls && toolCalls.length > 0 && (
-        <CollapsibleSection title="Tool Calls" icon={<Wrench className="h-3.5 w-3.5" />} accent="amber" count={toolCalls.length}>
-          <div className="space-y-2 mt-1">
-            {toolCalls.map((tc, i) => (
-              <div key={i} className="rounded-md border border-amber-500/20 bg-background/60 p-2 space-y-1">
-                <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                  <Wrench className="h-3 w-3" /> {tc.name}
-                </p>
-                {tc.arguments !== undefined && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground mb-0.5">Arguments</p>
-                    <pre className="text-[10px] font-mono bg-muted/40 rounded px-2 py-1 overflow-auto max-h-24 whitespace-pre-wrap break-all">
-                      {typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments, null, 2)}
-                    </pre>
-                  </div>
-                )}
-                {tc.result !== undefined && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground mb-0.5">Result</p>
-                    <pre className="text-[10px] font-mono bg-emerald-500/5 border border-emerald-500/20 rounded px-2 py-1 overflow-auto max-h-24 whitespace-pre-wrap break-all text-emerald-700 dark:text-emerald-400">
-                      {typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            ))}
+        <CollapsibleSection
+          title="Tool Calls"
+          icon={<Wrench className="h-3.5 w-3.5" />}
+          accent="amber"
+          count={toolCalls.length}
+        >
+          <div className="space-y-3 mt-1">
+            {toolCalls.map((tc, i) => {
+              const args = tc.args ?? tc.arguments;
+              return (
+                <div
+                  key={i}
+                  className="rounded-md border border-amber-500/20 bg-background/60 p-2 space-y-2"
+                >
+                  <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                    <Wrench className="h-3 w-3" /> {tc.name}
+                  </p>
+                  {args !== undefined && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">
+                          Arguments
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-4 w-4 opacity-60 hover:opacity-100"
+                          title={t('workflows.fullscreen.viewFullscreen')}
+                          onClick={() => openFullscreen(`${tc.name} — Arguments`, args)}
+                        >
+                          <Maximize2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <StructuredDataViewer data={args} />
+                    </div>
+                  )}
+                  {tc.result !== undefined && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">
+                          Result
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-4 w-4 opacity-60 hover:opacity-100"
+                          title={t('workflows.fullscreen.viewFullscreen')}
+                          onClick={() => openFullscreen(`${tc.name} — Result`, tc.result)}
+                        >
+                          <Maximize2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <StructuredDataViewer data={tc.result} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </CollapsibleSection>
       )}
 
       {subAgentResults && subAgentResults.length > 0 && (
-        <CollapsibleSection title="Sub-Agent Results" icon={<Bot className="h-3.5 w-3.5" />} accent="violet" count={subAgentResults.length}>
+        <CollapsibleSection
+          title="Sub-Agent Results"
+          icon={<Bot className="h-3.5 w-3.5" />}
+          accent="violet"
+          count={subAgentResults.length}
+        >
           <div className="space-y-2 mt-1">
             {subAgentResults.map((sa, i) => (
-              <div key={i} className="rounded-md border border-violet-500/20 bg-background/60 p-2 space-y-1">
-                <p className="text-[11px] font-semibold text-violet-600 dark:text-violet-400 flex items-center gap-1.5">
-                  <Bot className="h-3 w-3" /> {sa.agentId}
-                </p>
+              <div
+                key={i}
+                className="rounded-md border border-violet-500/20 bg-background/60 p-2 space-y-1"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold text-violet-600 dark:text-violet-400 flex items-center gap-1.5">
+                    <Bot className="h-3 w-3" /> {sa.agentId}
+                  </p>
+                  {!sa.error && sa.output !== undefined && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4 opacity-60 hover:opacity-100"
+                      title={t('workflows.fullscreen.viewFullscreen')}
+                      onClick={() => openFullscreen(`Sub-Agent: ${sa.agentId}`, sa.output)}
+                    >
+                      <Maximize2 className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
                 {sa.error ? (
                   <p className="text-[10px] text-destructive">{sa.error}</p>
                 ) : (
-                  <pre className="text-[10px] font-mono bg-muted/40 rounded px-2 py-1 overflow-auto max-h-24 whitespace-pre-wrap break-all">
-                    {typeof sa.output === 'string' ? sa.output : JSON.stringify(sa.output, null, 2)}
-                  </pre>
+                  <StructuredDataViewer data={sa.output} />
                 )}
               </div>
             ))}
@@ -189,7 +305,19 @@ export function SingleTurnView({
       )}
 
       {consoleLogs && consoleLogs.length > 0 && (
-        <CollapsibleSection title="Console Logs" icon={<Terminal className="h-3.5 w-3.5" />} accent="neutral" count={consoleLogs.length} defaultOpen={false}>
+        <CollapsibleSection
+          title="Console Logs"
+          icon={<Terminal className="h-3.5 w-3.5" />}
+          accent="neutral"
+          count={consoleLogs.length}
+          defaultOpen={false}
+          actions={
+            <FullscreenButton
+              title={t('workflows.fullscreen.viewFullscreen')}
+              onClick={() => openFullscreen('Console Logs', consoleLogs)}
+            />
+          }
+        >
           <div className="mt-1 space-y-0.5 font-mono text-[10px]">
             {consoleLogs.map((line, i) => {
               const isError = line.startsWith('[ERROR]');
@@ -237,10 +365,27 @@ export function SingleTurnView({
       )}
 
       {!agentText && !toolCalls && !subAgentResults && (
-        <CollapsibleSection title="Raw Output" icon={<ArrowUpFromLine className="h-3.5 w-3.5" />} accent="neutral" defaultOpen>
-          <pre className="text-[11px] font-mono overflow-auto max-h-48 text-foreground/80 mt-1 whitespace-pre-wrap break-all">
-            {output !== undefined ? JSON.stringify(output, null, 2) : 'No output recorded.'}
-          </pre>
+        <CollapsibleSection
+          title="Raw Output"
+          icon={<ArrowUpFromLine className="h-3.5 w-3.5" />}
+          accent="neutral"
+          defaultOpen
+          actions={
+            output !== undefined ? (
+              <FullscreenButton
+                title={t('workflows.fullscreen.viewFullscreen')}
+                onClick={() => openFullscreen('Raw Output', output)}
+              />
+            ) : undefined
+          }
+        >
+          <div className="mt-1">
+            {output !== undefined ? (
+              <StructuredDataViewer data={output} />
+            ) : (
+              <span className="text-[11px] text-muted-foreground italic">No output recorded.</span>
+            )}
+          </div>
         </CollapsibleSection>
       )}
 

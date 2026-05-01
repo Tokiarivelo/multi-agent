@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useWorkflowExecutionStore, NodeStatus, SubExecutionRecord, NodeTurn } from '../store/workflowExecution.store';
+import { useWorkflowExecutionStore, NodeStatus, SubExecutionRecord, NodeTurn, ToolCall } from '../store/workflowExecution.store';
 import { useWorkspaceStore } from '@/features/workspace/store/workspaceStore';
 import { workflowsApi } from '../api/workflows.api';
 import { readFileAtPath, writeFileAtPath } from '@/features/workspace/hooks/useWorkspace';
@@ -30,7 +30,7 @@ export type ExecutionUpdateEvent = {
 };
 
 export type ExecutionLogLine = {
-  type: 'node_update' | 'execution_update' | 'error' | 'connected' | 'subscribed';
+  type: 'node_update' | 'execution_update' | 'error' | 'connected' | 'subscribed' | 'thinking';
   timestamp: string;
   message: string;
   data?: Record<string, unknown> | string | number | boolean | null;
@@ -53,6 +53,7 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
   const setNodeData = useWorkflowExecutionStore((s) => s.setNodeData);
   const appendNodeTurn = useWorkflowExecutionStore((s) => s.appendNodeTurn);
   const setNodeTokenProgress = useWorkflowExecutionStore((s) => s.setNodeTokenProgress);
+  const appendNodeThinking = useWorkflowExecutionStore((s) => s.appendNodeThinking);
   const clearExecution = useWorkflowExecutionStore((s) => s.clearExecution);
   const getWorkspaceById = useWorkspaceStore((s) => s.getWorkspaceById);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
@@ -128,6 +129,34 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
           totalTokens: event.totalTokens,
           model: event.model,
           iteration: event.iteration,
+        });
+      },
+    );
+
+    socket.on(
+      'node:thinking',
+      (event: {
+        executionId: string;
+        nodeId: string;
+        step: string;
+        thought?: string;
+        plan?: string[];
+        toolCalls?: ToolCall[];
+        timestamp: string;
+      }) => {
+        appendNodeThinking(event.nodeId, {
+          step: event.step,
+          thought: event.thought,
+          plan: event.plan,
+          toolCalls: event.toolCalls,
+          timestamp: event.timestamp,
+        });
+
+        addLog({
+          type: 'thinking',
+          timestamp: event.timestamp,
+          message: `🧠 [${event.step}] ${event.thought || 'Agent thinking...'}`,
+          data: event.toolCalls ? { toolCalls: event.toolCalls } : undefined,
         });
       },
     );
@@ -353,6 +382,7 @@ export function useWorkflowLogs({ executionId, wsUrl }: UseWorkflowLogsOptions) 
     setExecutionStatus,
     setNodeData,
     appendNodeTurn,
+    appendNodeThinking,
     workspaces,
     getWorkspaceById,
     addWorkspaceEntry,

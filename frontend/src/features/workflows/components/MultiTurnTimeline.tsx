@@ -1,16 +1,21 @@
 'use client';
 
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Bot,
   GitCommitHorizontal,
+  Maximize2,
   MessageCircleQuestion,
   User,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { StructuredDataViewer, deepParse } from './StructuredDataViewer';
+import { StructuredDataViewer } from './StructuredDataViewer';
+import { FullscreenDataModal } from './FullscreenDataModal';
 import { NodeTurn } from '../store/workflowExecution.store';
 
 export interface MultiTurnTimelineProps {
@@ -26,6 +31,8 @@ export function MultiTurnTimeline({
   turns,
   nodeStatus,
 }: MultiTurnTimelineProps) {
+  const { t } = useTranslation();
+  const [fullscreen, setFullscreen] = useState<{ title: string; data: unknown } | null>(null);
   const filtered = turns.filter((turn, idx) => {
     if (turn.status === 'RUNNING') {
       const prev = turns[idx - 1];
@@ -36,6 +43,14 @@ export function MultiTurnTimeline({
 
   return (
     <div className="flex flex-col gap-2 p-4">
+      {fullscreen && (
+        <FullscreenDataModal
+          open
+          onClose={() => setFullscreen(null)}
+          title={fullscreen.title}
+          data={fullscreen.data}
+        />
+      )}
       <div className="flex items-center justify-between mb-1">
         <span className="font-semibold text-sm">
           Node:{' '}
@@ -141,7 +156,15 @@ export function MultiTurnTimeline({
 
                   {isWaiting && <WaitingTurnContent raw={raw} />}
                   {isResume && <ResumeTurnContent raw={raw} />}
-                  {(isCompleted || isFailed) && <CompletedTurnContent raw={raw} />}
+                  {(isCompleted || isFailed) && (
+                    <CompletedTurnContent
+                      raw={raw}
+                      onFullscreen={(data) =>
+                        setFullscreen({ title: t('workflows.multiTurn.finalResponse'), data })
+                      }
+                      fullscreenLabel={t('workflows.fullscreen.viewFullscreen')}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -201,28 +224,34 @@ function ResumeTurnContent({ raw }: { raw: Record<string, unknown> | undefined }
   );
 }
 
-function CompletedTurnContent({ raw }: { raw: Record<string, unknown> | undefined }) {
-  const output = deepParse(raw?.output) as Record<string, unknown> | string | undefined;
-  const agentText = (() => {
-    if (typeof output === 'string') return output;
-    if (typeof output === 'object' && output !== null) {
-      const o = (output as Record<string, unknown>).output;
-      if (typeof o === 'string') return o;
-    }
-    return undefined;
-  })();
+function CompletedTurnContent({
+  raw,
+  onFullscreen,
+  fullscreenLabel,
+}: {
+  raw: Record<string, unknown> | undefined;
+  onFullscreen: (data: unknown) => void;
+  fullscreenLabel: string;
+}) {
   const err = raw?.error as string | undefined;
+  const outputData = raw?.output;
   return (
     <>
       {err && <p className="text-xs text-destructive">{err}</p>}
-      {agentText && (
-        <div className="text-xs leading-relaxed text-foreground/80 prose prose-sm dark:prose-invert max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{agentText}</ReactMarkdown>
+      <div className="space-y-1">
+        <div className="flex items-center justify-end">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 opacity-60 hover:opacity-100 transition-opacity"
+            title={fullscreenLabel}
+            onClick={() => onFullscreen(outputData)}
+          >
+            <Maximize2 className="h-3 w-3" />
+          </Button>
         </div>
-      )}
-      {!agentText && !err && (
-        <StructuredDataViewer data={raw?.output} className="min-h-[60px]" />
-      )}
+        <StructuredDataViewer data={outputData} className="min-h-[60px]" />
+      </div>
     </>
   );
 }

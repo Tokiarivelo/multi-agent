@@ -1,5 +1,6 @@
 'use client';
 
+import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MessageCircleQuestion, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,7 +38,7 @@ export interface WaitingInputModalProps {
   isCancelling: boolean;
 }
 
-export function WaitingInputModal({
+export const WaitingInputModal = memo(({
   waitingNodeId,
   executionId,
   waitingPrompt,
@@ -46,7 +47,7 @@ export function WaitingInputModal({
   waitingQuestionType,
   onCancel,
   isCancelling,
-}: WaitingInputModalProps) {
+}: WaitingInputModalProps) => {
   const { t } = useTranslation();
   const isDanger = waitingQuestionType === 'danger_choice';
   const isOAuth = waitingQuestionType === 'oauth_required';
@@ -138,4 +139,6 @@ export function WaitingInputModal({
       </Card>
     </div>
   );
-}
+});
+
+WaitingInputModal.displayName = 'WaitingInputModal';

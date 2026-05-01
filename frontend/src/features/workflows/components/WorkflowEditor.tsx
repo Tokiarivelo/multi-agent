@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -62,16 +62,25 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
   const nodeStatuses = useWorkflowExecutionStore((s) => s.nodeStatuses);
   const subExecutions = useWorkflowExecutionStore((s) => s.subExecutions);
 
-  const waitingNodeId =
-    Object.keys(nodeStatuses).find((id) => nodeStatuses[id] === 'WAITING_INPUT') ?? null;
-  const waitingNodeRaw = waitingNodeId
-    ? (nodeData[waitingNodeId] as Record<string, unknown> | undefined)
-    : undefined;
-  const waitingPrompt = (waitingNodeRaw?.prompt as string | undefined) ?? null;
-  const waitingAgentText = (waitingNodeRaw?.agentMessage as string | undefined) ?? null;
-  const waitingProposals = (waitingNodeRaw?.proposals as string[] | undefined) ?? [];
-  const waitingQuestionType =
-    (waitingNodeRaw?.questionType as QuestionType | undefined) ?? 'custom';
+  const {
+    waitingNodeId,
+    waitingPrompt,
+    waitingAgentText,
+    waitingProposals,
+    waitingQuestionType,
+  } = useMemo(() => {
+    const nodeId =
+      Object.keys(nodeStatuses).find((id) => nodeStatuses[id] === 'WAITING_INPUT') ?? null;
+    const raw = nodeId ? (nodeData[nodeId] as Record<string, unknown> | undefined) : undefined;
+
+    return {
+      waitingNodeId: nodeId,
+      waitingPrompt: (raw?.prompt as string | undefined) ?? null,
+      waitingAgentText: (raw?.agentMessage as string | undefined) ?? null,
+      waitingProposals: (raw?.proposals as string[] | undefined) ?? [],
+      waitingQuestionType: (raw?.questionType as QuestionType | undefined) ?? 'custom',
+    };
+  }, [nodeStatuses, nodeData]);
 
   const [activeExecution, setActiveExecution] = useState<WorkflowExecution | null>(null);
 
@@ -237,7 +246,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
     );
   };
 
-  const handleCancelExecution = () => {
+  const handleCancelExecution = useCallback(() => {
     if (!activeExecution) return;
     cancelExecution.mutate(activeExecution.id, {
       onSuccess: () => {
@@ -245,7 +254,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
         setActiveExecutionId(null);
       },
     });
-  };
+  }, [activeExecution, cancelExecution, setActiveExecutionId]);
 
   const isSaving = createWorkflow.isPending || updateWorkflow.isPending;
   const isWorkflowRunning =

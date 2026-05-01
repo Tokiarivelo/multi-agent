@@ -5,16 +5,17 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from 'next-themes';
 import { v4 as uuidv4 } from 'uuid';
 import Editor from '@monaco-editor/react';
-import { 
-  Play, 
-  CheckCircle2, 
-  AlertCircle, 
-  Loader2, 
-  XCircle, 
-  ChevronDown, 
-  ChevronUp, 
-  Copy, 
-  Check 
+import {
+  Play,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Check,
+  Maximize2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -26,6 +27,7 @@ import { useWorkflowLogs } from '../hooks/useWorkflowLogs';
 import { useWorkspaceStore } from '@/features/workspace/store/workspaceStore';
 import { StructuredDataViewer } from './StructuredDataViewer';
 import { TestOutcomePanel } from './TestOutcomePanel';
+import { FullscreenDataModal } from './FullscreenDataModal';
 
 interface TestNodePanelProps {
   workflowId: string;
@@ -65,6 +67,7 @@ export function TestNodePanel({
   const [currentTestExecId, setCurrentTestExecId] = useState<string | null>(null);
   const [outputExpanded, setOutputExpanded] = useState(false);
   const [copiedLogId, setCopiedLogId] = useState<string | null>(null);
+  const [fullscreenContent, setFullscreenContent] = useState<{ title: string; data: unknown } | null>(null);
 
   // Subscribe to WebSocket room for the active test execution
   useWorkflowLogs({ executionId: currentTestExecId });
@@ -127,6 +130,14 @@ export function TestNodePanel({
 
   return (
     <div className="border-t border-border/50 bg-muted/10 shrink-0 flex flex-col min-h-0">
+      {fullscreenContent && (
+        <FullscreenDataModal
+          open
+          onClose={() => setFullscreenContent(null)}
+          title={fullscreenContent.title}
+          data={fullscreenContent.data}
+        />
+      )}
       <Collapsible open={testPanelOpen} onOpenChange={setTestPanelOpen}>
         <CollapsibleTrigger asChild>
           <Button
@@ -158,7 +169,22 @@ export function TestNodePanel({
           <div className="overflow-y-auto max-h-[55vh] px-4 pt-3 pb-4 space-y-3 animate-in slide-in-from-top-1">
             {/* Input Editor */}
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t('healing.test.manualInput')}</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">{t('healing.test.manualInput')}</Label>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 opacity-60 hover:opacity-100 transition-opacity"
+                  title={t('workflows.fullscreen.viewFullscreen')}
+                  onClick={() => {
+                    let parsed: unknown = testInput;
+                    try { parsed = JSON.parse(testInput); } catch { /* keep as string */ }
+                    setFullscreenContent({ title: t('healing.test.manualInput'), data: parsed });
+                  }}
+                >
+                  <Maximize2 className="h-3 w-3" />
+                </Button>
+              </div>
               <div className="border border-border/50 rounded-md overflow-hidden">
                 <Editor
                   key={initialTestInput}
@@ -245,24 +271,40 @@ export function TestNodePanel({
                       )}
                     </p>
                     {!testResult.error && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-[10px] gap-1 opacity-60 hover:opacity-100 transition-opacity"
-                        onClick={() => setOutputExpanded(!outputExpanded)}
-                      >
-                        {outputExpanded ? (
-                          <>
-                            <ChevronUp className="h-3 w-3" />
-                            {t('common.collapse', 'Collapse')}
-                          </>
-                        ) : (
-                          <>
-                            <ChevronDown className="h-3 w-3" />
-                            {t('common.expand', 'Expand')}
-                          </>
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-60 hover:opacity-100 transition-opacity"
+                          title={t('workflows.fullscreen.viewFullscreen')}
+                          onClick={() =>
+                            setFullscreenContent({
+                              title: t('healing.test.output'),
+                              data: testResult.output,
+                            })
+                          }
+                        >
+                          <Maximize2 className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] gap-1 opacity-60 hover:opacity-100 transition-opacity"
+                          onClick={() => setOutputExpanded(!outputExpanded)}
+                        >
+                          {outputExpanded ? (
+                            <>
+                              <ChevronUp className="h-3 w-3" />
+                              {t('common.collapse', 'Collapse')}
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="h-3 w-3" />
+                              {t('common.expand', 'Expand')}
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     )}
                   </div>
                   <div className={cn('w-full', testResult.error ? 'text-destructive font-mono text-sm' : 'mt-2')}>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -71,7 +71,7 @@ interface ChoiceChipsProps {
   onToggle: (value: string) => void;
 }
 
-function ChoiceChips({ proposals, selected, multi, danger = false, onToggle }: ChoiceChipsProps) {
+const ChoiceChips = memo(({ proposals, selected, multi, danger = false, onToggle }: ChoiceChipsProps) => {
   return (
     <div className="flex flex-wrap gap-1.5">
       {proposals.map((p, i) => {
@@ -104,7 +104,8 @@ function ChoiceChips({ proposals, selected, multi, danger = false, onToggle }: C
       })}
     </div>
   );
-}
+});
+ChoiceChips.displayName = 'ChoiceChips';
 
 // ─── Danger Confirmation Bar ───────────────────────────────────────────────────
 
@@ -301,51 +302,96 @@ function OAuthBar({ executionId, nodeId, onDone }: OAuthBarProps) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export function AgentReplyBar({
-  nodeId,
-  executionId,
-  agentText,
-  externalProposals,
-  multiSelect: multiSelectProp,
-  questionType: questionTypeProp,
-}: AgentReplyBarProps) {
-  const { t } = useTranslation();
+// ─── Custom Input Isolated Component ──────────────────────────────────────────
+interface CustomTextInputProps {
+  value: string;
+  onChange: (val: string) => void;
+  onSend: () => void;
+  placeholder: string;
+  disabled: boolean;
+  autoFocus: boolean;
+}
 
-  const parsedFromText = agentText ? parseProposals(agentText) : [];
-  const proposals =
-    externalProposals && externalProposals.length > 0 ? externalProposals : parsedFromText;
+const CustomTextInput = memo(
+  ({ value, onChange, onSend, placeholder, disabled, autoFocus }: CustomTextInputProps) => {
+    return (
+      <Input
+        autoFocus={autoFocus}
+        placeholder={placeholder}
+        className="h-8 text-xs bg-background/60"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) onSend();
+        }}
+        disabled={disabled}
+      />
+    );
+  },
+);
+CustomTextInput.displayName = 'CustomTextInput';
+export const AgentReplyBar = memo(
+  ({
+    nodeId,
+    executionId,
+    agentText,
+    externalProposals,
+    multiSelect: multiSelectProp,
+    questionType: questionTypeProp,
+  }: AgentReplyBarProps) => {
+    const { t } = useTranslation();
 
-  const questionType = resolveQuestionType(questionTypeProp, multiSelectProp, proposals);
-  const isMulti = questionType === 'multiple_choice';
-  const isDanger = questionType === 'danger_choice';
-  const isCustomOnly = questionType === 'custom';
+    const parsedFromText = useMemo(
+      () => (agentText ? parseProposals(agentText) : []),
+      [agentText],
+    );
+    const proposals = useMemo(
+      () =>
+        externalProposals && externalProposals.length > 0 ? externalProposals : parsedFromText,
+      [externalProposals, parsedFromText],
+    );
 
-  const [selected, setSelected] = useState<string[]>([]);
-  const [customText, setCustomText] = useState('');
-  const [showCustom, setShowCustom] = useState(isCustomOnly || proposals.length === 0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+    const questionType = useMemo(
+      () => resolveQuestionType(questionTypeProp, multiSelectProp, proposals),
+      [questionTypeProp, multiSelectProp, proposals],
+    );
+    const isMulti = questionType === 'multiple_choice';
+    const isDanger = questionType === 'danger_choice';
+    const isCustomOnly = questionType === 'custom';
 
-  const toggleProposal = (value: string) => {
-    if (isMulti) {
-      setSelected((prev) =>
-        prev.includes(value) ? prev.filter((p) => p !== value) : [...prev, value],
-      );
-    } else {
-      setSelected((prev) => (prev[0] === value ? [] : [value]));
-    }
-  };
+    const [selected, setSelected] = useState<string[]>([]);
+    const [customText, setCustomText] = useState('');
+    const [showCustom, setShowCustom] = useState(isCustomOnly || proposals.length === 0);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const customTextRef = useRef(customText);
+    customTextRef.current = customText;
+    const selectedRef = useRef(selected);
+    selectedRef.current = selected;
+
+    const toggleProposal = useCallback((value: string) => {
+      if (isMulti) {
+        setSelected((prev) =>
+          prev.includes(value) ? prev.filter((p) => p !== value) : [...prev, value],
+        );
+      } else {
+        setSelected((prev) => (prev[0] === value ? [] : [value]));
+      }
+    }, [isMulti]);
 
   const canSend = selected.length > 0 || customText.trim().length > 0;
 
-  const handleSend = async () => {
-    if (!executionId || !canSend) return;
+  const handleSend = useCallback(async () => {
+    const ct = customTextRef.current;
+    const sel = selectedRef.current;
+    if (!executionId || (sel.length === 0 && ct.trim().length === 0)) return;
     let finalInput: string;
-    if (customText.trim()) {
-      finalInput = customText.trim();
+    if (ct.trim()) {
+      finalInput = ct.trim();
     } else if (isMulti) {
-      finalInput = JSON.stringify(selected);
+      finalInput = JSON.stringify(sel);
     } else {
-      finalInput = selected[0] ?? '';
+      finalInput = sel[0] ?? '';
     }
     setIsSubmitting(true);
     try {
@@ -359,7 +405,7 @@ export function AgentReplyBar({
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [executionId, isMulti, nodeId, isCustomOnly, proposals.length, t]);
 
   // OAuth required: special handler
   if (questionType === 'oauth_required') {
@@ -442,19 +488,16 @@ export function AgentReplyBar({
       {/* Custom text input */}
       {(showCustom || isCustomOnly) && (
         <div className="flex items-center gap-2">
-          <Input
+          <CustomTextInput
             autoFocus={isCustomOnly || proposals.length === 0}
             placeholder={
               selected.length > 0
                 ? t('workflows.agentReply.overridePlaceholder', 'Override with custom text (optional)…')
                 : t('workflows.agentReply.typePlaceholder', 'Type your response…')
             }
-            className="h-8 text-xs bg-background/60"
             value={customText}
-            onChange={(e) => setCustomText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) handleSend();
-            }}
+            onChange={setCustomText}
+            onSend={handleSend}
             disabled={isSubmitting}
           />
         </div>
@@ -480,4 +523,7 @@ export function AgentReplyBar({
       </div>
     </div>
   );
-}
+});
+
+AgentReplyBar.displayName = 'AgentReplyBar';
+

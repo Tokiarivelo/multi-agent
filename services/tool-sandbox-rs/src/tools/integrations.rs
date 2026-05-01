@@ -452,11 +452,9 @@ pub async fn document_generate(
         .await
         .map_err(|e| anyhow::anyhow!("document_generate failed: {}", e))?;
 
-    if let Some(out_path) = output_path {
-        // Check if path is in workspace
-        let resolved_res = resolve_workspace_path(config, out_path);
-
-        match resolved_res {
+    // Write to local workspace if outputPath is inside workspace
+    let local_path: Option<String> = if let Some(out_path) = output_path {
+        match resolve_workspace_path(config, out_path) {
             Ok(safe) => {
                 if let Some(parent) = safe.parent() {
                     tokio::fs::create_dir_all(parent)
@@ -466,22 +464,42 @@ pub async fn document_generate(
                 tokio::fs::write(&safe, &bytes)
                     .await
                     .map_err(|e| anyhow::anyhow!("document_generate failed: {}", e))?;
-                return Ok(json!({
-                    "success":  true,
-                    "path":     safe.to_string_lossy(),
-                    "filename": filename,
-                    "size":     bytes.len(),
-                    "type":     "local"
-                }));
+                Some(safe.to_string_lossy().to_string())
             }
-            Err(_) => {
-                // Out of workspace, upload to cloud
-                let uid = user_id.ok_or_else(|| {
-                    anyhow::anyhow!("Access denied: outputPath is outside workspace and no userId provided")
-                })?;
-                return upload_to_cloud(client, config, out_path, &filename, &bytes, &uid).await;
-            }
+            Err(_) => None,
         }
+    } else {
+        None
+    };
+
+    // Always upload to cloud when userId is available so the user gets a download URL
+    if let Some(uid) = &user_id {
+        let cloud_result =
+            upload_to_cloud(client, config, &filename, &filename, &bytes, uid).await?;
+        let url = cloud_result["url"].as_str().unwrap_or("").to_string();
+        let file_id = cloud_result["fileId"].as_str().unwrap_or("").to_string();
+        let stored_as = cloud_result["storedAs"].as_str().unwrap_or(&filename).to_string();
+        return Ok(json!({
+            "success":   true,
+            "url":       url,
+            "filename":  filename,
+            "fileId":    file_id,
+            "storedAs":  stored_as,
+            "size":      bytes.len(),
+            "type":      "cloud",
+            "localPath": local_path,
+        }));
+    }
+
+    // No userId: return local path if it was written, otherwise base64
+    if let Some(path) = local_path {
+        return Ok(json!({
+            "success":  true,
+            "path":     path,
+            "filename": filename,
+            "size":     bytes.len(),
+            "type":     "local"
+        }));
     }
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);

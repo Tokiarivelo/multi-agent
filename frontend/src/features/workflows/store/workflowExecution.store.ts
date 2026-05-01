@@ -30,6 +30,19 @@ export interface NodeTokenProgress {
   iteration: number;
 }
 
+export interface ToolCall {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+export interface NodeThinking {
+  step: string;
+  thought?: string;
+  plan?: string[];
+  toolCalls?: ToolCall[];
+  timestamp: string;
+}
+
 /** One snapshot captured from a single node:update WS event */
 export interface NodeTurn {
   status: NodeStatus | string;
@@ -50,6 +63,8 @@ interface WorkflowExecutionState {
   nodeTurns: Record<string, NodeTurn[]>;
   /** Live token counts pushed during RUNNING state, keyed by nodeId */
   nodeTokenProgress: Record<string, NodeTokenProgress>;
+  /** Live thinking/planning steps pushed during RUNNING state, keyed by nodeId */
+  nodeThinking: Record<string, NodeThinking[]>;
 
   /** Child (sub-workflow) executions discovered during the active run */
   subExecutions: SubExecutionRecord[];
@@ -62,6 +77,7 @@ interface WorkflowExecutionState {
   setNodeData: (nodeId: string, data: unknown) => void;
   appendNodeTurn: (nodeId: string, turn: NodeTurn) => void;
   setNodeTokenProgress: (nodeId: string, progress: NodeTokenProgress) => void;
+  appendNodeThinking: (nodeId: string, thinking: NodeThinking) => void;
   clearExecution: () => void;
 
   /** Register a discovered sub-workflow execution (idempotent) */
@@ -79,6 +95,7 @@ export const useWorkflowExecutionStore = create<WorkflowExecutionState>((set) =>
   nodeData: {},
   nodeTurns: {},
   nodeTokenProgress: {},
+  nodeThinking: {},
   subExecutions: [],
 
   setActiveExecutionId: (id) => set({ activeExecutionId: id }),
@@ -98,6 +115,13 @@ export const useWorkflowExecutionStore = create<WorkflowExecutionState>((set) =>
     })),
   setNodeTokenProgress: (nodeId, progress) =>
     set((state) => ({ nodeTokenProgress: { ...state.nodeTokenProgress, [nodeId]: progress } })),
+  appendNodeThinking: (nodeId, thinking) =>
+    set((state) => ({
+      nodeThinking: {
+        ...state.nodeThinking,
+        [nodeId]: [...(state.nodeThinking[nodeId] ?? []), thinking],
+      },
+    })),
   clearExecution: () =>
     set({
       activeExecutionId: null,
@@ -106,6 +130,7 @@ export const useWorkflowExecutionStore = create<WorkflowExecutionState>((set) =>
       nodeData: {},
       nodeTurns: {},
       nodeTokenProgress: {},
+      nodeThinking: {},
       selectedNodeId: null,
       selectedNodeName: null,
       subExecutions: [],

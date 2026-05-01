@@ -42,12 +42,13 @@ install-py: ## Install Python dependencies for document-service only
 	pip install -r services/document-service/requirements.txt
 	@echo "$(GREEN)Python dependencies installed!$(NC)"
 
-dev-all: ## Run all services locally in development mode (Node, Python, Go)
+dev-all: ## Run all services locally in development mode (Node, Python, Go, Rust)
 	@echo "$(GREEN)Starting all services in dev mode...$(NC)"
 	@trap 'kill 0' SIGINT; \
-	pnpm -r --parallel dev & \
+	pnpm -r --parallel --filter "!@multi-agent/document-service" dev & \
 	$(MAKE) dev-document & \
 	$(MAKE) dev-gateway-go & \
+	$(MAKE) dev-sandbox-rs & \
 	wait
 
 check-node: ## Check if Node version is 24

@@ -143,6 +143,25 @@ export class WorkflowGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     });
   }
 
+  sendNodeThinkingUpdate(
+    executionId: string,
+    nodeId: string,
+    thinking: {
+      step: string;
+      thought?: string;
+      plan?: string[];
+      toolCalls?: any[];
+    },
+  ) {
+    const room = `execution:${executionId}`;
+    this.server.to(room).emit('node:thinking', {
+      executionId,
+      nodeId,
+      ...thinking,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   sendError(executionId: string, error: string) {
     const room = `execution:${executionId}`;
 
