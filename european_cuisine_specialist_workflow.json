@@ -1,0 +1,92 @@
+{
+  "name": "European Cuisine Specialist Workflow",
+  "description": "A workflow that provides expert guidance on European cuisine, including recipe analysis, cooking techniques, and culinary recommendations",
+  "definition": {
+    "nodes": [
+      {
+        "id": "start-node",
+        "type": "START",
+        "customName": "Start",
+        "config": {},
+        "position": {
+          "x": 100,
+          "y": 0
+        }
+      },
+      {
+        "id": "cuisine-input",
+        "type": "PROMPT",
+        "customName": "Format Cuisine Request",
+        "config": {
+          "template": "You are a European cuisine specialist. The user asks: {{input.query}}\n\nProvide detailed guidance on European cooking techniques, recipes, ingredients, and culinary traditions."
+        },
+        "position": {
+          "x": 100,
+          "y": 200
+        }
+      },
+      {
+        "id": "cuisine-agent",
+        "type": "AGENT",
+        "config": {
+          "prompt": "{{input.template}}",
+          "agentId": "05ece5fc-0bc2-4611-b08d-1588dd026fd8"
+        },
+        "position": {
+          "x": 100,
+          "y": 400
+        },
+        "customName": "European Cuisine Expert"
+      },
+      {
+        "id": "refine-response",
+        "type": "AGENT",
+        "customName": "Refine Culinary Advice",
+        "config": {
+          "prompt": "Review and refine this European cuisine guidance: {{output.result}}. Ensure it's accurate, practical, and well-structured.",
+          "agentId": "ec5bd52f-47ac-41df-80b7-8496575f5621"
+        },
+        "position": {
+          "x": 100,
+          "y": 600
+        }
+      },
+      {
+        "id": "end-node",
+        "type": "END",
+        "customName": "End",
+        "config": {},
+        "position": {
+          "x": 100,
+          "y": 1000
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-start-to-input",
+        "source": "start-node",
+        "target": "cuisine-input"
+      },
+      {
+        "id": "edge-input-to-agent",
+        "source": "cuisine-input",
+        "target": "cuisine-agent"
+      },
+      {
+        "id": "edge-agent-to-refine",
+        "source": "cuisine-agent",
+        "target": "refine-response"
+      },
+      {
+        "id": "4a49fcf2-5243-4b53-82bb-f515986d1cda",
+        "source": "refine-response",
+        "target": "end-node"
+      }
+    ],
+    "version": 1,
+    "inputSchema": [],
+    "outputSchema": []
+  },
+  "status": "ACTIVE"
+}

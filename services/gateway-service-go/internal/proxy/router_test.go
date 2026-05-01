@@ -32,6 +32,7 @@ func TestResolveTarget(t *testing.T) {
 		{"orchestration", cfg.OrchestrationServiceURL},
 		{"workspace", cfg.OrchestrationServiceURL},
 		{"agents", cfg.AgentServiceURL},
+		{"chat", cfg.AgentServiceURL},
 		{"executions", cfg.ExecutionServiceURL},
 		{"models", cfg.ModelServiceURL},
 		{"api-keys", cfg.ModelServiceURL},

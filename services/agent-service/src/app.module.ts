@@ -22,14 +22,20 @@ import { ModelClientService } from './infrastructure/external/model-client.servi
 import { ToolClientService } from './infrastructure/external/tool-client.service';
 import { VectorClientService } from './infrastructure/external/vector-client.service';
 import { AgentRepository } from './infrastructure/persistence/agent.repository';
+import { ChatRepository } from './infrastructure/persistence/chat.repository';
 import { TokenUsageRepository } from './infrastructure/persistence/token-usage.repository';
 import { AgentController } from './presentation/controllers/agent.controller';
 import { AgentAiController } from './presentation/controllers/agent-ai.controller';
+import { ChatController } from './presentation/controllers/chat.controller';
 import { CompletionController } from './presentation/controllers/completion.controller';
 import { HealthController } from './presentation/controllers/health.controller';
 import { McpController } from './presentation/controllers/mcp.controller';
 import { AgentAiService } from './infrastructure/external/agent-ai.service';
 import { AgentExecutionGateway } from './presentation/gateways/agent-execution.gateway';
+import { ChatGateway } from './presentation/gateways/chat.gateway';
+import { CHAT_REPOSITORY } from './domain/repositories/chat.repository.interface';
+import { ChatSessionUseCase } from './application/use-cases/chat-session.use-case';
+import { ChatMessageUseCase } from './application/use-cases/chat-message.use-case';
 
 @Module({
   imports: [
@@ -39,7 +45,7 @@ import { AgentExecutionGateway } from './presentation/gateways/agent-execution.g
       maxRedirects: 5,
     }),
   ],
-  controllers: [AgentController, AgentAiController, CompletionController, HealthController, McpController],
+  controllers: [AgentController, AgentAiController, ChatController, CompletionController, HealthController, McpController],
   providers: [
     PrismaService,
     SeedService,
@@ -47,6 +53,13 @@ import { AgentExecutionGateway } from './presentation/gateways/agent-execution.g
       provide: AGENT_REPOSITORY,
       useClass: AgentRepository,
     },
+    {
+      provide: CHAT_REPOSITORY,
+      useClass: ChatRepository,
+    },
+    ChatSessionUseCase,
+    ChatMessageUseCase,
+    ChatGateway,
     AgentExecutionService,
     CreateAgentUseCase,
     ListAgentsUseCase,

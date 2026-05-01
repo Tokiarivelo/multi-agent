@@ -1,6 +1,6 @@
 # Makefile for Multi-Agent Platform Kubernetes Deployment
 
-.PHONY: help install install-py setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-tools seed-agents seed-all test-subworkflow dev-document dev-sandbox-rs build-rust test-sandbox-rs benchmark-gateway benchmark-sandbox test-contract-sandbox
+.PHONY: help install install-py setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-tools seed-agents seed-all test-subworkflow dev-document dev-sandbox-rs build-rust test-sandbox-rs benchmark-gateway benchmark-sandbox test-contract-sandbox build-chat dev-chat
 
 # Ensure ~/go/bin (air) is available
 export PATH := $(HOME)/go/bin:$(PATH)
@@ -229,6 +229,20 @@ test-contract-sandbox: ## Smoke-test tool-sandbox-rs API contract (requires serv
 dev-agent: ## Start agent-service in dev/watch mode
 	@echo "$(GREEN)Starting agent-service in dev mode…$(NC)"
 	cd services/agent-service && pnpm dev
+
+build-chat: ## Rebuild Go gateway + agent-service after chat route changes
+	@echo "$(GREEN)Building Go gateway (chat route)…$(NC)"
+	cd services/gateway-service-go && go build -o ./tmp/main ./cmd/server
+	@echo "$(GREEN)Building agent-service…$(NC)"
+	cd services/agent-service && pnpm build
+	@echo "$(GREEN)Chat route ready — restart dev-gateway-go and dev-agent$(NC)"
+
+dev-chat: ## Start Go gateway + agent-service for chat development
+	@echo "$(GREEN)Starting Go gateway + agent-service for chat…$(NC)"
+	@trap 'kill 0' SIGINT; \
+	$(MAKE) dev-gateway-go & \
+	$(MAKE) dev-agent & \
+	wait
 
 dev-document: ## Start document-service in dev/watch mode (Python)
 	@echo "$(GREEN)Starting document-service in dev mode…$(NC)"

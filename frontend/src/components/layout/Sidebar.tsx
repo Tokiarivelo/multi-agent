@@ -22,6 +22,7 @@ import {
   BarChart3,
   GitBranch,
   FileDown,
+  MessageSquare,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -30,6 +31,7 @@ import { useEffect, useState } from 'react';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Chat', href: '/chat', icon: MessageSquare },
   { name: 'Workflows', href: '/workflows', icon: Workflow },
   { name: 'Agents', href: '/agents', icon: Bot },
   { name: 'Tools', href: '/tools', icon: Wrench },

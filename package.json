@@ -13,6 +13,10 @@
     "prisma:generate": "pnpm --filter @multi-agent/database prisma:generate && pnpm --filter @multi-agent/database build",
     "prisma:migrate": "pnpm --filter @multi-agent/database prisma:migrate",
     "prisma:studio": "pnpm --filter @multi-agent/database prisma:studio",
+    "gateway:build": "make build-go",
+    "gateway:dev": "make dev-gateway-go",
+    "gateway:test": "make test-gateway-go",
+    "agent:dev": "make dev-agent",
     "prepare": "husky install"
   },
   "devDependencies": {

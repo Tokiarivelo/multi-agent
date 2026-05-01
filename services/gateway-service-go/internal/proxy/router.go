@@ -12,7 +12,7 @@ func resolveTarget(segment string, cfg *config.Config) string {
 	switch segment {
 	case "workflows", "orchestration", "workspace":
 		return cfg.OrchestrationServiceURL
-	case "agents":
+	case "agents", "chat":
 		return cfg.AgentServiceURL
 	case "executions":
 		return cfg.ExecutionServiceURL

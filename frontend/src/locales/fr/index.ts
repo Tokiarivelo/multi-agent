@@ -9,6 +9,7 @@ import { github } from './github';
 import { tools } from './tools';
 import { healing } from './healing';
 import { documents } from './documents';
+import { chat } from './chat';
 
 export const fr = {
   ...workflows,
@@ -22,4 +23,5 @@ export const fr = {
   ...tools,
   ...healing,
   ...documents,
+  ...chat,
 };

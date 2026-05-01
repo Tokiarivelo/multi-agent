@@ -40,6 +40,7 @@ export class ProxyController {
             );
             break;
           case 'agents':
+          case 'chat':
             target = this.configService.get<string>('AGENT_SERVICE_URL', 'http://localhost:3002');
             break;
           case 'executions':
@@ -179,6 +180,7 @@ export class ProxyController {
       case 'orchestration':
       case 'workspace':
       case 'agents':
+      case 'chat':
       case 'executions':
       case 'models':
       case 'api-keys':
