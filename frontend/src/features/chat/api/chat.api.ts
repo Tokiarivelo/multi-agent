@@ -50,9 +50,9 @@ export interface ChatThinkingStep {
 
 export interface CreateSessionInput {
   title?: string;
-  modelId?: string;
-  agentId?: string;
-  workflowId?: string;
+  modelId?: string | null;
+  agentId?: string | null;
+  workflowId?: string | null;
   tools?: string[];
   systemPrompt?: string;
 }

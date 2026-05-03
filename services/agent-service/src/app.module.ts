@@ -20,6 +20,7 @@ import { ProviderFactory } from './infrastructure/external/langchain/providers/p
 import { TokenStreamHandler } from './infrastructure/external/langchain/streaming/token-stream.handler';
 import { ModelClientService } from './infrastructure/external/model-client.service';
 import { ToolClientService } from './infrastructure/external/tool-client.service';
+import { WorkflowClientService } from './infrastructure/external/workflow-client.service';
 import { VectorClientService } from './infrastructure/external/vector-client.service';
 import { AgentRepository } from './infrastructure/persistence/agent.repository';
 import { ChatRepository } from './infrastructure/persistence/chat.repository';
@@ -76,6 +77,7 @@ import { ChatMessageUseCase } from './application/use-cases/chat-message.use-cas
     TokenStreamHandler,
     ModelClientService,
     ToolClientService,
+    WorkflowClientService,
     VectorClientService,
     AgentExecutionGateway,
     TokenUsageRepository,

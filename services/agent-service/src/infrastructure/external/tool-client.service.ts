@@ -120,6 +120,7 @@ export class ToolClientService {
     toolName: string,
     parameters: Record<string, any>,
     userId?: string,
+    cwd?: string,
   ): Promise<any> {
     try {
       const response = await firstValueFrom(
@@ -127,6 +128,7 @@ export class ToolClientService {
           toolName,
           parameters,
           ...(userId ? { userId } : {}),
+          ...(cwd ? { cwd } : {}),
         }),
       );
 

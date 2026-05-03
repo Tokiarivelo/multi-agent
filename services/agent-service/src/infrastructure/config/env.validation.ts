@@ -19,6 +19,10 @@ class EnvironmentVariables {
   @IsOptional()
   MODEL_SERVICE_URL?: string = 'http://localhost:3001';
 
+  @IsString()
+  @IsOptional()
+  ORCHESTRATION_SERVICE_URL?: string = 'http://localhost:3003';
+
   @IsOptional()
   @IsUrl({ require_tld: false })
   TOOL_SERVICE_URL?: string = 'http://localhost:3030';

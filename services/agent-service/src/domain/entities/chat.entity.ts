@@ -2,9 +2,9 @@ export interface ChatSession {
   id: string;
   userId: string;
   title: string;
-  modelId?: string;
-  agentId?: string;
-  workflowId?: string;
+  modelId?: string | null;
+  agentId?: string | null;
+  workflowId?: string | null;
   tools: string[];
   systemPrompt?: string;
   memoryContext?: Record<string, unknown>;
@@ -46,4 +46,19 @@ export interface ChatThinkingStep {
   toolName?: string;
   toolInput?: unknown;
   toolResult?: string;
+}
+
+export interface ChatToolRequestItem {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+}
+
+export interface ChatToolRequest {
+  requestId: string;
+  failedToolName: string;
+  failedToolArgs: unknown;
+  errorMessage: string;
+  availableTools: ChatToolRequestItem[];
 }

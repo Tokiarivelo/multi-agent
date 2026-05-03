@@ -554,13 +554,18 @@ pub async fn document_write(
         .and_then(|v| v.as_str())
         .unwrap_or("utf-8");
 
+    let cwd = params
+        .get("cwd")
+        .and_then(|v| v.as_str());
+
     let resp = client
         .post(format!("{}/api/documents/write", config.document_service_url))
         .json(&json!({
             "path": path,
             "content": content,
             "encoding": encoding,
-            "userId": user_id
+            "userId": user_id,
+            "workspaceRoot": cwd
         }))
         .send()
         .await

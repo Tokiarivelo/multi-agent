@@ -1,5 +1,5 @@
-import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsArray, IsOptional, IsString, ValidateIf, ValidateNested } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class ChatAttachmentDto {
   @IsString()
@@ -48,17 +48,23 @@ export class UpdateChatSessionDto {
   @IsOptional()
   title?: string;
 
-  @IsString()
+  @Transform(({ value }) => value)
   @IsOptional()
-  modelId?: string;
+  @ValidateIf((_, val) => val !== null)
+  @IsString()
+  modelId?: string | null;
 
-  @IsString()
+  @Transform(({ value }) => value)
   @IsOptional()
-  agentId?: string;
+  @ValidateIf((_, val) => val !== null)
+  @IsString()
+  agentId?: string | null;
 
-  @IsString()
+  @Transform(({ value }) => value)
   @IsOptional()
-  workflowId?: string;
+  @ValidateIf((_, val) => val !== null)
+  @IsString()
+  workflowId?: string | null;
 
   @IsArray()
   @IsString({ each: true })
@@ -79,4 +85,8 @@ export class SendChatMessageDto {
   @Type(() => ChatAttachmentDto)
   @IsOptional()
   attachments?: ChatAttachmentDto[];
+
+  @IsString()
+  @IsOptional()
+  workspacePath?: string;
 }

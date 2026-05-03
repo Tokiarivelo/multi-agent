@@ -208,7 +208,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     if (this.workflowExecutionService.isEndNode(workflow, nodeId)) {
       this.logger.log(`Reached END node ${nodeId}`);
 
-      execution.startNodeExecution(nodeId, node.customName || node.type, input);
+      execution.startNodeExecution(nodeId, node.customName || node.type, input, node.type);
       await this.updateExecution(execution);
       this.workflowGateway.sendNodeUpdate(
         execution.id,
@@ -231,7 +231,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       return;
     }
 
-    execution.startNodeExecution(nodeId, node.customName || node.type, input);
+    execution.startNodeExecution(nodeId, node.customName || node.type, input, node.type);
     await this.updateExecution(execution);
     this.workflowGateway.sendExecutionUpdate(execution);
     this.workflowGateway.sendNodeUpdate(
@@ -584,7 +584,13 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
             const choices = askUser.choices ?? [];
             const visibleText = sentinelSourceText.replace(/__ASK_USER__:\{[\s\S]*?\}/g, '').trim();
 
-            execution.waitNodeExecution(node.id);
+            execution.waitNodeExecution(node.id, {
+              proposals: choices,
+              questionType,
+              multiSelect: questionType === 'multiple_choice',
+              prompt: askUser.question,
+              agentMessage: visibleText,
+            });
             await this.updateExecution(execution);
             this.workflowGateway.sendExecutionUpdate(execution);
             this.workflowGateway.sendNodeUpdate(
@@ -616,7 +622,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
             }
 
             // Resume: re-run agent with user's answer injected
-            execution.startNodeExecution(node.id, node.customName || node.type, input);
+            execution.startNodeExecution(node.id, node.customName || node.type, input, node.type);
             await this.updateExecution(execution);
             this.workflowGateway.sendNodeUpdate(
               execution.id,
@@ -825,7 +831,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           : '';
 
         if (execution && execution.id) {
-          execution.waitNodeExecution(node.id);
+          execution.waitNodeExecution(node.id, { prompt: resolvedPrompt });
           await this.updateExecution(execution);
           this.workflowGateway.sendExecutionUpdate(execution);
           this.workflowGateway.sendNodeUpdate(
@@ -856,7 +862,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           }
 
           // Resume status
-          execution.startNodeExecution(node.id, node.customName || node.type, input);
+          execution.startNodeExecution(node.id, node.customName || node.type, input, node.type);
           await this.updateExecution(execution);
           this.workflowGateway.sendExecutionUpdate(execution);
           this.workflowGateway.sendNodeUpdate(

@@ -18,10 +18,18 @@ export enum NodeExecutionStatus {
 export interface NodeExecution {
   nodeId: string;
   nodeName?: string;
+  nodeType?: string;
   status: NodeExecutionStatus;
   input?: any;
   output?: any;
   error?: string;
+  waitData?: {
+    proposals?: string[];
+    questionType?: string;
+    multiSelect?: boolean;
+    prompt?: string;
+    agentMessage?: string;
+  };
   startedAt?: Date;
   completedAt?: Date;
   retryCount: number;
@@ -71,7 +79,7 @@ export class WorkflowExecution {
     this.completedAt = new Date();
   }
 
-  startNodeExecution(nodeId: string, nodeName: string, input?: any): void {
+  startNodeExecution(nodeId: string, nodeName: string, input?: any, nodeType?: string): void {
     this.currentNodeId = nodeId;
     const existingIndex = this.nodeExecutions.findIndex((n) => n.nodeId === nodeId);
 
@@ -79,14 +87,17 @@ export class WorkflowExecution {
       this.nodeExecutions[existingIndex] = {
         ...this.nodeExecutions[existingIndex],
         nodeName: nodeName || this.nodeExecutions[existingIndex].nodeName,
+        nodeType: nodeType ?? this.nodeExecutions[existingIndex].nodeType,
         status: NodeExecutionStatus.RUNNING,
         input,
+        waitData: undefined,
         startedAt: new Date(),
       };
     } else {
       this.nodeExecutions.push({
         nodeId,
         nodeName,
+        nodeType,
         status: NodeExecutionStatus.RUNNING,
         input,
         startedAt: new Date(),
@@ -104,10 +115,11 @@ export class WorkflowExecution {
     }
   }
 
-  waitNodeExecution(nodeId: string): void {
+  waitNodeExecution(nodeId: string, waitData?: NodeExecution['waitData']): void {
     const execution = this.nodeExecutions.find((n) => n.nodeId === nodeId);
     if (execution) {
       execution.status = NodeExecutionStatus.WAITING_INPUT;
+      if (waitData) execution.waitData = waitData;
     }
   }
 

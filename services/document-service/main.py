@@ -450,6 +450,7 @@ class WriteFileRequest(BaseModel):
     content: str
     encoding: Optional[str] = "utf-8"
     userId: Optional[str] = None
+    workspaceRoot: Optional[str] = None
 
 
 class DeleteFileRequest(BaseModel):
@@ -471,14 +472,15 @@ def _safe_workspace_path(file_path: str, check_exists: bool = True) -> str:
     return path
 
 
-def _resolve_path(file_path: str) -> tuple[str, bool]:
-    """Resolve *file_path* and check if it is within WORKSPACE_ROOT."""
+def _resolve_path(file_path: str, workspace_root: Optional[str] = None) -> tuple[str, bool]:
+    """Resolve *file_path* against *workspace_root* (or WORKSPACE_ROOT) and check containment."""
+    root = workspace_root or WORKSPACE_ROOT
     if os.path.isabs(file_path):
         candidate = file_path
     else:
-        candidate = os.path.join(WORKSPACE_ROOT, file_path)
+        candidate = os.path.join(root, file_path)
 
-    real_root = os.path.realpath(WORKSPACE_ROOT)
+    real_root = os.path.realpath(root)
     real_candidate = os.path.realpath(candidate)
 
     is_safe = real_candidate.startswith(real_root + os.sep) or real_candidate == real_root
@@ -720,7 +722,7 @@ def read_text_file(
 @app.post("/api/documents/write")
 async def write_text_file(req: WriteFileRequest):
     """Write a plain-text file to the workspace or cloud if outside."""
-    path, is_safe = _resolve_path(req.path)
+    path, is_safe = _resolve_path(req.path, req.workspaceRoot)
 
     if not is_safe:
         if not req.userId:
