@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, Cpu, Bot, Check, GitBranch, X, Settings2, Wrench } from 'lucide-react';
+import { ChevronDown, Cpu, Bot, Check, GitBranch, X, Settings2, Wrench, Zap } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,12 +14,42 @@ import { useModels } from '@/features/models/hooks/useModels';
 import { useAgents } from '@/features/agents/hooks/useAgents';
 import { useWorkflows } from '@/features/workflows/hooks/useWorkflows';
 import { useTools } from '@/features/tools/hooks/useTools';
+import { Model } from '@/types';
 import { ChatSession, CreateSessionInput } from '../api/chat.api';
 import { useUpdateChatSession } from '../hooks/useChatSessions';
+import { useChatStore } from '../store/chat.store';
 import { cn } from '@/lib/utils';
 
 interface Props {
   session: ChatSession;
+}
+
+const pillBase =
+  'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all border outline-none focus-visible:ring-1 focus-visible:ring-primary/50';
+const pillActive = 'bg-primary/10 border-primary/20 text-primary hover:bg-primary/15';
+const pillIdle =
+  'bg-muted/40 border-border/40 text-muted-foreground hover:bg-muted hover:text-foreground hover:border-border/70';
+
+function fmtTokens(n: number): string {
+  return n >= 1_000_000 ? `${Math.round(n / 1_000_000)}M` : `${Math.round(n / 1000)}k`;
+}
+
+function ModelItem({ model, selected }: { model: Model; selected: boolean }) {
+  const isAvailable = model.isActive && model.status !== 'unavailable';
+  return (
+    <>
+      <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', isAvailable ? 'bg-green-500' : 'bg-muted-foreground/40')} />
+      <div className="flex flex-col flex-1 min-w-0">
+        <span className="truncate">{model.name}</span>
+        <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+          {model.provider}
+          {model.maxTokens && <span className="opacity-70">· {fmtTokens(model.maxTokens)}</span>}
+          {model.supportsStreaming && <span className="opacity-70">· stream</span>}
+        </span>
+      </div>
+      {selected && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+    </>
+  );
 }
 
 export function ChatConfigPills({ session }: Props) {
@@ -29,6 +59,7 @@ export function ChatConfigPills({ session }: Props) {
   const { data: workflowsData } = useWorkflows(1, 100);
   const { data: toolsData } = useTools(1, 100);
   const updateSession = useUpdateChatSession();
+  const autoActivateTools = useChatStore((s) => s.autoActivateTools);
 
   const models = modelsData?.data ?? [];
   const agents = agentsData?.data ?? [];
@@ -60,11 +91,11 @@ export function ChatConfigPills({ session }: Props) {
   };
 
   const toolCount = session.tools?.length ?? 0;
-  const pillBase =
-    'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all border outline-none focus-visible:ring-1 focus-visible:ring-primary/50';
-  const pillActive = 'bg-primary/10 border-primary/20 text-primary hover:bg-primary/15';
-  const pillIdle =
-    'bg-muted/40 border-border/40 text-muted-foreground hover:bg-muted hover:text-foreground hover:border-border/70';
+  const toolsLabel = autoActivateTools
+    ? t('chat.config.tools_auto')
+    : toolCount > 0
+      ? t('chat.config.tools_count', { count: toolCount })
+      : t('chat.config.tools');
 
   return (
     <div className="flex items-center gap-1.5">
@@ -123,13 +154,9 @@ export function ChatConfigPills({ session }: Props) {
                 <DropdownMenuItem
                   key={m.id}
                   onClick={() => patch({ modelId: m.id === session.modelId ? null : m.id })}
+                  className="gap-2"
                 >
-                  <Cpu className="h-3.5 w-3.5 mr-2 shrink-0 text-muted-foreground" />
-                  <div className="flex flex-col flex-1">
-                    <span>{m.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{m.provider}</span>
-                  </div>
-                  {session.modelId === m.id && <Check className="h-3.5 w-3.5 text-primary" />}
+                  <ModelItem model={m} selected={session.modelId === m.id} />
                 </DropdownMenuItem>
               ))}
             </>
@@ -140,12 +167,10 @@ export function ChatConfigPills({ session }: Props) {
       {!session.agentId && session.modelId && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className={cn(pillBase, toolCount > 0 ? pillActive : pillIdle)}>
-              <Wrench className="h-3 w-3 shrink-0" />
-              <span className="max-w-[100px] truncate">
-                {toolCount > 0 ? t('chat.config.tools_count', { count: toolCount }) : t('chat.config.tools')}
-              </span>
-              {toolCount > 0 ? (
+            <button className={cn(pillBase, toolCount > 0 || autoActivateTools ? pillActive : pillIdle)}>
+              {autoActivateTools ? <Zap className="h-3 w-3 shrink-0" /> : <Wrench className="h-3 w-3 shrink-0" />}
+              <span className="max-w-[100px] truncate">{toolsLabel}</span>
+              {toolCount > 0 && !autoActivateTools ? (
                 <span
                   role="button"
                   tabIndex={-1}
@@ -163,10 +188,17 @@ export function ChatConfigPills({ session }: Props) {
             <DropdownMenuLabel className="text-xs text-muted-foreground">{t('chat.config.tools')}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {tools.map((tool) => (
-              <DropdownMenuItem key={tool.id} onClick={(e) => toggleTool(e, tool.id)}>
-                <Wrench className="h-3.5 w-3.5 mr-2 shrink-0 text-muted-foreground" />
-                <span className="flex-1">{tool.name}</span>
-                {session.tools?.includes(tool.id) && <Check className="h-3.5 w-3.5 text-primary" />}
+              <DropdownMenuItem key={tool.id} onClick={(e) => toggleTool(e, tool.id)} className="gap-2 items-start">
+                <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground mt-0.5" />
+                <div className="flex flex-col flex-1 min-w-0">
+                  <span className="truncate font-medium">{tool.name}</span>
+                  {tool.description && (
+                    <span className="text-[10px] text-muted-foreground line-clamp-2 leading-snug">
+                      {tool.description}
+                    </span>
+                  )}
+                </div>
+                {session.tools?.includes(tool.id) && <Check className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>

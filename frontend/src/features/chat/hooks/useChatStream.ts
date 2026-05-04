@@ -46,7 +46,14 @@ export function useChatStream(sessionId: string | null, userId: string | undefin
     });
 
     socket.on('tool_request', (payload: ToolRequest) => {
-      setToolRequest(payload);
+      if (useChatStore.getState().autoActivateTools) {
+        socket.emit('tool_request_response', {
+          requestId: payload.requestId,
+          selectedToolIds: payload.availableTools.map((t) => t.id),
+        });
+      } else {
+        setToolRequest(payload);
+      }
     });
 
     socket.on('complete', (message: ChatMessage) => {
@@ -98,7 +105,10 @@ export function useChatStream(sessionId: string | null, userId: string | undefin
     if (!socketRef.current) return;
     setToolRequest(null);
     socketRef.current.emit('tool_request_response', { requestId, selectedToolIds });
-  }, [setToolRequest]);
+    if (selectedToolIds.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ['chat-sessions'] });
+    }
+  }, [setToolRequest, queryClient]);
 
   return { sendMessage, sendWorkflowChoice, sendToolRequestResponse };
 }

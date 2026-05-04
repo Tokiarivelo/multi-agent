@@ -148,7 +148,7 @@ export class AnthropicProvider {
           this.logger.log('executeWithProgress: first chunk received — stream is live');
         }
         if (chunkCount % 10 === 0) {
-          const estOutput = this.estimateTokens(aggregated.content?.toString() ?? '');
+          const estOutput = this.estimateTokens(this.extractText(aggregated.content));
           this.logger.log(
             `executeWithProgress: chunk=${chunkCount} estOutput=${estOutput} — calling onProgress`,
           );
@@ -165,7 +165,7 @@ export class AnthropicProvider {
       const usage = aggregated.response_metadata?.usage;
       const inputTokens: number = usage?.input_tokens ?? 0;
       const outputTokens: number =
-        usage?.output_tokens ?? this.estimateTokens(aggregated.content?.toString() ?? '');
+        usage?.output_tokens ?? this.estimateTokens(this.extractText(aggregated.content));
       const totalTokens = inputTokens + outputTokens;
 
       this.logger.log(
@@ -174,7 +174,7 @@ export class AnthropicProvider {
       onProgress({ inputTokens, outputTokens, totalTokens });
 
       return {
-        content: aggregated.content?.toString() ?? '',
+        content: this.extractText(aggregated.content),
         tokens: totalTokens,
         inputTokens,
         outputTokens,
@@ -207,6 +207,7 @@ export class AnthropicProvider {
 
       let fullContent = '';
       let tokenCount = 0;
+      let aggregated: any;
 
       let boundModel: any = streamingModel;
       if (tools && tools.length > 0) {
@@ -238,17 +239,19 @@ export class AnthropicProvider {
       const stream = await boundModel.stream(langchainMessages);
 
       for await (const chunk of stream) {
-        const content = chunk.content.toString();
-        if (content) {
-          fullContent += content;
+        aggregated = aggregated === undefined ? chunk : concat(aggregated, chunk);
+        const text = this.extractText(chunk.content);
+        if (text) {
+          fullContent += text;
           tokenCount = this.estimateTokens(fullContent);
-          callbacks.onToken(content);
+          callbacks.onToken(text);
         }
       }
 
-      callbacks.onComplete({
+      await callbacks.onComplete({
         content: fullContent,
         tokens: tokenCount,
+        toolCalls: aggregated?.tool_calls ?? [],
       });
     } catch (error) {
       this.logger.error(`Anthropic streaming error: ${error.message}`);
@@ -281,6 +284,17 @@ export class AnthropicProvider {
           return new HumanMessage(msg.content);
       }
     });
+  }
+
+  private extractText(content: unknown): string {
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content
+        .filter((b: any) => b.type === 'text')
+        .map((b: any) => b.text ?? '')
+        .join('');
+    }
+    return '';
   }
 
   private estimateTokens(text: string): number {

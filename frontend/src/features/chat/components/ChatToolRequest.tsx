@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Wrench, Send, AlertCircle, Sparkles } from 'lucide-react';
+import { Wrench, Send, AlertCircle, Sparkles, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ToolRequest } from '../store/chat.store';
+import { ToolRequest, useChatStore } from '../store/chat.store';
 
 interface Props {
   request: ToolRequest;
@@ -14,6 +14,8 @@ interface Props {
 export function ChatToolRequest({ request, onAnswer }: Props) {
   const { t } = useTranslation();
   const [selected, setSelected] = useState<string[]>([]);
+  const [autoActivate, setAutoActivate] = useState(false);
+  const setAutoActivateTools = useChatStore((s) => s.setAutoActivateTools);
 
   const isSuggestion = !request.failedToolName;
 
@@ -69,20 +71,33 @@ export function ChatToolRequest({ request, onAnswer }: Props) {
           {Object.entries(byCategory).map(([category, tools]) => (
             <div key={category} className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{category}</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-1 gap-1.5">
                 {tools.map((tool) => (
                   <button
                     key={tool.id}
                     onClick={() => toggle(tool.id)}
-                    title={tool.description}
                     className={cn(
-                      'rounded-lg px-3 py-1.5 text-xs font-medium border transition-all text-left',
+                      'rounded-lg px-3 py-2 text-left border transition-all flex items-start gap-2.5',
                       selected.includes(tool.id)
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-background border-border/60 text-foreground hover:border-primary/50 hover:bg-primary/5',
+                        ? 'bg-primary/10 border-primary/40 text-primary'
+                        : 'bg-background border-border/60 text-foreground hover:border-primary/40 hover:bg-primary/5',
                     )}
                   >
-                    {tool.name}
+                    <div className={cn(
+                      'mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 transition-colors',
+                      selected.includes(tool.id) ? 'border-primary bg-primary' : 'border-border',
+                    )} />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-medium leading-snug">{tool.name}</span>
+                      {tool.description && (
+                        <span className={cn(
+                          'text-[10px] leading-snug mt-0.5 line-clamp-2',
+                          selected.includes(tool.id) ? 'text-primary/70' : 'text-muted-foreground',
+                        )}>
+                          {tool.description}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -93,9 +108,25 @@ export function ChatToolRequest({ request, onAnswer }: Props) {
         <p className="text-xs text-muted-foreground">{t('chat.tool_request.no_tools')}</p>
       )}
 
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={autoActivate}
+          onChange={(e) => setAutoActivate(e.target.checked)}
+          className="h-3.5 w-3.5 rounded accent-primary"
+        />
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Zap className="h-3 w-3" />
+          {t('chat.tool_request.auto_activate')}
+        </span>
+      </label>
+
       <div className="flex items-center gap-2">
         <button
-          onClick={() => onAnswer(selected)}
+          onClick={() => {
+            if (autoActivate) setAutoActivateTools(true);
+            onAnswer(selected);
+          }}
           disabled={selected.length === 0}
           className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors"
         >

@@ -49,4 +49,6 @@ export const chat = {
   'chat.tool_request.no_tools': 'Aucun outil disponible dans le catalogue.',
   'chat.tool_request.confirm': 'Activer {{count}} outil(s)',
   'chat.tool_request.skip': 'Ignorer',
+  'chat.tool_request.auto_activate': "Laisser l'agent activer les outils automatiquement",
+  'chat.config.tools_auto': 'Auto',
 };

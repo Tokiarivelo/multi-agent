@@ -162,9 +162,12 @@ export class ChatMessageUseCase {
 
     const context = this.agentExecutionService.buildContext(conversationMessages, systemPrompt);
 
-    // Proactive tool suggestion on first message when no tools are configured
+    // Proactive tool suggestion when no tools are configured:
+    // - on the first message (fresh session), OR
+    // - when the session previously used tools but user deselected them
     const isFirstMessage = history.filter((m) => m.role === 'user').length === 1;
-    if (!session.agentId && toolIds.length === 0 && isFirstMessage) {
+    const hadToolCallsInHistory = history.some((m) => m.toolCalls && m.toolCalls.length > 0);
+    if (!session.agentId && toolIds.length === 0 && (isFirstMessage || hadToolCallsInHistory)) {
       const catalog = await this.toolClient.listToolsCatalog();
       if (catalog.length > 0) {
         const requestId = `toolsugg-${Date.now()}`;
@@ -199,7 +202,6 @@ export class ChatMessageUseCase {
         callbacks.onToken(token);
       },
       onComplete: async (response) => {
-        // Handle tool calls if any
         if (response.toolCalls && response.toolCalls.length > 0) {
           await this.processToolCalls(
             response,
@@ -213,7 +215,13 @@ export class ChatMessageUseCase {
             userId,
             dto.workspacePath,
           );
-          fullContent = context.conversationHistory[context.conversationHistory.length - 1]?.content ?? fullContent;
+          // Ask the LLM to summarize the tool results in natural language
+          const followUp = await this.langchainProvider.execute(
+            context.conversationHistory,
+            tools.length > 0 ? tools : undefined,
+          );
+          fullContent = followUp.content;
+          if (fullContent) callbacks.onToken(fullContent);
         }
 
         const assistantMessage = await this.chatRepository.addMessage({
@@ -271,7 +279,7 @@ export class ChatMessageUseCase {
       let isError = false;
       try {
         const raw = await this.toolClient.executeTool(toolCall.name, toolCall.args, userId, workspacePath);
-        toolContent = typeof raw === 'string' ? raw : JSON.stringify(raw);
+        toolContent = this.formatToolContent(raw);
       } catch (err) {
         isError = true;
         const errMessage = err instanceof Error ? err.message : String(err);
@@ -320,5 +328,20 @@ export class ChatMessageUseCase {
         name: toolCall.name,
       });
     }
+  }
+
+  private formatToolContent(raw: unknown): string {
+    const str = typeof raw === 'string' ? raw : JSON.stringify(raw);
+    try {
+      const parsed: any = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const data = parsed?.data ?? parsed;
+      const url: string | undefined = data?.url;
+      const filename: string | undefined = data?.filename ?? data?.name;
+      if (url) {
+        const label = filename ?? 'Download file';
+        return `${str}\n\nFile link: [${label}](${url})`;
+      }
+    } catch {}
+    return str;
   }
 }

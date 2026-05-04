@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
+import { concat } from '@langchain/core/utils/stream';
 import {
   LLMConfig,
   LLMResponse,
@@ -95,18 +96,22 @@ export class OpenAIProvider {
       if (!stream) {
         throw new Error('Failed to create stream');
       }
+
+      let aggregated: any;
       for await (const chunk of stream) {
-        const content = chunk.content.toString();
-        if (content) {
-          fullContent += content;
+        aggregated = aggregated === undefined ? chunk : concat(aggregated, chunk);
+        const text = typeof chunk.content === 'string' ? chunk.content : '';
+        if (text) {
+          fullContent += text;
           tokenCount = this.estimateTokens(fullContent);
-          callbacks.onToken(content);
+          callbacks.onToken(text);
         }
       }
 
-      callbacks.onComplete({
+      await callbacks.onComplete({
         content: fullContent,
         tokens: tokenCount,
+        toolCalls: aggregated?.tool_calls ?? [],
       });
     } catch (error) {
       this.logger.error(`OpenAI streaming error: ${error.message}`);

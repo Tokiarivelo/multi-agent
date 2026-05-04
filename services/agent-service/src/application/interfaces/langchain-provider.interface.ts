@@ -20,7 +20,7 @@ export interface LLMResponse {
 
 export interface StreamingOptions {
   onToken: (token: string) => void;
-  onComplete: (response: LLMResponse) => void;
+  onComplete: (response: LLMResponse) => void | Promise<void>;
   onError: (error: Error) => void;
 }
 

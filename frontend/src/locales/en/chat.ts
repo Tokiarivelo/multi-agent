@@ -49,4 +49,6 @@ export const chat = {
   'chat.tool_request.no_tools': 'No tools available in the catalog.',
   'chat.tool_request.confirm': 'Enable {{count}} tool(s)',
   'chat.tool_request.skip': 'Skip',
+  'chat.tool_request.auto_activate': 'Let agent activate tools automatically',
+  'chat.config.tools_auto': 'Auto',
 };

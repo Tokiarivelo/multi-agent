@@ -31,6 +31,7 @@ interface ChatState {
   thinkingSteps: ChatThinkingStep[];
   workflowChoice: WorkflowChoice | null;
   toolRequest: ToolRequest | null;
+  autoActivateTools: boolean;
   error: string | null;
   pendingMessages: ChatMessage[];
 
@@ -40,6 +41,7 @@ interface ChatState {
   addThinkingStep: (step: ChatThinkingStep) => void;
   setWorkflowChoice: (choice: WorkflowChoice | null) => void;
   setToolRequest: (request: ToolRequest | null) => void;
+  setAutoActivateTools: (val: boolean) => void;
   addPendingMessage: (message: ChatMessage) => void;
   finalizeMessage: (message: ChatMessage) => void;
   setError: (error: string | null) => void;
@@ -53,11 +55,12 @@ export const useChatStore = create<ChatState>((set) => ({
   thinkingSteps: [],
   workflowChoice: null,
   toolRequest: null,
+  autoActivateTools: false,
   error: null,
   pendingMessages: [],
 
   setActiveSession: (id) =>
-    set({ activeSessionId: id, streamingContent: '', thinkingSteps: [], workflowChoice: null, toolRequest: null, error: null, pendingMessages: [] }),
+    set({ activeSessionId: id, streamingContent: '', thinkingSteps: [], workflowChoice: null, toolRequest: null, autoActivateTools: false, error: null, pendingMessages: [] }),
 
   appendToken: (token) =>
     set((state) => ({ streamingContent: state.streamingContent + token })),
@@ -71,6 +74,8 @@ export const useChatStore = create<ChatState>((set) => ({
   setWorkflowChoice: (choice) => set({ workflowChoice: choice }),
 
   setToolRequest: (request) => set({ toolRequest: request }),
+
+  setAutoActivateTools: (val) => set({ autoActivateTools: val }),
 
   addPendingMessage: (message) =>
     set((state) => ({ pendingMessages: [...state.pendingMessages, message] })),
@@ -87,5 +92,5 @@ export const useChatStore = create<ChatState>((set) => ({
   setError: (error) => set({ error }),
 
   resetStream: () =>
-    set({ streamingContent: '', isStreaming: false, thinkingSteps: [], workflowChoice: null, toolRequest: null, error: null, pendingMessages: [] }),
+    set({ streamingContent: '', isStreaming: false, thinkingSteps: [], workflowChoice: null, toolRequest: null, autoActivateTools: false, error: null, pendingMessages: [] }),
 }));
