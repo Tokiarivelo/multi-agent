@@ -736,6 +736,62 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         return res.output;
       }
 
+      case NodeType.EMAIL: {
+        const action = (node.config.action as string) || 'send';
+        const toolName = action === 'read' ? 'email_read_inbox' : 'email_send';
+        const res = await this.toolClient.executeTool({
+          toolName,
+          input: {
+            smtpHost: node.config.smtpHost,
+            smtpPort: node.config.smtpPort,
+            smtpUser: node.config.smtpUser,
+            smtpPass: node.config.smtpPass,
+            from: node.config.from,
+            to: node.config.to,
+            subject: node.config.subject,
+            body: node.config.body,
+            html: node.config.html,
+            filter: node.config.filter,
+            limit: node.config.limit,
+            ...(typeof input === 'object' && input !== null ? input : {}),
+          },
+          config: node.config,
+        });
+        if (!res.success) throw new Error(res.error || 'Email execution failed');
+        return res.output;
+      }
+
+      case NodeType.CALENDAR: {
+        const calAction = (node.config.action as string) || 'create_event';
+        const calToolMap: Record<string, string> = {
+          create_event: 'calendar_create_event',
+          list_events: 'calendar_list_events',
+          find_slots: 'calendar_find_free_slots',
+          update_event: 'calendar_update_event',
+          delete_event: 'calendar_delete_event',
+        };
+        const calTool = calToolMap[calAction] ?? 'calendar_create_event';
+        const res = await this.toolClient.executeTool({
+          toolName: calTool,
+          input: {
+            credentials: node.config.credentials,
+            calendarId: node.config.calendarId,
+            title: node.config.title,
+            description: node.config.description,
+            startDateTime: node.config.startDateTime,
+            endDateTime: node.config.endDateTime,
+            attendees: node.config.attendees,
+            duration: node.config.duration,
+            count: node.config.count,
+            eventId: node.config.eventId,
+            ...(typeof input === 'object' && input !== null ? input : {}),
+          },
+          config: node.config,
+        });
+        if (!res.success) throw new Error(res.error || 'Calendar execution failed');
+        return res.output;
+      }
+
       case NodeType.SHELL: {
         const rawCwd =
           node.config.cwd ||

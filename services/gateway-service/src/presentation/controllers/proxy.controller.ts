@@ -87,6 +87,18 @@ export class ProxyController {
               'http://localhost:3011',
             );
             break;
+          case 'email':
+            target = this.configService.get<string>(
+              'EMAIL_MCP_SERVICE_URL',
+              'http://localhost:3012',
+            );
+            break;
+          case 'calendar':
+            target = this.configService.get<string>(
+              'CALENDAR_MCP_SERVICE_URL',
+              'http://localhost:3013',
+            );
+            break;
           case 'auth':
             target = this.configService.get<string>(
               'FRONTEND_SERVICE_URL',
@@ -152,6 +164,16 @@ export class ProxyController {
     return this.proxyMiddleware(req as any, res as any, next);
   }
 
+  @All('email/*')
+  proxyEmail(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    return this.proxyMiddleware(req as any, res as any, next);
+  }
+
+  @All('calendar/*')
+  proxyCalendar(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    return this.proxyMiddleware(req as any, res as any, next);
+  }
+
   @All('*')
   proxy(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     const segments = req.path.split('/').filter(Boolean);
@@ -193,6 +215,8 @@ export class ProxyController {
       case 'users':
       case 'github':
       case 'trello':
+      case 'email':
+      case 'calendar':
         break;
       default:
         return next(

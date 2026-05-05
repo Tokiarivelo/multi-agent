@@ -25,6 +25,8 @@ export enum NodeType {
   SUBWORKFLOW = 'SUBWORKFLOW',
   MCP = 'MCP',
   ORCHESTRATOR = 'ORCHESTRATOR',
+  EMAIL = 'EMAIL',
+  CALENDAR = 'CALENDAR',
 }
 
 export interface WorkflowNode {

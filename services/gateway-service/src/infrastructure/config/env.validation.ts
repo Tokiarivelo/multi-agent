@@ -51,6 +51,14 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   TRELLO_MCP_SERVICE_URL?: string = 'http://localhost:3011';
+
+  @IsString()
+  @IsOptional()
+  EMAIL_MCP_SERVICE_URL?: string = 'http://localhost:3012';
+
+  @IsString()
+  @IsOptional()
+  CALENDAR_MCP_SERVICE_URL?: string = 'http://localhost:3013';
 }
 
 export function validate(config: Record<string, unknown>) {
