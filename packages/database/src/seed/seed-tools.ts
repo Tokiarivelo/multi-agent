@@ -446,6 +446,47 @@ const tools = [
     ],
     code: null,
   },
+  {
+    name: 'gmail_fetch_emails',
+    description: 'Fetch emails from a Gmail inbox via IMAP. Returns subject, sender, date, and a text snippet for each message.',
+    category: ToolCategory.MCP,
+    isBuiltIn: false,
+    mcpConfig: {
+      serverUrl: '$EMAIL_MCP_URL/api/mcp',
+      toolName: 'gmail_fetch_emails',
+    },
+    parameters: [
+      { name: 'mailbox', type: 'string', description: 'Mailbox to read (default: INBOX)', required: false },
+      { name: 'limit', type: 'string', description: 'Maximum number of emails to return (default: 20, max: 100)', required: false },
+      { name: 'query', type: 'string', description: 'Optional search filter using key:value pairs. Supported keys: from, to, subject, text, since, before.', required: false },
+      { name: 'imapUser', type: 'string', description: 'Gmail address (uses IMAP_USER env if omitted)', required: false },
+      { name: 'imapPass', type: 'string', description: 'Gmail App Password (uses IMAP_PASS env if omitted)', required: false },
+      { name: 'imapHost', type: 'string', description: 'IMAP host (default: imap.gmail.com)', required: false },
+      { name: 'imapPort', type: 'string', description: 'IMAP port (default: 993)', required: false },
+    ],
+    code: null,
+  },
+  {
+    name: 'gmail_manipulate_emails',
+    description: 'Manipulate emails in a Gmail inbox (mark as read/unread, move, delete) using their UIDs.',
+    category: ToolCategory.MCP,
+    isBuiltIn: false,
+    mcpConfig: {
+      serverUrl: '$EMAIL_MCP_URL/api/mcp',
+      toolName: 'gmail_manipulate_emails',
+    },
+    parameters: [
+      { name: 'uids', type: 'array', description: 'Array of email UIDs to manipulate', required: true },
+      { name: 'action', type: 'string', description: 'Action to perform on the specified emails (mark_read, mark_unread, move, delete)', required: true },
+      { name: 'mailbox', type: 'string', description: 'Mailbox where the emails currently reside (default: INBOX)', required: false },
+      { name: 'targetMailbox', type: 'string', description: 'Target mailbox for the "move" action', required: false },
+      { name: 'imapUser', type: 'string', description: 'Gmail address (uses IMAP_USER env if omitted)', required: false },
+      { name: 'imapPass', type: 'string', description: 'Gmail App Password (uses IMAP_PASS env if omitted)', required: false },
+      { name: 'imapHost', type: 'string', description: 'IMAP host (default: imap.gmail.com)', required: false },
+      { name: 'imapPort', type: 'string', description: 'IMAP port (default: 993)', required: false },
+    ],
+    code: null,
+  },
   // ── Calendar tools (calendar-mcp-service, port 3013) ────────────────────
   {
     name: 'calendar_create_event',

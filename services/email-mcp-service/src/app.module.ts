@@ -10,6 +10,7 @@ import {
   SendEmailTemplateTool,
   VerifySmtpTool,
   FetchEmailsTool,
+  ManipulateEmailsTool,
 } from '@presentation/tools';
 
 @Module({
@@ -28,6 +29,7 @@ import {
     SendEmailTemplateTool,
     VerifySmtpTool,
     FetchEmailsTool,
+    ManipulateEmailsTool,
   ],
 })
 export class AppModule {}

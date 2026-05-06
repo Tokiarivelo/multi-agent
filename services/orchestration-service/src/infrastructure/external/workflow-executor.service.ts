@@ -738,13 +738,13 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
       case NodeType.EMAIL: {
         const action = (node.config.action as string) || 'send';
-        let toolName = 'gmail_send_email';
+        let toolName = 'email_send';
         if (action === 'fetch') toolName = 'gmail_fetch_emails';
         if (action === 'manipulate') toolName = 'gmail_manipulate_emails';
 
         // Extract input parameters based on the action
         let toolInput: any = { ...(typeof input === 'object' && input !== null ? input : {}) };
-        
+
         if (action === 'send') {
           toolInput = {
             to: node.config.to ?? toolInput.to,
@@ -765,7 +765,10 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           if (Array.isArray(uids)) {
             parsedUids = uids;
           } else if (typeof uids === 'string') {
-            parsedUids = uids.split(',').map(u => parseInt(u.trim(), 10)).filter(u => !isNaN(u));
+            parsedUids = uids
+              .split(',')
+              .map((u) => parseInt(u.trim(), 10))
+              .filter((u) => !isNaN(u));
           } else if (typeof uids === 'number') {
             parsedUids = [uids];
           }

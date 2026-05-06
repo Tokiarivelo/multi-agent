@@ -12,6 +12,17 @@ export interface FetchEmailsParams {
   imapPort?: number;
 }
 
+export interface ManipulateEmailsParams {
+  mailbox?: string;
+  uids: number[];
+  action: 'mark_read' | 'mark_unread' | 'move' | 'delete';
+  targetMailbox?: string;
+  imapUser?: string;
+  imapPass?: string;
+  imapHost?: string;
+  imapPort?: number;
+}
+
 export interface FetchedEmail {
   uid: number;
   subject: string;
@@ -107,6 +118,60 @@ export class GmailFetchService {
 
     this.logger.log(`Fetched ${results.length} emails from ${mailbox}`);
     return results;
+  }
+
+  async manipulateEmails(
+    params: ManipulateEmailsParams,
+  ): Promise<{ success: boolean; modified: number }> {
+    const host = params.imapHost ?? this.defaultImap.host;
+    const port = params.imapPort ?? this.defaultImap.port;
+    const user = params.imapUser ?? this.defaultImap.user;
+    const pass = params.imapPass ?? this.defaultImap.pass;
+    const mailbox = params.mailbox ?? 'INBOX';
+
+    this.logger.log(
+      `Manipulating emails — mailbox: ${mailbox}, action: ${params.action}, uids: ${params.uids.join(',')}`,
+    );
+
+    const client = new ImapFlow({
+      host,
+      port,
+      secure: port === 993,
+      auth: { user, pass },
+      logger: false,
+    });
+
+    await client.connect();
+
+    try {
+      const lock = await client.getMailboxLock(mailbox);
+      try {
+        const uidSequence = params.uids.join(',');
+        if (!uidSequence) return { success: true, modified: 0 };
+
+        switch (params.action) {
+          case 'mark_read':
+            await client.messageFlagsAdd(uidSequence, ['\\Seen'], { uid: true });
+            break;
+          case 'mark_unread':
+            await client.messageFlagsRemove(uidSequence, ['\\Seen'], { uid: true });
+            break;
+          case 'move':
+            if (!params.targetMailbox) throw new Error('targetMailbox is required for move action');
+            await client.messageMove(uidSequence, params.targetMailbox, { uid: true });
+            break;
+          case 'delete':
+            await client.messageFlagsAdd(uidSequence, ['\\Deleted'], { uid: true });
+            break;
+        }
+      } finally {
+        lock.release();
+      }
+    } finally {
+      await client.logout();
+    }
+
+    return { success: true, modified: params.uids.length };
   }
 
   private parseQuery(query: string): Record<string, unknown> {

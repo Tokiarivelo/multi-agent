@@ -5,7 +5,13 @@ export interface McpToolSchema {
     type: 'object';
     properties: Record<
       string,
-      { type: string; description: string; default?: unknown; enum?: string[] }
+      {
+        type: string;
+        description: string;
+        default?: unknown;
+        enum?: string[];
+        items?: Record<string, unknown> | { type: string };
+      }
     >;
     required: string[];
   };

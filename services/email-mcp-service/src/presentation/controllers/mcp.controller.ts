@@ -1,6 +1,12 @@
 import { Controller, Post, Body, HttpCode, Get, Logger } from '@nestjs/common';
 import { McpToolHandler, McpToolResult } from '@domain/email-tool.interface';
-import { SendEmailTool, SendEmailTemplateTool, VerifySmtpTool, FetchEmailsTool } from '../tools';
+import {
+  SendEmailTool,
+  SendEmailTemplateTool,
+  VerifySmtpTool,
+  FetchEmailsTool,
+  ManipulateEmailsTool,
+} from '../tools';
 
 export interface JsonRpcRequest {
   jsonrpc: '2.0';
@@ -39,8 +45,15 @@ export class McpController {
     sendEmailTemplate: SendEmailTemplateTool,
     verifySmtp: VerifySmtpTool,
     fetchEmails: FetchEmailsTool,
+    manipulateEmails: ManipulateEmailsTool,
   ) {
-    const handlers: McpToolHandler[] = [sendEmail, sendEmailTemplate, verifySmtp, fetchEmails];
+    const handlers: McpToolHandler[] = [
+      sendEmail,
+      sendEmailTemplate,
+      verifySmtp,
+      fetchEmails,
+      manipulateEmails,
+    ];
     this.tools = new Map(handlers.map((h) => [h.schema().name, h]));
   }
 

@@ -18,6 +18,7 @@ import {
   HardDriveUpload,
   Workflow,
   Network,
+  Mail,
   type LucideIcon,
 } from 'lucide-react';
 import { NodeTypeId } from '@/types';
@@ -280,6 +281,18 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
       subAgents: [],
       maxTokens: 0,
     },
+  },
+  {
+    id: 'EMAIL',
+    label: 'Email',
+    labelFr: 'Email',
+    description: 'Send or manipulate emails',
+    descriptionFr: 'Envoyer ou manipuler des emails',
+    icon: Mail,
+    color: 'text-rose-400',
+    bgColor: 'bg-rose-400/10',
+    borderColor: 'border-rose-400/40',
+    defaultConfig: { action: 'send', to: '', subject: '', body: '' },
   },
 ];
 

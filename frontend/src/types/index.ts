@@ -45,7 +45,8 @@ export type NodeTypeId =
   | 'WORKSPACE_READ'
   | 'WORKSPACE_WRITE'
   | 'SUBWORKFLOW'
-  | 'ORCHESTRATOR';
+  | 'ORCHESTRATOR'
+  | 'EMAIL';
 
 export interface WorkflowIOField {
   key: string;
