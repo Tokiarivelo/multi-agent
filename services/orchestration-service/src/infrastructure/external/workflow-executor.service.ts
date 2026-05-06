@@ -738,23 +738,49 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
       case NodeType.EMAIL: {
         const action = (node.config.action as string) || 'send';
-        const toolName = action === 'read' ? 'email_read_inbox' : 'email_send';
+        let toolName = 'gmail_send_email';
+        if (action === 'fetch') toolName = 'gmail_fetch_emails';
+        if (action === 'manipulate') toolName = 'gmail_manipulate_emails';
+
+        // Extract input parameters based on the action
+        let toolInput: any = { ...(typeof input === 'object' && input !== null ? input : {}) };
+        
+        if (action === 'send') {
+          toolInput = {
+            to: node.config.to ?? toolInput.to,
+            subject: node.config.subject ?? toolInput.subject,
+            body: node.config.body ?? toolInput.body,
+            ...toolInput,
+          };
+        } else if (action === 'fetch') {
+          toolInput = {
+            mailbox: node.config.mailbox ?? toolInput.mailbox ?? 'INBOX',
+            query: node.config.query ?? toolInput.query,
+            limit: node.config.limit ?? toolInput.limit ?? 20,
+            ...toolInput,
+          };
+        } else if (action === 'manipulate') {
+          const uids = node.config.uids ?? toolInput.uids;
+          let parsedUids: number[] = [];
+          if (Array.isArray(uids)) {
+            parsedUids = uids;
+          } else if (typeof uids === 'string') {
+            parsedUids = uids.split(',').map(u => parseInt(u.trim(), 10)).filter(u => !isNaN(u));
+          } else if (typeof uids === 'number') {
+            parsedUids = [uids];
+          }
+
+          toolInput = {
+            action: node.config.manipulateAction ?? toolInput.action ?? 'mark_read',
+            uids: parsedUids.length > 0 ? parsedUids : toolInput.uids,
+            targetMailbox: node.config.targetMailbox ?? toolInput.targetMailbox,
+            ...toolInput,
+          };
+        }
+
         const res = await this.toolClient.executeTool({
           toolName,
-          input: {
-            smtpHost: node.config.smtpHost,
-            smtpPort: node.config.smtpPort,
-            smtpUser: node.config.smtpUser,
-            smtpPass: node.config.smtpPass,
-            from: node.config.from,
-            to: node.config.to,
-            subject: node.config.subject,
-            body: node.config.body,
-            html: node.config.html,
-            filter: node.config.filter,
-            limit: node.config.limit,
-            ...(typeof input === 'object' && input !== null ? input : {}),
-          },
+          input: toolInput,
           config: node.config,
         });
         if (!res.success) throw new Error(res.error || 'Email execution failed');

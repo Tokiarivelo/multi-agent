@@ -2432,6 +2432,128 @@ function NodeEditorForm({
               </div>
             )}
 
+            {/* EMAIL config */}
+            {type === 'EMAIL' && (
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Action</Label>
+                  <Select
+                    value={(config.action as string) ?? 'send'}
+                    onValueChange={(v) => handleConfigChange('action', v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="send">Send Email</SelectItem>
+                      <SelectItem value="fetch">Fetch Emails</SelectItem>
+                      <SelectItem value="manipulate">Manipulate Emails</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {config.action === 'send' && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">To</Label>
+                      <Input
+                        placeholder="recipient@example.com"
+                        value={(config.to as string) ?? ''}
+                        onChange={(e) => handleConfigChange('to', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Subject</Label>
+                      <Input
+                        placeholder="Subject..."
+                        value={(config.subject as string) ?? ''}
+                        onChange={(e) => handleConfigChange('subject', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Body</Label>
+                      <Textarea
+                        placeholder="Email body..."
+                        rows={4}
+                        value={(config.body as string) ?? ''}
+                        onChange={(e) => handleConfigChange('body', e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {config.action === 'fetch' && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Mailbox (default: INBOX)</Label>
+                      <Input
+                        placeholder="INBOX"
+                        value={(config.mailbox as string) ?? ''}
+                        onChange={(e) => handleConfigChange('mailbox', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Query / Filter (e.g., from:bob)</Label>
+                      <Input
+                        placeholder="from:alice"
+                        value={(config.query as string) ?? ''}
+                        onChange={(e) => handleConfigChange('query', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Limit</Label>
+                      <Input
+                        type="number"
+                        placeholder="20"
+                        value={(config.limit as number) ?? 20}
+                        onChange={(e) => handleConfigChange('limit', parseInt(e.target.value))}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {config.action === 'manipulate' && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Manipulation Type</Label>
+                      <Select
+                        value={(config.manipulateAction as string) ?? 'mark_read'}
+                        onValueChange={(v) => handleConfigChange('manipulateAction', v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="mark_read">Mark Read</SelectItem>
+                          <SelectItem value="mark_unread">Mark Unread</SelectItem>
+                          <SelectItem value="move">Move</SelectItem>
+                          <SelectItem value="delete">Delete</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">UIDs (comma separated or {'{{variable}}'})</Label>
+                      <Input
+                        placeholder="1,2,3 or {{uids}}"
+                        value={(config.uids as string) ?? ''}
+                        onChange={(e) => handleConfigChange('uids', e.target.value)}
+                      />
+                    </div>
+                    {config.manipulateAction === 'move' && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Target Mailbox</Label>
+                        <Input
+                          placeholder="[Gmail]/Trash"
+                          value={(config.targetMailbox as string) ?? ''}
+                          onChange={(e) => handleConfigChange('targetMailbox', e.target.value)}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {/* START / END — no extra config */}
             {(type === 'START' || type === 'END') && (
               <p className="text-sm text-muted-foreground italic">
