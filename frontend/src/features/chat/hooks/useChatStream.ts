@@ -71,7 +71,7 @@ export function useChatStream(sessionId: string | null, userId: string | undefin
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [sessionId, appendToken, setStreaming, addThinkingStep, setWorkflowChoice, setToolRequest, finalizeMessage, setError]);
+  }, [sessionId, appendToken, setStreaming, addThinkingStep, setWorkflowChoice, setToolRequest, finalizeMessage, setError, queryClient]);
 
   const sendMessage = useCallback(
     (content: string, attachments?: ChatMessage['attachments']) => {

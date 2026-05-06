@@ -40,6 +40,9 @@ export class EmailApiService {
       pass: this.config.get<string>('smtp.pass', ''),
       from: this.config.get<string>('smtp.from', ''),
     };
+    this.logger.log(
+      `SMTP config loaded — host: ${this.defaultSmtp.host}, port: ${this.defaultSmtp.port}, user: "${this.defaultSmtp.user || '(none)'}", from: "${this.defaultSmtp.from || '(none)'}", pass: ${this.defaultSmtp.pass ? '(set)' : '(not set)'}`,
+    );
   }
 
   private buildTransporter(params: Partial<SendEmailParams>): Transporter {
@@ -57,24 +60,44 @@ export class EmailApiService {
   }
 
   async sendEmail(params: SendEmailParams): Promise<SentEmailResult> {
-    const transporter = this.buildTransporter(params);
+    const host = params.smtpHost ?? this.defaultSmtp.host;
+    const port = params.smtpPort ?? this.defaultSmtp.port;
+    const user = params.smtpUser ?? this.defaultSmtp.user;
     const from = params.from ?? this.defaultSmtp.from;
 
-    this.logger.log(`Sending email to ${JSON.stringify(params.to)} — subject: "${params.subject}"`);
+    this.logger.log(
+      `Sending email — to: ${JSON.stringify(params.to)}, subject: "${params.subject}", from: "${from}", smtp: ${host}:${port}, user: "${user || '(none)'}", auth: ${user ? 'yes' : 'no'}`,
+    );
 
-    const info = await transporter.sendMail({
-      from,
-      to: Array.isArray(params.to) ? params.to.join(', ') : params.to,
-      subject: params.subject,
-      text: params.body,
-      html: params.html,
-    });
+    const transporter = this.buildTransporter(params);
 
-    return {
-      messageId: info.messageId as string,
-      accepted: (info.accepted as string[]) ?? [],
-      rejected: (info.rejected as string[]) ?? [],
-    };
+    try {
+      const info = await transporter.sendMail({
+        from,
+        to: Array.isArray(params.to) ? params.to.join(', ') : params.to,
+        subject: params.subject,
+        text: params.body,
+        html: params.html,
+      });
+
+      this.logger.log(
+        `Email sent — messageId: ${info.messageId}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`,
+      );
+
+      return {
+        messageId: info.messageId as string,
+        accepted: (info.accepted as string[]) ?? [],
+        rejected: (info.rejected as string[]) ?? [],
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error ? err.stack : undefined;
+      this.logger.error(
+        `Failed to send email — smtp: ${host}:${port}, user: "${user || '(none)'}", from: "${from}", to: ${JSON.stringify(params.to)}, error: ${message}`,
+        stack,
+      );
+      throw err;
+    }
   }
 
   async verifyConnection(params: Partial<SendEmailParams> = {}): Promise<boolean> {

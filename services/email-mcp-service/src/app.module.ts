@@ -3,8 +3,14 @@ import { ConfigModule } from '@nestjs/config';
 import configuration from '@infrastructure/config/configuration';
 import { envValidationSchema } from '@infrastructure/config/env.validation';
 import { EmailApiService } from '@infrastructure/email/email-api.service';
+import { GmailFetchService } from '@infrastructure/email/gmail-fetch.service';
 import { McpController } from '@presentation/controllers/mcp.controller';
-import { SendEmailTool, SendEmailTemplateTool, VerifySmtpTool } from '@presentation/tools';
+import {
+  SendEmailTool,
+  SendEmailTemplateTool,
+  VerifySmtpTool,
+  FetchEmailsTool,
+} from '@presentation/tools';
 
 @Module({
   imports: [
@@ -15,6 +21,13 @@ import { SendEmailTool, SendEmailTemplateTool, VerifySmtpTool } from '@presentat
     }),
   ],
   controllers: [McpController],
-  providers: [EmailApiService, SendEmailTool, SendEmailTemplateTool, VerifySmtpTool],
+  providers: [
+    EmailApiService,
+    GmailFetchService,
+    SendEmailTool,
+    SendEmailTemplateTool,
+    VerifySmtpTool,
+    FetchEmailsTool,
+  ],
 })
 export class AppModule {}

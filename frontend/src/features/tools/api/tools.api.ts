@@ -59,6 +59,19 @@ export const toolsApi = {
     return data;
   },
 
+  searchByVector: async (
+    query: string,
+    tools: Array<{ id: string; name: string; description: string }>,
+    userId: string,
+    limit = 10,
+  ): Promise<Array<{ toolId: string; score: number }>> => {
+    const { data } = await apiClient.post<{ results: Array<{ toolId: string; score: number }> }>(
+      '/api/vectors/search-tools',
+      { userId, query, tools, limit },
+    );
+    return data.results;
+  },
+
   execute: async (
     toolId: string,
     parameters: Record<string, unknown>,

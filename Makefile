@@ -263,12 +263,12 @@ test-mcp: ## Smoke-test the MCP endpoint (requires agent-service running on :300
 
 seed-tools: ## Seed built-in tools into the database
 	@echo "$(GREEN)Seeding built-in tools…$(NC)"
-	cd packages/database && pnpm ts-node src/seed/seed-tools.ts
+	cd packages/database && pnpm run seed:tools
 	@echo "$(GREEN)Built-in tools seeded!$(NC)"
 
 seed-agents: ## Seed system agents and models into the database
 	@echo "$(GREEN)Seeding system agents…$(NC)"
-	cd packages/database && pnpm ts-node src/seed/seed-agents.ts
+	cd packages/database && pnpm run seed:agents
 	@echo "$(GREEN)System agents seeded!$(NC)"
 
 seed-all: seed-tools seed-agents ## Run all seed files

@@ -1,7 +1,8 @@
 'use client';
 
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, Cpu, Bot, Check, GitBranch, X, Settings2, Wrench, Zap } from 'lucide-react';
+import { ChevronDown, Cpu, Bot, Check, GitBranch, X, Settings2, Wrench, Zap, Search } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +15,8 @@ import { useModels } from '@/features/models/hooks/useModels';
 import { useAgents } from '@/features/agents/hooks/useAgents';
 import { useWorkflows } from '@/features/workflows/hooks/useWorkflows';
 import { useTools } from '@/features/tools/hooks/useTools';
+import { toolsApi } from '@/features/tools/api/tools.api';
+import { useAuthStoreBase } from '@/store/auth.store';
 import { Model } from '@/types';
 import { ChatSession, CreateSessionInput } from '../api/chat.api';
 import { useUpdateChatSession } from '../hooks/useChatSessions';
@@ -60,11 +63,53 @@ export function ChatConfigPills({ session }: Props) {
   const { data: toolsData } = useTools(1, 100);
   const updateSession = useUpdateChatSession();
   const autoActivateTools = useChatStore((s) => s.autoActivateTools);
+  const userId = useAuthStoreBase((s) => s.user?.id ?? '');
+
+  const [toolSearch, setToolSearch] = useState('');
+  const [vectorMatches, setVectorMatches] = useState<string[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const allTools = useMemo(() => toolsData?.data ?? [], [toolsData?.data]);
+
+  const runVectorSearch = useCallback(
+    async (query: string) => {
+      if (!query.trim() || allTools.length === 0 || !userId) {
+        setVectorMatches(null);
+        return;
+      }
+      setIsSearching(true);
+      try {
+        const results = await toolsApi.searchByVector(
+          query,
+          allTools.map((t) => ({ id: t.id, name: t.name, description: t.description ?? '' })),
+          userId,
+          allTools.length,
+        );
+        setVectorMatches(results.map((r) => r.toolId));
+      } catch {
+        setVectorMatches(null);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [allTools, userId],
+  );
+
+  useEffect(() => {
+    if (!toolSearch.trim()) {
+      setVectorMatches(null);
+      return;
+    }
+    const timer = setTimeout(() => runVectorSearch(toolSearch), 400);
+    return () => clearTimeout(timer);
+  }, [toolSearch, runVectorSearch]);
 
   const models = modelsData?.data ?? [];
   const agents = agentsData?.data ?? [];
   const workflows = workflowsData?.data ?? [];
-  const tools = toolsData?.data ?? [];
+  const tools = vectorMatches
+    ? allTools.filter((t) => vectorMatches.includes(t.id))
+    : allTools;
 
   const currentModel = models.find((m) => m.id === session.modelId);
   const currentAgent = agents.find((a) => a.id === session.agentId);
@@ -184,7 +229,25 @@ export function ChatConfigPills({ session }: Props) {
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="top" className="w-60 max-h-64 overflow-y-auto">
+          <DropdownMenuContent align="start" side="top" className="w-60 max-h-72 flex flex-col overflow-hidden">
+            <div className="px-2 pt-2 pb-1 shrink-0">
+              <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 py-1">
+                <Search className="h-3 w-3 text-muted-foreground shrink-0" />
+                <input
+                  value={toolSearch}
+                  onChange={(e) => setToolSearch(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  placeholder={t('chat.config.tools_search')}
+                  className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                />
+                {isSearching && (
+                  <span className="h-2 w-2 rounded-full bg-primary/60 animate-pulse shrink-0" />
+                )}
+              </div>
+            </div>
+            <DropdownMenuSeparator className="shrink-0" />
+            <div className="overflow-y-auto flex-1">
             <DropdownMenuLabel className="text-xs text-muted-foreground">{t('chat.config.tools')}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {tools.map((tool) => (
@@ -201,6 +264,7 @@ export function ChatConfigPills({ session }: Props) {
                 {session.tools?.includes(tool.id) && <Check className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />}
               </DropdownMenuItem>
             ))}
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       )}

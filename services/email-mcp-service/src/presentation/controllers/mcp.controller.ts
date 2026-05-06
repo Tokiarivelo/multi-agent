@@ -1,6 +1,6 @@
 import { Controller, Post, Body, HttpCode, Get, Logger } from '@nestjs/common';
 import { McpToolHandler, McpToolResult } from '@domain/email-tool.interface';
-import { SendEmailTool, SendEmailTemplateTool, VerifySmtpTool } from '../tools';
+import { SendEmailTool, SendEmailTemplateTool, VerifySmtpTool, FetchEmailsTool } from '../tools';
 
 export interface JsonRpcRequest {
   jsonrpc: '2.0';
@@ -38,8 +38,9 @@ export class McpController {
     sendEmail: SendEmailTool,
     sendEmailTemplate: SendEmailTemplateTool,
     verifySmtp: VerifySmtpTool,
+    fetchEmails: FetchEmailsTool,
   ) {
-    const handlers: McpToolHandler[] = [sendEmail, sendEmailTemplate, verifySmtp];
+    const handlers: McpToolHandler[] = [sendEmail, sendEmailTemplate, verifySmtp, fetchEmails];
     this.tools = new Map(handlers.map((h) => [h.schema().name, h]));
   }
 
@@ -86,7 +87,8 @@ export class McpController {
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Internal error';
-      this.logger.error(`RPC error: ${message}`);
+      const stack = err instanceof Error ? err.stack : undefined;
+      this.logger.error(`RPC error method="${req.method}": ${message}`, stack);
       return this.error(req.id, JSON_RPC_ERRORS.INTERNAL_ERROR, message);
     }
   }

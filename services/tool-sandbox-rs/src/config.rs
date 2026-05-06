@@ -10,6 +10,8 @@ pub struct Config {
     pub document_service_url: String,
     pub workspace_root: String,
     pub file_service_url: String,
+    pub email_mcp_url: String,
+    pub calendar_mcp_url: String,
 }
 
 impl Config {
@@ -52,6 +54,10 @@ impl Config {
                 .unwrap_or_else(|_| "http://localhost:3009".to_string()),
             file_service_url: env::var("FILE_SERVICE_URL")
                 .unwrap_or_else(|_| "http://localhost:3008".to_string()),
+            email_mcp_url: env::var("EMAIL_MCP_URL")
+                .unwrap_or_else(|_| "http://localhost:3012".to_string()),
+            calendar_mcp_url: env::var("CALENDAR_MCP_URL")
+                .unwrap_or_else(|_| "http://localhost:3013".to_string()),
             workspace_root,
         })
     }

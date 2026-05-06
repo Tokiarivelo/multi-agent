@@ -148,6 +148,76 @@ export class VectorController {
   }
 
   /**
+   * Convenience endpoint: indexes tools into a per-user "agent_tools" collection
+   * and returns semantically ranked tool IDs for the given query.
+   * Pass `tools` to upsert/refresh the index; omit to search only.
+   */
+  @Post('search-tools')
+  @HttpCode(HttpStatus.OK)
+  async searchTools(
+    @Body()
+    body: {
+      userId: string;
+      query: string;
+      tools?: Array<{ id: string; name: string; description: string }>;
+      limit?: number;
+    },
+  ) {
+    this.logger.log(`POST /vectors/search-tools - userId: ${body.userId}`);
+    const TOOLS_COLLECTION = 'agent_tools';
+    const DIMENSION = 1536;
+
+    let collection = await this.vectorRepository.findCollectionByNameAndUserId(
+      TOOLS_COLLECTION,
+      body.userId,
+    );
+
+    if (!collection) {
+      try {
+        collection = await this.createCollectionUseCase.execute({
+          name: TOOLS_COLLECTION,
+          userId: body.userId,
+          dimension: DIMENSION,
+          distance: 'cosine',
+        });
+      } catch {
+        collection = await this.vectorRepository.findCollectionByNameAndUserId(
+          TOOLS_COLLECTION,
+          body.userId,
+        );
+      }
+    }
+
+    if (!collection) return { results: [] };
+
+    if (body.tools?.length) {
+      await this.upsertDocumentUseCase.executeBatch({
+        collectionId: collection.id,
+        documents: body.tools.map((tool) => ({
+          documentId: tool.id,
+          content: `${tool.name}: ${tool.description}`,
+          metadata: { toolId: tool.id, name: tool.name },
+        })),
+      });
+    }
+
+    if (!body.query?.trim()) return { results: [] };
+
+    const searchResults = await this.searchSimilarUseCase.execute({
+      collectionId: collection.id,
+      query: body.query,
+      limit: body.limit ?? 10,
+    });
+
+    return {
+      results: searchResults.map((r) => ({
+        toolId: (r.metadata as Record<string, string>).toolId ?? r.id,
+        score: r.score,
+      })),
+    };
+  }
+
+  /**
    * Convenience endpoint: resolves the caller's "workspace_files" collection
    * automatically and searches across all indexed files (or a specific file).
    */

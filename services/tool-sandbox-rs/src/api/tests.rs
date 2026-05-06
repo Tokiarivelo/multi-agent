@@ -21,7 +21,10 @@ fn make_config() -> crate::config::Config {
         enable_file_operations: true,
         allowed_domains: vec!["*".to_string()],
         document_service_url: "http://localhost:3009".into(),
+        file_service_url: "http://localhost:3008".into(),
         workspace_root: std::env::temp_dir().to_string_lossy().into_owned(),
+        email_mcp_url: "http://localhost:3012".into(),
+        calendar_mcp_url: "http://localhost:3013".into(),
     }
 }
 

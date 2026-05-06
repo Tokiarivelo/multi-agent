@@ -35,4 +35,6 @@ export const agents = {
   'agents.form.max_tokens': 'Max Tokens',
   'agents.form.tools_config': 'Capabilities',
   'agents.form.tools_desc': 'External tools and integrations',
+  'agents.form.tools_search_placeholder': 'Search capabilities...',
+  'agents.form.tools_no_results': 'No matching tools',
 };

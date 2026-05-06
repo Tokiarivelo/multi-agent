@@ -12,8 +12,8 @@
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "prisma:reset": "prisma migrate reset",
-    "seed:tools": "ts-node src/seed/seed-tools.ts",
-    "seed:agents": "ts-node src/seed/seed-agents.ts"
+    "seed:tools": "tsx src/seed/seed-tools.ts",
+    "seed:agents": "tsx src/seed/seed-agents.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
@@ -27,6 +27,7 @@
     "dotenv": "^17.3.1",
     "prisma": "^7.4.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.3.3"
   }
 }

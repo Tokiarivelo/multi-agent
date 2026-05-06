@@ -14,6 +14,7 @@ pub async fn execute_mcp(
     headers: &HashMap<String, String>,
     timeout_ms: u64,
 ) -> anyhow::Result<Value> {
+    tracing::info!("MCP call → url={:?} tool={} timeout={}ms", server_url, tool_name, timeout_ms);
     let id = RPC_COUNTER.fetch_add(1, Ordering::SeqCst);
 
     let request = json!({
@@ -32,13 +33,15 @@ pub async fn execute_mcp(
         req = req.header(k.as_str(), v.as_str());
     }
 
-    let rpc: Value = req
+    let response = req
         .send()
         .await
-        .map_err(|e| anyhow::anyhow!("MCP execution failed: {}", e))?
+        .map_err(|e| anyhow::anyhow!("MCP call to {} failed (send): {}", server_url, e))?;
+
+    let rpc: Value = response
         .json()
         .await
-        .map_err(|e| anyhow::anyhow!("MCP execution failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("MCP call to {} failed (json parse): {}", server_url, e))?;
 
     if let Some(error) = rpc.get("error") {
         let code = error.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
@@ -46,7 +49,7 @@ pub async fn execute_mcp(
             .get("message")
             .and_then(|m| m.as_str())
             .unwrap_or("unknown error");
-        anyhow::bail!("MCP error {}: {}", code, msg);
+        anyhow::bail!("MCP error {} from {}: {}", code, server_url, msg);
     }
 
     let result = match rpc.get("result") {

@@ -35,4 +35,6 @@ export const agents = {
   'agents.form.max_tokens': 'Jetons max',
   'agents.form.tools_config': 'Capacités',
   'agents.form.tools_desc': 'Outils externes et intégrations',
+  'agents.form.tools_search_placeholder': 'Rechercher des capacités...',
+  'agents.form.tools_no_results': 'Aucun outil correspondant',
 };

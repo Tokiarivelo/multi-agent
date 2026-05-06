@@ -392,8 +392,12 @@ const tools = [
   {
     name: 'email_send',
     description: 'Send an email via SMTP. Supports plain text and HTML bodies.',
-    category: ToolCategory.API,
-    isBuiltIn: true,
+    category: ToolCategory.MCP,
+    isBuiltIn: false,
+    mcpConfig: {
+      serverUrl: '$EMAIL_MCP_URL/api/mcp',
+      toolName: 'email_send',
+    },
     parameters: [
       { name: 'to', type: 'string', description: 'Recipient address(es), comma-separated', required: true },
       { name: 'subject', type: 'string', description: 'Email subject line', required: true },
@@ -410,8 +414,12 @@ const tools = [
   {
     name: 'email_send_template',
     description: 'Send an email using a template with {{variable}} placeholders auto-replaced from variables.',
-    category: ToolCategory.API,
-    isBuiltIn: true,
+    category: ToolCategory.MCP,
+    isBuiltIn: false,
+    mcpConfig: {
+      serverUrl: '$EMAIL_MCP_URL/api/mcp',
+      toolName: 'email_send_template',
+    },
     parameters: [
       { name: 'to', type: 'string', description: 'Recipient address(es), comma-separated', required: true },
       { name: 'subject', type: 'string', description: 'Subject — supports {{variable}} placeholders', required: true },
@@ -424,8 +432,12 @@ const tools = [
   {
     name: 'email_verify_smtp',
     description: 'Verify SMTP connection is working before sending emails.',
-    category: ToolCategory.API,
-    isBuiltIn: true,
+    category: ToolCategory.MCP,
+    isBuiltIn: false,
+    mcpConfig: {
+      serverUrl: '$EMAIL_MCP_URL/api/mcp',
+      toolName: 'email_verify_smtp',
+    },
     parameters: [
       { name: 'smtpHost', type: 'string', description: 'SMTP host to test', required: false },
       { name: 'smtpPort', type: 'string', description: 'SMTP port to test', required: false },
@@ -438,8 +450,9 @@ const tools = [
   {
     name: 'calendar_create_event',
     description: 'Create a new event in Google Calendar.',
-    category: ToolCategory.API,
-    isBuiltIn: true,
+    category: ToolCategory.MCP,
+    isBuiltIn: false,
+    mcpConfig: { serverUrl: '$CALENDAR_MCP_URL/api/mcp', toolName: 'calendar_create_event' },
     parameters: [
       { name: 'title', type: 'string', description: 'Event title/summary', required: true },
       { name: 'startDateTime', type: 'string', description: 'Start date-time in ISO 8601 (UTC)', required: true },
@@ -455,8 +468,9 @@ const tools = [
   {
     name: 'calendar_list_events',
     description: 'List upcoming events from Google Calendar.',
-    category: ToolCategory.API,
-    isBuiltIn: true,
+    category: ToolCategory.MCP,
+    isBuiltIn: false,
+    mcpConfig: { serverUrl: '$CALENDAR_MCP_URL/api/mcp', toolName: 'calendar_list_events' },
     parameters: [
       { name: 'timeMin', type: 'string', description: 'Start of range in ISO 8601 (default: now)', required: false },
       { name: 'timeMax', type: 'string', description: 'End of range in ISO 8601', required: false },
@@ -469,8 +483,9 @@ const tools = [
   {
     name: 'calendar_find_free_slots',
     description: 'Find N available time slots of a given duration in a calendar, scanning working hours (09:00–18:00 UTC).',
-    category: ToolCategory.API,
-    isBuiltIn: true,
+    category: ToolCategory.MCP,
+    isBuiltIn: false,
+    mcpConfig: { serverUrl: '$CALENDAR_MCP_URL/api/mcp', toolName: 'calendar_find_free_slots' },
     parameters: [
       { name: 'duration', type: 'string', description: 'Slot duration in minutes (e.g. 60)', required: true },
       { name: 'count', type: 'string', description: 'Number of slots to return (default: 3)', required: false },
@@ -484,8 +499,9 @@ const tools = [
   {
     name: 'calendar_update_event',
     description: 'Update an existing Google Calendar event.',
-    category: ToolCategory.API,
-    isBuiltIn: true,
+    category: ToolCategory.MCP,
+    isBuiltIn: false,
+    mcpConfig: { serverUrl: '$CALENDAR_MCP_URL/api/mcp', toolName: 'calendar_update_event' },
     parameters: [
       { name: 'eventId', type: 'string', description: 'Google Calendar event ID', required: true },
       { name: 'title', type: 'string', description: 'New event title', required: false },
@@ -501,8 +517,9 @@ const tools = [
   {
     name: 'calendar_delete_event',
     description: 'Delete an event from Google Calendar.',
-    category: ToolCategory.API,
-    isBuiltIn: true,
+    category: ToolCategory.MCP,
+    isBuiltIn: false,
+    mcpConfig: { serverUrl: '$CALENDAR_MCP_URL/api/mcp', toolName: 'calendar_delete_event' },
     parameters: [
       { name: 'eventId', type: 'string', description: 'Google Calendar event ID to delete', required: true },
       { name: 'calendarId', type: 'string', description: 'Calendar ID (default: primary)', required: false },

@@ -149,10 +149,12 @@ async fn run(state: &AppState, req: &ExecuteRequest) -> anyhow::Result<Value> {
             }
         }
 
-        let server_url = mcp_cfg
+        let raw_url = mcp_cfg
             .get("serverUrl")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("MCP tool missing serverUrl"))?;
+        let server_url_owned = resolve_server_url(raw_url, &state.config);
+        let server_url = server_url_owned.as_str();
         let tool_name = mcp_cfg
             .get("toolName")
             .and_then(|v| v.as_str())
@@ -203,6 +205,16 @@ async fn run(state: &AppState, req: &ExecuteRequest) -> anyhow::Result<Value> {
     }
 
     anyhow::bail!("Tool has no executable code");
+}
+
+/// Replace `$VAR_NAME` placeholders in a stored serverUrl with runtime config values.
+///
+/// Supported placeholders:
+///   $EMAIL_MCP_URL    → config.email_mcp_url
+///   $CALENDAR_MCP_URL → config.calendar_mcp_url
+fn resolve_server_url(url: &str, config: &crate::config::Config) -> String {
+    url.replace("$EMAIL_MCP_URL", &config.email_mcp_url)
+        .replace("$CALENDAR_MCP_URL", &config.calendar_mcp_url)
 }
 
 fn is_github_auth_error(msg: &str) -> bool {

@@ -277,12 +277,15 @@ export class ChatMessageUseCase {
     for (const toolCall of response.toolCalls) {
       let toolContent: string;
       let isError = false;
+      this.logger.log(`Executing tool: ${toolCall.name} args=${JSON.stringify(toolCall.args)}`);
       try {
         const raw = await this.toolClient.executeTool(toolCall.name, toolCall.args, userId, workspacePath);
+        this.logger.log(`Tool ${toolCall.name} result: ${JSON.stringify(raw).slice(0, 200)}`);
         toolContent = this.formatToolContent(raw);
       } catch (err) {
         isError = true;
         const errMessage = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Tool ${toolCall.name} failed: ${errMessage}`);
 
         // Pause and ask user to select appropriate tools from catalog
         const catalog = await this.toolClient.listToolsCatalog();

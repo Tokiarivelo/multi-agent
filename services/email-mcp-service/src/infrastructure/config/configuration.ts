@@ -8,4 +8,10 @@ export default () => ({
     pass: process.env['SMTP_PASS'] ?? '',
     from: process.env['SMTP_FROM'] ?? '',
   },
+  imap: {
+    host: process.env['IMAP_HOST'] ?? 'imap.gmail.com',
+    port: Number(process.env['IMAP_PORT'] ?? 993),
+    user: process.env['IMAP_USER'] ?? process.env['SMTP_USER'] ?? '',
+    pass: process.env['IMAP_PASS'] ?? process.env['SMTP_PASS'] ?? '',
+  },
 });

@@ -51,4 +51,5 @@ export const chat = {
   'chat.tool_request.skip': 'Skip',
   'chat.tool_request.auto_activate': 'Let agent activate tools automatically',
   'chat.config.tools_auto': 'Auto',
+  'chat.config.tools_search': 'Search tools...',
 };
