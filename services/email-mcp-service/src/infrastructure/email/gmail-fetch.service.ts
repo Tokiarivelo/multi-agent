@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ImapFlow, FetchMessageObject } from 'imapflow';
+import { HttpService } from '@nestjs/axios';
+import { ImapFlow, FetchMessageObject, MessageStructureObject } from 'imapflow';
+import { Readable } from 'stream';
+import { firstValueFrom } from 'rxjs';
 
 export interface FetchEmailsParams {
   mailbox?: string;
@@ -32,6 +35,38 @@ export interface FetchedEmail {
   snippet: string;
 }
 
+export interface AttachmentInfo {
+  partId: string;
+  filename: string;
+  contentType: string;
+  size: number;
+}
+
+export interface ListAttachmentsParams {
+  uid: number;
+  mailbox?: string;
+  imapUser?: string;
+  imapPass?: string;
+  imapHost?: string;
+  imapPort?: number;
+}
+
+export interface DownloadAttachmentParams extends ListAttachmentsParams {
+  partId: string;
+  savePath?: string;
+}
+
+export interface DownloadedAttachment {
+  filename: string;
+  contentType: string;
+  size: number;
+  data: string;
+  encoding: 'base64';
+  savedTo?: string;
+  localPath?: string;
+  url?: string;
+}
+
 @Injectable()
 export class GmailFetchService {
   private readonly logger = new Logger(GmailFetchService.name);
@@ -42,42 +77,50 @@ export class GmailFetchService {
     user: string;
     pass: string;
   };
+  private readonly toolServiceUrl: string;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly http: HttpService,
+  ) {
     this.defaultImap = {
       host: this.config.get<string>('imap.host', 'imap.gmail.com'),
       port: this.config.get<number>('imap.port', 993),
       user: this.config.get<string>('imap.user', ''),
       pass: this.config.get<string>('imap.pass', ''),
     };
+    this.toolServiceUrl = this.config.get<string>('toolServiceUrl', 'http://localhost:3030');
   }
 
   async fetchEmails(params: FetchEmailsParams = {}): Promise<FetchedEmail[]> {
-    const host = params.imapHost ?? this.defaultImap.host;
-    const port = params.imapPort ?? this.defaultImap.port;
-    const user = params.imapUser ?? this.defaultImap.user;
-    const pass = params.imapPass ?? this.defaultImap.pass;
     const mailbox = params.mailbox ?? 'INBOX';
     const limit = params.limit ?? 20;
 
-    this.logger.log(
-      `Fetching emails — mailbox: ${mailbox}, limit: ${limit}, host: ${host}:${port}, user: "${user}"`,
-    );
+    this.logger.log(`Fetching emails — mailbox: ${mailbox}, limit: ${limit}`);
 
-    const client = new ImapFlow({
-      host,
-      port,
-      secure: port === 993,
-      auth: { user, pass },
-      logger: false,
-    });
+    const client = this.buildClient(params);
+
+    if (mailbox.includes('@')) {
+      this.logger.warn(
+        `Mailbox "${mailbox}" looks like an email address — defaulting to INBOX. Use an IMAP folder name (e.g. INBOX, [Gmail]/Sent Mail) instead.`,
+      );
+      return this.fetchEmails({ ...params, mailbox: 'INBOX' });
+    }
 
     await client.connect();
 
     const results: FetchedEmail[] = [];
 
     try {
-      const lock = await client.getMailboxLock(mailbox);
+      let lock;
+      try {
+        lock = await client.getMailboxLock(mailbox);
+      } catch {
+        throw new Error(
+          `Mailbox "${mailbox}" not found on the IMAP server. ` +
+            `Common Gmail folders: INBOX, [Gmail]/Sent Mail, [Gmail]/Drafts, [Gmail]/Trash.`,
+        );
+      }
       try {
         const status = await client.status(mailbox, { messages: true });
         const total = status.messages ?? 0;
@@ -123,23 +166,11 @@ export class GmailFetchService {
   async manipulateEmails(
     params: ManipulateEmailsParams,
   ): Promise<{ success: boolean; modified: number }> {
-    const host = params.imapHost ?? this.defaultImap.host;
-    const port = params.imapPort ?? this.defaultImap.port;
-    const user = params.imapUser ?? this.defaultImap.user;
-    const pass = params.imapPass ?? this.defaultImap.pass;
     const mailbox = params.mailbox ?? 'INBOX';
-
     this.logger.log(
       `Manipulating emails — mailbox: ${mailbox}, action: ${params.action}, uids: ${params.uids.join(',')}`,
     );
-
-    const client = new ImapFlow({
-      host,
-      port,
-      secure: port === 993,
-      auth: { user, pass },
-      logger: false,
-    });
+    const client = this.buildClient(params);
 
     await client.connect();
 
@@ -172,6 +203,137 @@ export class GmailFetchService {
     }
 
     return { success: true, modified: params.uids.length };
+  }
+
+  async listAttachments(params: ListAttachmentsParams): Promise<AttachmentInfo[]> {
+    const client = this.buildClient(params);
+    const mailbox = params.mailbox ?? 'INBOX';
+
+    await client.connect();
+    try {
+      const lock = await client.getMailboxLock(mailbox);
+      try {
+        const msg = await client.fetchOne(
+          String(params.uid),
+          { bodyStructure: true },
+          { uid: true },
+        );
+        if (!msg || !msg.bodyStructure) return [];
+        const attachments: AttachmentInfo[] = [];
+        this.collectAttachments(msg.bodyStructure, attachments);
+        return attachments;
+      } finally {
+        lock.release();
+      }
+    } finally {
+      await client.logout();
+    }
+  }
+
+  async downloadAttachment(params: DownloadAttachmentParams): Promise<DownloadedAttachment> {
+    const client = this.buildClient(params);
+    const mailbox = params.mailbox ?? 'INBOX';
+
+    await client.connect();
+    try {
+      const lock = await client.getMailboxLock(mailbox);
+      try {
+        const result = await client.download(String(params.uid), params.partId, { uid: true });
+        if (!result) throw new Error(`Part ${params.partId} not found in message ${params.uid}`);
+
+        const { meta, content } = result as {
+          meta: { filename?: string; contentType?: string; expectedSize?: number };
+          content: Readable;
+        };
+        const chunks: Buffer[] = [];
+        for await (const chunk of content) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+        }
+        const buf = Buffer.concat(chunks);
+
+        const filename = meta.filename ?? `attachment_${params.partId}`;
+        const contentType = meta.contentType ?? 'application/octet-stream';
+        const data = buf.toString('base64');
+
+        if (params.savePath) {
+          try {
+            const resp = await firstValueFrom(
+              this.http.post(`${this.toolServiceUrl}/api/tools/execute`, {
+                toolName: 'download_file',
+                parameters: {
+                  content: data,
+                  outputPath: params.savePath,
+                  filename,
+                  contentType,
+                },
+              }),
+            );
+            const result = resp.data?.data ?? resp.data ?? {};
+            return {
+              filename,
+              contentType,
+              size: buf.length,
+              data,
+              encoding: 'base64' as const,
+              localPath: result.localPath as string | undefined,
+              url: result.url as string | undefined,
+            };
+          } catch (err) {
+            this.logger.warn(
+              `download_file tool call failed, skipping save: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
+
+        return { filename, contentType, size: buf.length, data, encoding: 'base64' as const };
+      } finally {
+        lock.release();
+      }
+    } finally {
+      await client.logout();
+    }
+  }
+
+  private buildClient(params: {
+    imapHost?: string;
+    imapPort?: number;
+    imapUser?: string;
+    imapPass?: string;
+  }): ImapFlow {
+    const host = params.imapHost ?? this.defaultImap.host;
+    const port = params.imapPort ?? this.defaultImap.port;
+    const user = params.imapUser ?? this.defaultImap.user;
+    const pass = params.imapPass ?? this.defaultImap.pass;
+    return new ImapFlow({ host, port, secure: port === 993, auth: { user, pass }, logger: false });
+  }
+
+  private collectAttachments(node: MessageStructureObject, parts: AttachmentInfo[]): void {
+    if (node.childNodes) {
+      for (const child of node.childNodes) {
+        this.collectAttachments(child, parts);
+      }
+    }
+    if (!node.part) return;
+
+    const isAttachment =
+      node.disposition?.toLowerCase() === 'attachment' ||
+      node.dispositionParameters?.['filename'] !== undefined ||
+      (node.parameters?.['name'] !== undefined &&
+        !node.type.startsWith('text/') &&
+        !node.type.startsWith('multipart/'));
+
+    if (isAttachment) {
+      const filename =
+        node.dispositionParameters?.['filename'] ??
+        node.parameters?.['name'] ??
+        `attachment_${node.part}`;
+      parts.push({
+        partId: node.part,
+        filename,
+        contentType: node.type,
+        size: node.size ?? 0,
+      });
+    }
   }
 
   private parseQuery(query: string): Record<string, unknown> {

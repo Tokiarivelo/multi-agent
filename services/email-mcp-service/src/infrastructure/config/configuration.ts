@@ -14,4 +14,5 @@ export default () => ({
     user: process.env['IMAP_USER'] ?? process.env['SMTP_USER'] ?? '',
     pass: process.env['IMAP_PASS'] ?? process.env['SMTP_PASS'] ?? '',
   },
+  toolServiceUrl: process.env['TOOL_SERVICE_URL'] ?? 'http://localhost:3030',
 });

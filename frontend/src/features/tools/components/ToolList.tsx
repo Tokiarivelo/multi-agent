@@ -13,7 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Plus, Wrench, Play, Pencil, Trash2, Sparkles } from 'lucide-react';
+import { Plus, Wrench, Play, Pencil, Trash2, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import * as LucideIcons from 'lucide-react';
 import { useState } from 'react';
@@ -36,7 +36,8 @@ const DynamicIcon = ({ name, className }: { name?: string; className?: string })
 
 export function ToolList() {
   const { t } = useTranslation();
-  const { data, isLoading, error } = useTools();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, error } = useTools(page);
   const deleteTool = useDeleteTool();
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [pendingDeleteTool, setPendingDeleteTool] = useState<Tool | null>(null);
@@ -47,6 +48,9 @@ export function ToolList() {
   if (error) return <div className="text-destructive">{t('tools.error')}</div>;
 
   const tools = data?.data || [];
+  const total = data?.total ?? tools.length;
+  const pageSize = data?.pageSize ?? data?.limit ?? 20;
+  const totalPages = data?.totalPages ?? Math.ceil(total / pageSize);
 
   return (
     <div className="space-y-4">
@@ -75,7 +79,7 @@ export function ToolList() {
         <CardHeader>
           <CardTitle>{t('tools.allTools')}</CardTitle>
           <CardDescription>
-            {t(`tools.count_${tools.length === 1 ? 'one' : 'other'}`, { count: tools.length })}
+            {t(`tools.count_${total === 1 ? 'one' : 'other'}`, { count: total })}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -84,6 +88,7 @@ export function ToolList() {
               <p className="text-muted-foreground">{t('tools.noTools')}</p>
             </div>
           ) : (
+            <>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -177,6 +182,36 @@ export function ToolList() {
                 ))}
               </TableBody>
             </Table>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-4 border-t border-border/40">
+                <span className="text-sm text-muted-foreground">
+                  {t('tools.pagination.pageOf', { page, total: totalPages })}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="gap-1"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    {t('tools.pagination.previous')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="gap-1"
+                  >
+                    {t('tools.pagination.next')}
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </CardContent>
       </Card>

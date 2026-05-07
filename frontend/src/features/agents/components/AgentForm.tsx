@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCreateAgent, useUpdateAgent, useDeleteAgent } from '../hooks/useAgents';
 import { useModels } from '@/features/models/hooks/useModels';
 import { useTools } from '@/features/tools/hooks/useTools';
@@ -32,7 +32,9 @@ export function AgentForm({ agent }: AgentFormProps) {
   const updateAgent = useUpdateAgent();
   const deleteAgent = useDeleteAgent();
   const { data: modelsData, isLoading: modelsLoading } = useModels();
-  const { data: toolsData, isLoading: toolsLoading } = useTools();
+  const [toolsPage, setToolsPage] = useState(1);
+  const [accumulatedTools, setAccumulatedTools] = useState<import('@/types').Tool[]>([]);
+  const { data: toolsData, isLoading: toolsLoading, isFetching: toolsFetching } = useTools(toolsPage);
 
   const handleSave = () => {
     const agentData = {
@@ -58,9 +60,21 @@ export function AgentForm({ agent }: AgentFormProps) {
     }
   };
 
+  useEffect(() => {
+    if (!toolsData?.data) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAccumulatedTools((prev) =>
+      toolsPage === 1 ? toolsData.data : [...prev, ...toolsData.data],
+    );
+  }, [toolsData, toolsPage]);
+
   const isLoading = createAgent.isPending || updateAgent.isPending || deleteAgent.isPending;
   const models = modelsData?.data || [];
-  const availableTools = toolsData?.data || [];
+  const availableTools = accumulatedTools;
+  const toolsPageSize = toolsData?.pageSize ?? toolsData?.limit ?? 20;
+  const toolsTotalPages = toolsData?.totalPages ?? Math.ceil((toolsData?.total ?? 0) / toolsPageSize);
+  const hasMoreTools = toolsData ? toolsPage < toolsTotalPages : false;
+  const loadMoreTools = () => setToolsPage((p) => p + 1);
 
   const toggleTool = (toolId: string) => {
     setSelectedTools((prev) =>
@@ -141,6 +155,9 @@ export function AgentForm({ agent }: AgentFormProps) {
             selectedTools={selectedTools}
             toggleTool={toggleTool}
             availableTools={availableTools}
+            hasMore={hasMoreTools}
+            onFetchMore={loadMoreTools}
+            isFetchingMore={toolsFetching && toolsPage > 1}
           />
         </div>
       </div>

@@ -202,9 +202,18 @@ export class ChatMessageUseCase {
         callbacks.onToken(token);
       },
       onComplete: async (response) => {
-        if (response.toolCalls && response.toolCalls.length > 0) {
+        const MAX_TOOL_ITERATIONS = 10;
+        let currentResponse = response;
+        let iterations = 0;
+
+        while (
+          currentResponse.toolCalls &&
+          currentResponse.toolCalls.length > 0 &&
+          iterations < MAX_TOOL_ITERATIONS
+        ) {
+          iterations++;
           await this.processToolCalls(
-            response,
+            currentResponse,
             context,
             tools,
             toolIds,
@@ -215,12 +224,11 @@ export class ChatMessageUseCase {
             userId,
             dto.workspacePath,
           );
-          // Ask the LLM to summarize the tool results in natural language
-          const followUp = await this.langchainProvider.execute(
+          currentResponse = await this.langchainProvider.execute(
             context.conversationHistory,
             tools.length > 0 ? tools : undefined,
           );
-          fullContent = followUp.content;
+          fullContent = currentResponse.content;
           if (fullContent) callbacks.onToken(fullContent);
         }
 
@@ -277,15 +285,46 @@ export class ChatMessageUseCase {
     for (const toolCall of response.toolCalls) {
       let toolContent: string;
       let isError = false;
-      this.logger.log(`Executing tool: ${toolCall.name} args=${JSON.stringify(toolCall.args)}`);
+
+      const callStep: ChatThinkingStep = {
+        step: 'tool_call',
+        toolName: toolCall.name,
+        toolInput: toolCall.args,
+        thought: `Calling ${toolCall.name}…`,
+      };
+      thinkingSteps.push(callStep);
+      callbacks.onThinking(callStep);
+
+      this.logger.log(`[tool →] ${toolCall.name} args=${JSON.stringify(toolCall.args)}`);
+      const t0 = Date.now();
       try {
         const raw = await this.toolClient.executeTool(toolCall.name, toolCall.args, userId, workspacePath);
-        this.logger.log(`Tool ${toolCall.name} result: ${JSON.stringify(raw).slice(0, 200)}`);
+        const elapsed = Date.now() - t0;
+        const rawStr = JSON.stringify(raw);
+        this.logger.log(`[tool ←] ${toolCall.name} (${elapsed}ms) result=${rawStr.slice(0, 500)}${rawStr.length > 500 ? '…' : ''}`);
         toolContent = this.formatToolContent(raw);
+
+        const resultStep: ChatThinkingStep = {
+          step: 'tool_result',
+          toolName: toolCall.name,
+          toolResult: rawStr.slice(0, 1000),
+          thought: `${toolCall.name} completed in ${elapsed}ms`,
+        };
+        thinkingSteps.push(resultStep);
+        callbacks.onThinking(resultStep);
       } catch (err) {
         isError = true;
         const errMessage = err instanceof Error ? err.message : String(err);
-        this.logger.error(`Tool ${toolCall.name} failed: ${errMessage}`);
+        this.logger.error(`[tool ✗] ${toolCall.name} (${Date.now() - t0}ms) error=${errMessage}`);
+
+        const errStep: ChatThinkingStep = {
+          step: 'tool_error',
+          toolName: toolCall.name,
+          toolResult: errMessage,
+          thought: `${toolCall.name} failed: ${errMessage}`,
+        };
+        thinkingSteps.push(errStep);
+        callbacks.onThinking(errStep);
 
         // Pause and ask user to select appropriate tools from catalog
         const catalog = await this.toolClient.listToolsCatalog();

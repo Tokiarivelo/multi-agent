@@ -2432,9 +2432,64 @@ function NodeEditorForm({
               </div>
             )}
 
+            {/* DOWNLOAD_FILE config */}
+            {type === 'DOWNLOAD_FILE' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">URL</Label>
+                  <Input
+                    placeholder="https://example.com/file.pdf"
+                    value={(config.url as string) ?? ''}
+                    onChange={(e) => handleConfigChange('url', e.target.value)}
+                    className="font-mono text-xs h-8"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    Output Path{' '}
+                    <span className="text-muted-foreground font-normal">(Optional)</span>
+                  </Label>
+                  <Input
+                    placeholder="downloads/file.pdf or /absolute/path"
+                    value={(config.outputPath as string) ?? ''}
+                    onChange={(e) => handleConfigChange('outputPath', e.target.value)}
+                    className="font-mono text-xs h-8"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    If empty, returns base64-encoded content without saving.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    Filename{' '}
+                    <span className="text-muted-foreground font-normal">(Optional)</span>
+                  </Label>
+                  <Input
+                    placeholder="report.pdf (default: derived from URL)"
+                    value={(config.filename as string) ?? ''}
+                    onChange={(e) => handleConfigChange('filename', e.target.value)}
+                    className="font-mono text-xs h-8"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    Headers{' '}
+                    <span className="text-muted-foreground font-normal">(JSON, Optional)</span>
+                  </Label>
+                  <Textarea
+                    placeholder='{"Authorization": "Bearer token"}'
+                    rows={3}
+                    className="font-mono text-xs"
+                    value={(config.headers as string) ?? ''}
+                    onChange={(e) => handleConfigChange('headers', e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* EMAIL config */}
             {type === 'EMAIL' && (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Action</Label>
                   <Select
@@ -2457,15 +2512,26 @@ function NodeEditorForm({
                     <div className="space-y-1.5">
                       <Label className="text-xs">To</Label>
                       <Input
-                        placeholder="recipient@example.com"
+                        placeholder="recipient@example.com or {{email}}"
                         value={(config.to as string) ?? ''}
                         onChange={(e) => handleConfigChange('to', e.target.value)}
                       />
                     </div>
                     <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        From{' '}
+                        <span className="text-muted-foreground font-normal">(optional)</span>
+                      </Label>
+                      <Input
+                        placeholder="sender@example.com or {{from}}"
+                        value={(config.from as string) ?? ''}
+                        onChange={(e) => handleConfigChange('from', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
                       <Label className="text-xs">Subject</Label>
                       <Input
-                        placeholder="Subject..."
+                        placeholder="Subject... or {{subject}}"
                         value={(config.subject as string) ?? ''}
                         onChange={(e) => handleConfigChange('subject', e.target.value)}
                       />
@@ -2473,29 +2539,110 @@ function NodeEditorForm({
                     <div className="space-y-1.5">
                       <Label className="text-xs">Body</Label>
                       <Textarea
-                        placeholder="Email body..."
-                        rows={4}
+                        placeholder="Email body... or {{body}}"
+                        rows={3}
                         value={(config.body as string) ?? ''}
                         onChange={(e) => handleConfigChange('body', e.target.value)}
                       />
                     </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        HTML Body{' '}
+                        <span className="text-muted-foreground font-normal">(optional)</span>
+                      </Label>
+                      <Textarea
+                        placeholder="<p>HTML content...</p> or {{html}}"
+                        rows={3}
+                        value={(config.html as string) ?? ''}
+                        onChange={(e) => handleConfigChange('html', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        Attachments{' '}
+                        <span className="text-muted-foreground font-normal">(optional)</span>
+                      </Label>
+                      <Input
+                        placeholder="{{files}} or {{attachments}}"
+                        value={(config.attachments as string) ?? ''}
+                        onChange={(e) => handleConfigChange('attachments', e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Variable from a previous node that resolves to a file array — e.g.{' '}
+                        <code className="font-mono bg-muted px-0.5 rounded">{'{{files}}'}</code>
+                      </p>
+                    </div>
+                    <Collapsible>
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+                        >
+                          <ChevronRight className="h-3 w-3" />
+                          SMTP Credentials{' '}
+                          <span className="font-normal">(uses env vars if empty)</span>
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-2 pt-2 pl-4 animate-in slide-in-from-top-1">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">SMTP Host</Label>
+                          <Input
+                            placeholder="smtp.gmail.com"
+                            value={(config.smtpHost as string) ?? ''}
+                            onChange={(e) => handleConfigChange('smtpHost', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">SMTP Port</Label>
+                          <Input
+                            placeholder="587"
+                            value={(config.smtpPort as string) ?? ''}
+                            onChange={(e) => handleConfigChange('smtpPort', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">SMTP User</Label>
+                          <Input
+                            placeholder="user@gmail.com"
+                            value={(config.smtpUser as string) ?? ''}
+                            onChange={(e) => handleConfigChange('smtpUser', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">SMTP Password</Label>
+                          <Input
+                            type="password"
+                            placeholder="App password..."
+                            value={(config.smtpPass as string) ?? ''}
+                            onChange={(e) => handleConfigChange('smtpPass', e.target.value)}
+                          />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </>
                 )}
 
                 {config.action === 'fetch' && (
                   <>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Mailbox (default: INBOX)</Label>
+                      <Label className="text-xs">Mailbox</Label>
                       <Input
                         placeholder="INBOX"
                         value={(config.mailbox as string) ?? ''}
                         onChange={(e) => handleConfigChange('mailbox', e.target.value)}
                       />
+                      <p className="text-[10px] text-muted-foreground">
+                        IMAP folder name, not an email address — e.g.{' '}
+                        <code className="font-mono bg-muted px-0.5 rounded">INBOX</code>,{' '}
+                        <code className="font-mono bg-muted px-0.5 rounded">
+                          [Gmail]/Sent Mail
+                        </code>
+                      </p>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Query / Filter (e.g., from:bob)</Label>
+                      <Label className="text-xs">Query / Filter</Label>
                       <Input
-                        placeholder="from:alice"
+                        placeholder="from:alice or {{query}}"
                         value={(config.query as string) ?? ''}
                         onChange={(e) => handleConfigChange('query', e.target.value)}
                       />
@@ -2509,6 +2656,53 @@ function NodeEditorForm({
                         onChange={(e) => handleConfigChange('limit', parseInt(e.target.value))}
                       />
                     </div>
+                    <Collapsible>
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+                        >
+                          <ChevronRight className="h-3 w-3" />
+                          IMAP Credentials{' '}
+                          <span className="font-normal">(uses env vars if empty)</span>
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-2 pt-2 pl-4 animate-in slide-in-from-top-1">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">IMAP User</Label>
+                          <Input
+                            placeholder="user@gmail.com or {{imapUser}}"
+                            value={(config.imapUser as string) ?? ''}
+                            onChange={(e) => handleConfigChange('imapUser', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">IMAP Password</Label>
+                          <Input
+                            type="password"
+                            placeholder="App password..."
+                            value={(config.imapPass as string) ?? ''}
+                            onChange={(e) => handleConfigChange('imapPass', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">IMAP Host</Label>
+                          <Input
+                            placeholder="imap.gmail.com"
+                            value={(config.imapHost as string) ?? ''}
+                            onChange={(e) => handleConfigChange('imapHost', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">IMAP Port</Label>
+                          <Input
+                            placeholder="993"
+                            value={(config.imapPort as string) ?? ''}
+                            onChange={(e) => handleConfigChange('imapPort', e.target.value)}
+                          />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </>
                 )}
 
@@ -2532,25 +2726,93 @@ function NodeEditorForm({
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">UIDs (comma separated or {'{{variable}}'})</Label>
+                      <Label className="text-xs">UIDs</Label>
                       <Input
                         placeholder="1,2,3 or {{uids}}"
                         value={(config.uids as string) ?? ''}
                         onChange={(e) => handleConfigChange('uids', e.target.value)}
                       />
                     </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Mailbox</Label>
+                      <Input
+                        placeholder="INBOX"
+                        value={(config.mailbox as string) ?? ''}
+                        onChange={(e) => handleConfigChange('mailbox', e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        IMAP folder name — e.g.{' '}
+                        <code className="font-mono bg-muted px-0.5 rounded">INBOX</code>,{' '}
+                        <code className="font-mono bg-muted px-0.5 rounded">
+                          [Gmail]/Sent Mail
+                        </code>
+                      </p>
+                    </div>
                     {config.manipulateAction === 'move' && (
                       <div className="space-y-1.5">
                         <Label className="text-xs">Target Mailbox</Label>
                         <Input
-                          placeholder="[Gmail]/Trash"
+                          placeholder="[Gmail]/Trash or {{targetMailbox}}"
                           value={(config.targetMailbox as string) ?? ''}
                           onChange={(e) => handleConfigChange('targetMailbox', e.target.value)}
                         />
                       </div>
                     )}
+                    <Collapsible>
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+                        >
+                          <ChevronRight className="h-3 w-3" />
+                          IMAP Credentials{' '}
+                          <span className="font-normal">(uses env vars if empty)</span>
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-2 pt-2 pl-4 animate-in slide-in-from-top-1">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">IMAP User</Label>
+                          <Input
+                            placeholder="user@gmail.com or {{imapUser}}"
+                            value={(config.imapUser as string) ?? ''}
+                            onChange={(e) => handleConfigChange('imapUser', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">IMAP Password</Label>
+                          <Input
+                            type="password"
+                            placeholder="App password..."
+                            value={(config.imapPass as string) ?? ''}
+                            onChange={(e) => handleConfigChange('imapPass', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">IMAP Host</Label>
+                          <Input
+                            placeholder="imap.gmail.com"
+                            value={(config.imapHost as string) ?? ''}
+                            onChange={(e) => handleConfigChange('imapHost', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">IMAP Port</Label>
+                          <Input
+                            placeholder="993"
+                            value={(config.imapPort as string) ?? ''}
+                            onChange={(e) => handleConfigChange('imapPort', e.target.value)}
+                          />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </>
                 )}
+
+                <p className="text-[10px] text-muted-foreground">
+                  Use{' '}
+                  <code className="font-mono bg-muted px-0.5 rounded">{'{{variable}}'}</code> in
+                  any field to inject a value from a previous node&apos;s output.
+                </p>
               </div>
             )}
 

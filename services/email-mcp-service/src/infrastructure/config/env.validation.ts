@@ -11,5 +11,6 @@ export const envValidationSchema = Joi.object({
   IMAP_PORT: Joi.number().default(993),
   IMAP_USER: Joi.string().optional().allow(''),
   IMAP_PASS: Joi.string().optional().allow(''),
+  TOOL_SERVICE_URL: Joi.string().default('http://localhost:3030'),
   NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
 });

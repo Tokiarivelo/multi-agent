@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EmailApiService } from '@infrastructure/email/email-api.service';
+import { EmailApiService, EmailAttachment } from '@infrastructure/email/email-api.service';
 import {
   McpToolHandler,
   McpToolSchema,
@@ -30,6 +30,21 @@ export class SendEmailTool implements McpToolHandler {
             type: 'string',
             description: 'SMTP password (uses SMTP_PASS env if omitted)',
           },
+          attachments: {
+            type: 'array',
+            description:
+              'List of attachments. Each item must have "filename" and either "path" (URL/file path) or "content" (raw text/base64).',
+            items: {
+              type: 'object',
+              properties: {
+                filename: { type: 'string', description: 'Attachment file name' },
+                path: { type: 'string', description: 'URL or local path to the file' },
+                content: { type: 'string', description: 'Inline content (text or base64)' },
+                contentType: { type: 'string', description: 'MIME type (e.g. application/pdf)' },
+              },
+              required: ['filename'],
+            },
+          },
         },
         required: ['to', 'subject'],
       },
@@ -37,6 +52,11 @@ export class SendEmailTool implements McpToolHandler {
   }
 
   async execute(args: Record<string, unknown>): Promise<McpToolResult> {
+    const rawAttachments = args['attachments'];
+    const attachments: EmailAttachment[] | undefined = Array.isArray(rawAttachments)
+      ? (rawAttachments as EmailAttachment[])
+      : undefined;
+
     const result = await this.email.sendEmail({
       to: args['to'] as string,
       subject: args['subject'] as string,
@@ -47,6 +67,7 @@ export class SendEmailTool implements McpToolHandler {
       smtpPort: args['smtpPort'] ? Number(args['smtpPort']) : undefined,
       smtpUser: args['smtpUser'] as string | undefined,
       smtpPass: args['smtpPass'] as string | undefined,
+      attachments,
     });
     return textResult({ success: true, ...result });
   }

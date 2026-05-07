@@ -237,6 +237,185 @@ pub async fn workspace_read(config: &Config, params: &Value) -> anyhow::Result<V
     file_read(config, &json!({ "path": file_path })).await
 }
 
+/// Download a file from a URL (or accept pre-fetched base64 `content`) and optionally
+/// save it to the workspace.
+///
+/// Inputs (one of `url` or `content` is required):
+///   - `url`         — remote URL to fetch bytes from
+///   - `content`     — base64-encoded bytes (skips HTTP fetch; used by gmail_download_attachment)
+///   - `outputPath`  — workspace-relative or absolute path to save the file (optional)
+///   - `filename`    — override the filename (optional)
+///   - `headers`     — HTTP headers for authenticated URL downloads (optional)
+///   - `contentType` — MIME type hint when using `content` input (optional)
+///
+/// Returns `{ success, localPath?, url, filename, contentType, size, content?, encoding? }`.
+pub async fn download_file(
+    client: &Client,
+    config: &Config,
+    params: &Value,
+    user_id: Option<String>,
+) -> anyhow::Result<Value> {
+    use base64::Engine as _;
+
+    let output_path = params.get("outputPath").and_then(|v| v.as_str());
+    let custom_filename = params.get("filename").and_then(|v| v.as_str());
+
+    // ── Branch: pre-fetched base64 content (no HTTP needed) ──────────────────
+    if let Some(b64) = params.get("content").and_then(|v| v.as_str()) {
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| anyhow::anyhow!("Failed to decode base64 content: {}", e))?;
+
+        let content_type = params
+            .get("contentType")
+            .and_then(|v| v.as_str())
+            .unwrap_or("application/octet-stream")
+            .to_string();
+
+        let filename = custom_filename
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "attachment".to_string());
+
+        let size = bytes.len();
+
+        return save_or_encode(
+            client,
+            config,
+            &bytes,
+            output_path,
+            &filename,
+            &content_type,
+            size,
+            user_id,
+            None,
+        )
+        .await;
+    }
+
+    // ── Branch: URL download ──────────────────────────────────────────────────
+    let url = params
+        .get("url")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Either url or content is required"))?;
+
+    let mut req = client
+        .get(url)
+        .timeout(std::time::Duration::from_millis(60_000));
+
+    if let Some(Value::Object(headers)) = params.get("headers") {
+        for (k, v) in headers {
+            if let Some(s) = v.as_str() {
+                req = req.header(k.as_str(), s);
+            }
+        }
+    }
+
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Download failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        anyhow::bail!("Download failed with status {}", resp.status());
+    }
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+
+    let filename = custom_filename.map(|s| s.to_string()).unwrap_or_else(|| {
+        url.rsplit('/')
+            .next()
+            .and_then(|s| s.split('?').next())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("download")
+            .to_string()
+    });
+
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to read response body: {}", e))?;
+
+    let size = bytes.len();
+
+    save_or_encode(
+        client,
+        config,
+        &bytes,
+        output_path,
+        &filename,
+        &content_type,
+        size,
+        user_id,
+        Some(url),
+    )
+    .await
+}
+
+async fn save_or_encode(
+    client: &Client,
+    config: &Config,
+    bytes: &[u8],
+    output_path: Option<&str>,
+    filename: &str,
+    content_type: &str,
+    size: usize,
+    user_id: Option<String>,
+    source_url: Option<&str>,
+) -> anyhow::Result<Value> {
+    use base64::Engine as _;
+
+    if let Some(path_str) = output_path {
+        let resolved = resolve_path(config, path_str, None);
+        let root = normalize_path(std::path::Path::new(&config.workspace_root));
+
+        if resolved.starts_with(&root) {
+            if let Some(parent) = resolved.parent() {
+                fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to create directory: {}", e))?;
+            }
+            fs::write(&resolved, bytes)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to write file: {}", e))?;
+
+            return Ok(json!({
+                "success": true,
+                "localPath": resolved.to_string_lossy(),
+                "url": source_url,
+                "filename": filename,
+                "contentType": content_type,
+                "size": size,
+            }));
+        } else if let Some(uid) = user_id {
+            let cloud = upload_to_cloud(client, config, path_str, filename, bytes, &uid).await?;
+            return Ok(json!({
+                "success": true,
+                "localPath": cloud["path"],
+                "url": cloud["url"],
+                "filename": filename,
+                "contentType": content_type,
+                "size": size,
+            }));
+        }
+    }
+
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(json!({
+        "success": true,
+        "url": source_url,
+        "filename": filename,
+        "contentType": content_type,
+        "size": size,
+        "content": encoded,
+        "encoding": "base64",
+    }))
+}
+
 pub async fn workspace_write(
     client: &Client,
     config: &Config,

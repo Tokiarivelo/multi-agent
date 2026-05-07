@@ -184,4 +184,6 @@ export const workflows = {
   'workflows.fullscreen.copy': 'Copy',
   'workflows.fullscreen.copied': 'Copied!',
   'workflows.multiTurn.finalResponse': 'Final Response',
+  'workflows.palette.tools_load_more': 'Load more',
+  'workflows.palette.tools_loading_more': 'Loading...',
 };

@@ -27,6 +27,7 @@ export enum NodeType {
   ORCHESTRATOR = 'ORCHESTRATOR',
   EMAIL = 'EMAIL',
   CALENDAR = 'CALENDAR',
+  DOWNLOAD_FILE = 'DOWNLOAD_FILE',
 }
 
 export interface WorkflowNode {

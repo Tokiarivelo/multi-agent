@@ -46,7 +46,8 @@ export type NodeTypeId =
   | 'WORKSPACE_WRITE'
   | 'SUBWORKFLOW'
   | 'ORCHESTRATOR'
-  | 'EMAIL';
+  | 'EMAIL'
+  | 'DOWNLOAD_FILE';
 
 export interface WorkflowIOField {
   key: string;
@@ -294,8 +295,9 @@ export interface PaginatedResponse<T> {
   data: T[];
   total: number;
   page: number;
-  pageSize: number;
-  totalPages: number;
+  pageSize?: number;
+  limit?: number;
+  totalPages?: number;
 }
 
 export interface ApiError {

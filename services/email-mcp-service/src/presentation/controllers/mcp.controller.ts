@@ -6,6 +6,8 @@ import {
   VerifySmtpTool,
   FetchEmailsTool,
   ManipulateEmailsTool,
+  ListAttachmentsTool,
+  DownloadAttachmentTool,
 } from '../tools';
 
 export interface JsonRpcRequest {
@@ -46,6 +48,8 @@ export class McpController {
     verifySmtp: VerifySmtpTool,
     fetchEmails: FetchEmailsTool,
     manipulateEmails: ManipulateEmailsTool,
+    listAttachments: ListAttachmentsTool,
+    downloadAttachment: DownloadAttachmentTool,
   ) {
     const handlers: McpToolHandler[] = [
       sendEmail,
@@ -53,8 +57,13 @@ export class McpController {
       verifySmtp,
       fetchEmails,
       manipulateEmails,
+      listAttachments,
+      downloadAttachment,
     ];
     this.tools = new Map(handlers.map((h) => [h.schema().name, h]));
+    this.logger.log(
+      `Registered ${this.tools.size} MCP tools: ${[...this.tools.keys()].join(', ')}`,
+    );
   }
 
   @Get('health')
@@ -85,9 +94,17 @@ export class McpController {
           };
           const tool = this.tools.get(name);
           if (!tool) {
+            this.logger.warn(
+              `Unknown tool requested: "${name}" — registered: ${[...this.tools.keys()].join(', ')}`,
+            );
             return this.error(req.id, JSON_RPC_ERRORS.METHOD_NOT_FOUND, `Unknown tool: ${name}`);
           }
+          this.logger.log(`[tool] → ${name} args=${JSON.stringify(args).slice(0, 300)}`);
+          const t0 = Date.now();
           const result: McpToolResult = await tool.execute(args ?? {});
+          this.logger.log(
+            `[tool] ← ${name} (${Date.now() - t0}ms) content=${JSON.stringify(result).slice(0, 300)}`,
+          );
           return this.success(req.id, result);
         }
 

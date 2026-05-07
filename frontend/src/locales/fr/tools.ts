@@ -90,6 +90,11 @@ export const tools = {
       WEB: 'Web / Navigateur',
       MCP: 'MCP',
     },
+    pagination: {
+      previous: 'Précédent',
+      next: 'Suivant',
+      pageOf: 'Page {{page}} sur {{total}}',
+    },
     mcp: {
       serverUrl: 'URL du serveur MCP',
       serverUrlHint: 'Le point de terminaison qui accepte les requêtes JSON-RPC 2.0 tools/call.',

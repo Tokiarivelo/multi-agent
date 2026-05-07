@@ -742,42 +742,120 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         if (action === 'fetch') toolName = 'gmail_fetch_emails';
         if (action === 'manipulate') toolName = 'gmail_manipulate_emails';
 
-        // Extract input parameters based on the action
-        let toolInput: any = { ...(typeof input === 'object' && input !== null ? input : {}) };
+        const prevInput: Record<string, unknown> =
+          typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+
+        // Resolve {{variable}} templates from the previous node's output, then fall back to it
+        const resolveField = (configVal: unknown, inputKey: string): unknown => {
+          if (typeof configVal === 'string' && configVal.trim() !== '') {
+            return configVal.replace(/\{\{([^}]+)\}\}/g, (_, path: string) => {
+              const v = path
+                .trim()
+                .split('.')
+                .reduce(
+                  (acc: unknown, k: string) =>
+                    acc && typeof acc === 'object'
+                      ? (acc as Record<string, unknown>)[k]
+                      : undefined,
+                  prevInput as unknown,
+                );
+              return v !== undefined ? (typeof v === 'object' ? JSON.stringify(v) : String(v)) : '';
+            });
+          }
+          return prevInput[inputKey];
+        };
+
+        // Resolve a raw variable reference (e.g. "{{files}}") to the actual value,
+        // returning undefined when the config is empty or the key is missing.
+        const resolveRaw = (configVal: unknown, inputKey: string): unknown => {
+          if (typeof configVal === 'string' && configVal.trim() !== '') {
+            const match = configVal.trim().match(/^\{\{([^}]+)\}\}$/);
+            if (match) {
+              return match[1]!
+                .trim()
+                .split('.')
+                .reduce(
+                  (acc: unknown, k: string) =>
+                    acc && typeof acc === 'object'
+                      ? (acc as Record<string, unknown>)[k]
+                      : undefined,
+                  prevInput as unknown,
+                );
+            }
+            return configVal;
+          }
+          return prevInput[inputKey];
+        };
+
+        // Convert whatever the attachments field resolves to into nodemailer format.
+        const resolveAttachments = (
+          configVal: unknown,
+        ): Array<{ filename: string; path?: string; content?: string }> | undefined => {
+          const raw = resolveRaw(configVal, 'attachments');
+          if (!raw) return undefined;
+          const items = Array.isArray(raw) ? raw : [raw];
+          return items
+            .filter((item): item is Record<string, unknown> => item && typeof item === 'object')
+            .map((item) => ({
+              filename: String(item['name'] ?? item['filename'] ?? 'attachment'),
+              ...(item['url'] ? { path: String(item['url']) } : {}),
+              ...(item['content'] ? { content: String(item['content']) } : {}),
+            }));
+        };
+
+        let toolInput: Record<string, unknown>;
 
         if (action === 'send') {
+          const attachments = resolveAttachments(node.config.attachments);
           toolInput = {
-            to: node.config.to ?? toolInput.to,
-            subject: node.config.subject ?? toolInput.subject,
-            body: node.config.body ?? toolInput.body,
-            ...toolInput,
+            to: resolveField(node.config.to, 'to'),
+            from: resolveField(node.config.from, 'from'),
+            subject: resolveField(node.config.subject, 'subject'),
+            body: resolveField(node.config.body, 'body'),
+            html: resolveField(node.config.html, 'html'),
+            smtpHost: resolveField(node.config.smtpHost, 'smtpHost'),
+            smtpPort: resolveField(node.config.smtpPort, 'smtpPort'),
+            smtpUser: resolveField(node.config.smtpUser, 'smtpUser'),
+            smtpPass: resolveField(node.config.smtpPass, 'smtpPass'),
+            ...(attachments && attachments.length > 0 ? { attachments } : {}),
           };
         } else if (action === 'fetch') {
           toolInput = {
-            mailbox: node.config.mailbox ?? toolInput.mailbox ?? 'INBOX',
-            query: node.config.query ?? toolInput.query,
-            limit: node.config.limit ?? toolInput.limit ?? 20,
-            ...toolInput,
+            mailbox: resolveField(node.config.mailbox, 'mailbox') ?? 'INBOX',
+            query: resolveField(node.config.query, 'query'),
+            limit:
+              (node.config.limit as number | undefined) ??
+              (prevInput.limit as number | undefined) ??
+              20,
+            imapUser: resolveField(node.config.imapUser, 'imapUser'),
+            imapPass: resolveField(node.config.imapPass, 'imapPass'),
+            imapHost: resolveField(node.config.imapHost, 'imapHost'),
+            imapPort: resolveField(node.config.imapPort, 'imapPort'),
           };
-        } else if (action === 'manipulate') {
-          const uids = node.config.uids ?? toolInput.uids;
+        } else {
+          const rawUids = node.config.uids ?? prevInput.uids;
           let parsedUids: number[] = [];
-          if (Array.isArray(uids)) {
-            parsedUids = uids;
-          } else if (typeof uids === 'string') {
-            parsedUids = uids
+          if (Array.isArray(rawUids)) {
+            parsedUids = rawUids as number[];
+          } else if (typeof rawUids === 'string') {
+            const resolved = String(resolveField(rawUids, 'uids') ?? rawUids);
+            parsedUids = resolved
               .split(',')
               .map((u) => parseInt(u.trim(), 10))
               .filter((u) => !isNaN(u));
-          } else if (typeof uids === 'number') {
-            parsedUids = [uids];
+          } else if (typeof rawUids === 'number') {
+            parsedUids = [rawUids];
           }
 
           toolInput = {
-            action: node.config.manipulateAction ?? toolInput.action ?? 'mark_read',
-            uids: parsedUids.length > 0 ? parsedUids : toolInput.uids,
-            targetMailbox: node.config.targetMailbox ?? toolInput.targetMailbox,
-            ...toolInput,
+            action: node.config.manipulateAction ?? prevInput.action ?? 'mark_read',
+            uids: parsedUids.length > 0 ? parsedUids : prevInput.uids,
+            mailbox: resolveField(node.config.mailbox, 'mailbox') ?? 'INBOX',
+            targetMailbox: resolveField(node.config.targetMailbox, 'targetMailbox'),
+            imapUser: resolveField(node.config.imapUser, 'imapUser'),
+            imapPass: resolveField(node.config.imapPass, 'imapPass'),
+            imapHost: resolveField(node.config.imapHost, 'imapHost'),
+            imapPort: resolveField(node.config.imapPort, 'imapPort'),
           };
         }
 
@@ -787,6 +865,60 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           config: node.config,
         });
         if (!res.success) throw new Error(res.error || 'Email execution failed');
+        return res.output;
+      }
+
+      case NodeType.DOWNLOAD_FILE: {
+        const prevVars: Record<string, unknown> =
+          typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+
+        const resolveVal = (configVal: unknown, inputKey: string): unknown => {
+          if (typeof configVal === 'string' && configVal.trim() !== '') {
+            return configVal.replace(/\{\{([^}]+)\}\}/g, (_, path: string) => {
+              const v = path
+                .trim()
+                .split('.')
+                .reduce(
+                  (acc: unknown, k: string) =>
+                    acc && typeof acc === 'object'
+                      ? (acc as Record<string, unknown>)[k]
+                      : undefined,
+                  prevVars as unknown,
+                );
+              return v !== undefined ? (typeof v === 'object' ? JSON.stringify(v) : String(v)) : '';
+            });
+          }
+          return prevVars[inputKey];
+        };
+
+        const url = resolveVal(node.config.url, 'url') as string | undefined;
+        if (!url) throw new Error('DOWNLOAD_FILE node requires a url in config');
+
+        const headersRaw = node.config.headers;
+        let headers: Record<string, string> | undefined;
+        if (typeof headersRaw === 'string' && headersRaw.trim()) {
+          try {
+            headers = JSON.parse(headersRaw) as Record<string, string>;
+          } catch {
+            // ignore malformed headers
+          }
+        } else if (typeof headersRaw === 'object' && headersRaw !== null) {
+          headers = headersRaw as Record<string, string>;
+        }
+
+        const downloadInput: Record<string, unknown> = { url };
+        const outputPath = resolveVal(node.config.outputPath, 'outputPath');
+        if (outputPath) downloadInput.outputPath = outputPath;
+        const filename = resolveVal(node.config.filename, 'filename');
+        if (filename) downloadInput.filename = filename;
+        if (headers) downloadInput.headers = headers;
+
+        const res = await this.toolClient.executeTool({
+          toolName: 'download_file',
+          input: downloadInput,
+          config: node.config,
+        });
+        if (!res.success) throw new Error(res.error || 'Download failed');
         return res.output;
       }
 

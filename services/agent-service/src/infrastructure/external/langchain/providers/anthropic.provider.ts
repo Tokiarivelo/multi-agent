@@ -80,10 +80,11 @@ export class AnthropicProvider {
       const usage = response.response_metadata?.usage;
       const inputTokens: number = usage?.input_tokens ?? 0;
       const outputTokens: number = usage?.output_tokens ?? 0;
-      const tokens = inputTokens + outputTokens || this.estimateTokens(response.content.toString());
+      const text = this.extractText(response.content);
+      const tokens = inputTokens + outputTokens || this.estimateTokens(text);
 
       return {
-        content: response.content.toString(),
+        content: text,
         tokens,
         inputTokens,
         outputTokens,

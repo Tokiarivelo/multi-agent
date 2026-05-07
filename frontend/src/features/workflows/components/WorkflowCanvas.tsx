@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
 import {
@@ -271,7 +271,22 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
   const pendingEdgeFlushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: agentsData } = useAgents(1, 100);
-  const { data: toolsData } = useTools(1, 100);
+  const [toolsPage, setToolsPage] = useState(1);
+  const accToolsRef = useRef<import('@/types').Tool[]>([]);
+  const [accToolsState, setAccToolsState] = useState<import('@/types').Tool[]>([]);
+  const { data: rawToolsData, isFetching: toolsFetching } = useTools(toolsPage);
+
+  useEffect(() => {
+    if (!rawToolsData?.data) return;
+    const next = toolsPage === 1 ? rawToolsData.data : [...accToolsRef.current, ...rawToolsData.data];
+    accToolsRef.current = next;
+    setAccToolsState(next);
+  }, [rawToolsData, toolsPage]);
+
+  const toolsPageSize = rawToolsData?.pageSize ?? rawToolsData?.limit ?? 20;
+  const toolsTotalPages = rawToolsData?.totalPages ?? Math.ceil((rawToolsData?.total ?? 0) / toolsPageSize);
+  const hasMoreTools = rawToolsData ? toolsPage < toolsTotalPages : false;
+  const toolsData = useMemo(() => ({ data: accToolsState }), [accToolsState]);
 
   /* Handle + and - zooming */
   useEffect(() => {
@@ -1230,7 +1245,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
                     <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className="text-xs font-medium text-muted-foreground">Tools</span>
                     <Badge variant="outline" className="text-[10px] h-4 ml-auto">
-                      {toolsData?.data?.length ?? 0}
+                      {rawToolsData?.total ?? accToolsState.length}
                     </Badge>
                   </div>
                   <ScrollArea className="h-72">
@@ -1297,6 +1312,15 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
                               <p className="text-[11px] text-muted-foreground text-center py-4">
                                 No tools registered
                               </p>
+                            )}
+                            {hasMoreTools && (
+                              <button
+                                onClick={() => setToolsPage((p) => p + 1)}
+                                disabled={toolsFetching}
+                                className="w-full text-[11px] text-muted-foreground hover:text-foreground py-1.5 border-t border-border/30 mt-1 transition-colors disabled:opacity-50"
+                              >
+                                {toolsFetching ? t('workflows.palette.tools_loading_more') : t('workflows.palette.tools_load_more')}
+                              </button>
                             )}
                           </>
                         );

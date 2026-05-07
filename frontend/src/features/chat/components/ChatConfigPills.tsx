@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, Cpu, Bot, Check, GitBranch, X, Settings2, Wrench, Zap, Search } from 'lucide-react';
 import {
@@ -60,7 +60,10 @@ export function ChatConfigPills({ session }: Props) {
   const { data: modelsData } = useModels(1, 100);
   const { data: agentsData } = useAgents(1, 100);
   const { data: workflowsData } = useWorkflows(1, 100);
-  const { data: toolsData } = useTools(1, 100);
+  const [toolsPage, setToolsPage] = useState(1);
+  const accToolsRef = useRef<import('@/types').Tool[]>([]);
+  const [accTools, setAccTools] = useState<import('@/types').Tool[]>([]);
+  const { data: toolsData, isFetching: toolsFetching } = useTools(toolsPage);
   const updateSession = useUpdateChatSession();
   const autoActivateTools = useChatStore((s) => s.autoActivateTools);
   const userId = useAuthStoreBase((s) => s.user?.id ?? '');
@@ -69,7 +72,18 @@ export function ChatConfigPills({ session }: Props) {
   const [vectorMatches, setVectorMatches] = useState<string[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  const allTools = useMemo(() => toolsData?.data ?? [], [toolsData?.data]);
+  useEffect(() => {
+    if (!toolsData?.data) return;
+    const next = toolsPage === 1 ? toolsData.data : [...accToolsRef.current, ...toolsData.data];
+    accToolsRef.current = next;
+    setAccTools(next);
+  }, [toolsData, toolsPage]);
+
+  const toolsPageSize = toolsData?.pageSize ?? toolsData?.limit ?? 20;
+  const toolsTotalPages = toolsData?.totalPages ?? Math.ceil((toolsData?.total ?? 0) / toolsPageSize);
+  const hasMoreTools = toolsData ? toolsPage < toolsTotalPages : false;
+
+  const allTools = useMemo(() => accTools, [accTools]);
 
   const runVectorSearch = useCallback(
     async (query: string) => {
@@ -264,6 +278,15 @@ export function ChatConfigPills({ session }: Props) {
                 {session.tools?.includes(tool.id) && <Check className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />}
               </DropdownMenuItem>
             ))}
+            {hasMoreTools && !toolSearch.trim() && (
+              <DropdownMenuItem
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setToolsPage((p) => p + 1); }}
+                disabled={toolsFetching}
+                className="justify-center text-xs text-muted-foreground italic"
+              >
+                {toolsFetching ? t('chat.config.tools_loading_more') : t('chat.config.tools_load_more')}
+              </DropdownMenuItem>
+            )}
             </div>
           </DropdownMenuContent>
         </DropdownMenu>

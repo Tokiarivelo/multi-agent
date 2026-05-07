@@ -37,4 +37,6 @@ export const agents = {
   'agents.form.tools_desc': 'Outils externes et intégrations',
   'agents.form.tools_search_placeholder': 'Rechercher des capacités...',
   'agents.form.tools_no_results': 'Aucun outil correspondant',
+  'agents.form.tools_load_more': "Charger plus d'outils",
+  'agents.form.tools_loading_more': 'Chargement...',
 };

@@ -52,4 +52,6 @@ export const chat = {
   'chat.tool_request.auto_activate': "Laisser l'agent activer les outils automatiquement",
   'chat.config.tools_auto': 'Auto',
   'chat.config.tools_search': 'Rechercher des outils...',
+  'chat.config.tools_load_more': "Charger plus d'outils",
+  'chat.config.tools_loading_more': 'Chargement...',
 };

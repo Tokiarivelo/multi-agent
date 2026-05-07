@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { HttpModule } from '@nestjs/axios';
 import configuration from '@infrastructure/config/configuration';
 import { envValidationSchema } from '@infrastructure/config/env.validation';
 import { EmailApiService } from '@infrastructure/email/email-api.service';
@@ -11,6 +12,8 @@ import {
   VerifySmtpTool,
   FetchEmailsTool,
   ManipulateEmailsTool,
+  ListAttachmentsTool,
+  DownloadAttachmentTool,
 } from '@presentation/tools';
 
 @Module({
@@ -20,6 +23,7 @@ import {
       load: [configuration],
       validationSchema: envValidationSchema,
     }),
+    HttpModule,
   ],
   controllers: [McpController],
   providers: [
@@ -30,6 +34,8 @@ import {
     VerifySmtpTool,
     FetchEmailsTool,
     ManipulateEmailsTool,
+    ListAttachmentsTool,
+    DownloadAttachmentTool,
   ],
 })
 export class AppModule {}

@@ -3,7 +3,8 @@
 import { useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Wrench, Search, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Wrench, Search, Loader2, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tool } from '@/types';
 import { toolsApi } from '@/features/tools/api/tools.api';
@@ -13,9 +14,12 @@ interface AgentToolsConfigProps {
   selectedTools: string[];
   toggleTool: (toolId: string) => void;
   availableTools: Tool[];
+  hasMore?: boolean;
+  onFetchMore?: () => void;
+  isFetchingMore?: boolean;
 }
 
-export function AgentToolsConfig({ selectedTools, toggleTool, availableTools }: AgentToolsConfigProps) {
+export function AgentToolsConfig({ selectedTools, toggleTool, availableTools, hasMore, onFetchMore, isFetchingMore }: AgentToolsConfigProps) {
   const { t } = useTranslation();
   const { user } = useAuthStore();
   const [query, setQuery] = useState('');
@@ -106,6 +110,7 @@ export function AgentToolsConfig({ selectedTools, toggleTool, availableTools }: 
                 <p className="text-xs text-muted-foreground">{t('agents.form.tools_no_results')}</p>
               </div>
             ) : (
+              <>
               <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-1">
                 {filteredTools.map((tool) => {
                   const isSelected = selectedTools.includes(tool.id);
@@ -152,6 +157,23 @@ export function AgentToolsConfig({ selectedTools, toggleTool, availableTools }: 
                   );
                 })}
               </div>
+              {hasMore && !query.trim() && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onFetchMore}
+                  disabled={isFetchingMore}
+                  className="w-full gap-2 border-dashed border-amber-500/30 text-amber-600 hover:bg-amber-500/10 mt-1"
+                >
+                  {isFetchingMore ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  )}
+                  {isFetchingMore ? t('agents.form.tools_loading_more') : t('agents.form.tools_load_more')}
+                </Button>
+              )}
+              </>
             )}
           </div>
         )}

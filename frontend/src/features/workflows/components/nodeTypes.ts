@@ -19,6 +19,7 @@ import {
   Workflow,
   Network,
   Mail,
+  Download,
   type LucideIcon,
 } from 'lucide-react';
 import { NodeTypeId } from '@/types';
@@ -283,6 +284,18 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     },
   },
   {
+    id: 'DOWNLOAD_FILE',
+    label: 'Download File',
+    labelFr: 'Télécharger Fichier',
+    description: 'Download a file from a URL and save it to the workspace',
+    descriptionFr: 'Télécharger un fichier depuis une URL et le sauvegarder dans le workspace',
+    icon: Download,
+    color: 'text-cyan-600',
+    bgColor: 'bg-cyan-600/10',
+    borderColor: 'border-cyan-600/40',
+    defaultConfig: { url: '', outputPath: '', filename: '', headers: '' },
+  },
+  {
     id: 'EMAIL',
     label: 'Email',
     labelFr: 'Email',
@@ -292,7 +305,15 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     color: 'text-rose-400',
     bgColor: 'bg-rose-400/10',
     borderColor: 'border-rose-400/40',
-    defaultConfig: { action: 'send', to: '', subject: '', body: '' },
+    defaultConfig: {
+      action: 'send',
+      to: '', from: '', subject: '', body: '', html: '',
+      attachments: '',
+      smtpHost: '', smtpPort: '', smtpUser: '', smtpPass: '',
+      mailbox: '', query: '', limit: 20,
+      manipulateAction: 'mark_read', uids: '', targetMailbox: '',
+      imapUser: '', imapPass: '', imapHost: '', imapPort: '',
+    },
   },
 ];
 

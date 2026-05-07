@@ -3,6 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 
+export interface EmailAttachment {
+  filename: string;
+  path?: string;
+  content?: string;
+  contentType?: string;
+}
+
 export interface SendEmailParams {
   smtpHost?: string;
   smtpPort?: number;
@@ -13,6 +20,7 @@ export interface SendEmailParams {
   subject: string;
   body?: string;
   html?: string;
+  attachments?: EmailAttachment[];
 }
 
 export interface SentEmailResult {
@@ -78,6 +86,7 @@ export class EmailApiService {
         subject: params.subject,
         text: params.body,
         html: params.html,
+        attachments: params.attachments,
       });
 
       this.logger.log(

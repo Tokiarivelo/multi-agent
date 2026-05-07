@@ -6,12 +6,12 @@ This service exposes email operations as MCP tools over JSON-RPC.
 
 ### Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `email_send` | Send an email via SMTP (plain text or HTML body) |
-| `email_send_template` | Send an email using a predefined template |
-| `email_verify_smtp` | Verify that SMTP credentials can connect |
-| `gmail_fetch_emails` | Fetch emails from a Gmail inbox via IMAP |
+| Tool                  | Description                                      |
+| --------------------- | ------------------------------------------------ |
+| `email_send`          | Send an email via SMTP (plain text or HTML body) |
+| `email_send_template` | Send an email using a predefined template        |
+| `email_verify_smtp`   | Verify that SMTP credentials can connect         |
+| `gmail_fetch_emails`  | Fetch emails from a Gmail inbox via IMAP         |
 
 ---
 
@@ -81,26 +81,26 @@ Call the tool via the MCP JSON-RPC endpoint `POST /mcp`:
 
 **All arguments are optional:**
 
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `mailbox` | string | `INBOX` | Mailbox to read. Gmail system folders: `[Gmail]/Sent Mail`, `[Gmail]/Spam`, `[Gmail]/Trash`, `[Gmail]/All Mail` |
-| `limit` | string | `20` | Number of most-recent emails to return (max 100) |
-| `query` | string | — | Search filter using `key:value` pairs (see below) |
-| `imapUser` | string | `IMAP_USER` env | Override Gmail address per-request |
-| `imapPass` | string | `IMAP_PASS` env | Override App Password per-request |
-| `imapHost` | string | `imap.gmail.com` | Override IMAP host |
-| `imapPort` | string | `993` | Override IMAP port |
+| Argument   | Type   | Default          | Description                                                                                                     |
+| ---------- | ------ | ---------------- | --------------------------------------------------------------------------------------------------------------- |
+| `mailbox`  | string | `INBOX`          | Mailbox to read. Gmail system folders: `[Gmail]/Sent Mail`, `[Gmail]/Spam`, `[Gmail]/Trash`, `[Gmail]/All Mail` |
+| `limit`    | string | `20`             | Number of most-recent emails to return (max 100)                                                                |
+| `query`    | string | —                | Search filter using `key:value` pairs (see below)                                                               |
+| `imapUser` | string | `IMAP_USER` env  | Override Gmail address per-request                                                                              |
+| `imapPass` | string | `IMAP_PASS` env  | Override App Password per-request                                                                               |
+| `imapHost` | string | `imap.gmail.com` | Override IMAP host                                                                                              |
+| `imapPort` | string | `993`            | Override IMAP port                                                                                              |
 
 **Query syntax** — space-separated `key:value` pairs:
 
-| Key | Example | Description |
-|-----|---------|-------------|
-| `from` | `from:alice@example.com` | Filter by sender |
-| `to` | `to:bob@example.com` | Filter by recipient |
-| `subject` | `subject:invoice` | Filter by subject keyword |
-| `text` | `text:hello` | Full-body text search |
-| `since` | `since:2024-01-01` | Emails after this date |
-| `before` | `before:2024-06-01` | Emails before this date |
+| Key       | Example                  | Description               |
+| --------- | ------------------------ | ------------------------- |
+| `from`    | `from:alice@example.com` | Filter by sender          |
+| `to`      | `to:bob@example.com`     | Filter by recipient       |
+| `subject` | `subject:invoice`        | Filter by subject keyword |
+| `text`    | `text:hello`             | Full-body text search     |
+| `since`   | `since:2024-01-01`       | Emails after this date    |
+| `before`  | `before:2024-06-01`      | Emails before this date   |
 
 Example — last 5 emails from Alice about invoices:
 
@@ -126,10 +126,12 @@ Example — last 5 emails from Alice about invoices:
   "jsonrpc": "2.0",
   "id": 2,
   "result": {
-    "content": [{
-      "type": "text",
-      "text": "{\n  \"count\": 1,\n  \"emails\": [\n    {\n      \"uid\": 4201,\n      \"subject\": \"Invoice #42\",\n      \"from\": \"Alice <alice@example.com>\",\n      \"to\": \"you@gmail.com\",\n      \"date\": \"2024-03-15T10:22:00.000Z\",\n      \"snippet\": \"Hi, please find attached...\"\n    }\n  ]\n}"
-    }]
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"count\": 1,\n  \"emails\": [\n    {\n      \"uid\": 4201,\n      \"subject\": \"Invoice #42\",\n      \"from\": \"Alice <alice@example.com>\",\n      \"to\": \"you@gmail.com\",\n      \"date\": \"2024-03-15T10:22:00.000Z\",\n      \"snippet\": \"Hi, please find attached...\"\n    }\n  ]\n}"
+      }
+    ]
   }
 }
 ```
@@ -155,12 +157,12 @@ Ce service expose des opérations d'email en tant qu'outils MCP via JSON-RPC.
 
 ### Outils disponibles
 
-| Outil | Description |
-|-------|-------------|
-| `email_send` | Envoyer un email via SMTP (texte brut ou HTML) |
-| `email_send_template` | Envoyer un email avec un modèle prédéfini |
-| `email_verify_smtp` | Vérifier que les identifiants SMTP fonctionnent |
-| `gmail_fetch_emails` | Récupérer des emails depuis une boîte Gmail via IMAP |
+| Outil                 | Description                                          |
+| --------------------- | ---------------------------------------------------- |
+| `email_send`          | Envoyer un email via SMTP (texte brut ou HTML)       |
+| `email_send_template` | Envoyer un email avec un modèle prédéfini            |
+| `email_verify_smtp`   | Vérifier que les identifiants SMTP fonctionnent      |
+| `gmail_fetch_emails`  | Récupérer des emails depuis une boîte Gmail via IMAP |
 
 ---
 
@@ -230,21 +232,21 @@ Appelez l'outil via l'endpoint JSON-RPC `POST /mcp` :
 
 **Tous les arguments sont optionnels :**
 
-| Argument | Type | Défaut | Description |
-|----------|------|--------|-------------|
-| `mailbox` | string | `INBOX` | Boîte à lire. Dossiers Gmail : `[Gmail]/Sent Mail`, `[Gmail]/Spam`, `[Gmail]/Trash` |
-| `limit` | string | `20` | Nombre d'emails les plus récents (max 100) |
-| `query` | string | — | Filtre de recherche `clé:valeur` (voir ci-dessous) |
-| `imapUser` | string | env `IMAP_USER` | Adresse Gmail à utiliser pour cette requête |
-| `imapPass` | string | env `IMAP_PASS` | Mot de passe d'application pour cette requête |
+| Argument   | Type   | Défaut          | Description                                                                         |
+| ---------- | ------ | --------------- | ----------------------------------------------------------------------------------- |
+| `mailbox`  | string | `INBOX`         | Boîte à lire. Dossiers Gmail : `[Gmail]/Sent Mail`, `[Gmail]/Spam`, `[Gmail]/Trash` |
+| `limit`    | string | `20`            | Nombre d'emails les plus récents (max 100)                                          |
+| `query`    | string | —               | Filtre de recherche `clé:valeur` (voir ci-dessous)                                  |
+| `imapUser` | string | env `IMAP_USER` | Adresse Gmail à utiliser pour cette requête                                         |
+| `imapPass` | string | env `IMAP_PASS` | Mot de passe d'application pour cette requête                                       |
 
 **Syntaxe de requête** — paires `clé:valeur` séparées par des espaces :
 
-| Clé | Exemple | Description |
-|-----|---------|-------------|
-| `from` | `from:alice@example.com` | Filtrer par expéditeur |
-| `to` | `to:bob@example.com` | Filtrer par destinataire |
-| `subject` | `subject:facture` | Filtrer par mot-clé dans le sujet |
-| `text` | `text:bonjour` | Recherche dans le corps du message |
-| `since` | `since:2024-01-01` | Emails après cette date |
-| `before` | `before:2024-06-01` | Emails avant cette date |
+| Clé       | Exemple                  | Description                        |
+| --------- | ------------------------ | ---------------------------------- |
+| `from`    | `from:alice@example.com` | Filtrer par expéditeur             |
+| `to`      | `to:bob@example.com`     | Filtrer par destinataire           |
+| `subject` | `subject:facture`        | Filtrer par mot-clé dans le sujet  |
+| `text`    | `text:bonjour`           | Recherche dans le corps du message |
+| `since`   | `since:2024-01-01`       | Emails après cette date            |
+| `before`  | `before:2024-06-01`      | Emails avant cette date            |

@@ -29,6 +29,7 @@ pub async fn dispatch_builtin(
         "file_write" => file::file_write(client, config, &params, user_id).await,
         "workspace_read" => file::workspace_read(config, &params).await,
         "workspace_write" => file::workspace_write(client, config, &params, user_id).await,
+        "download_file" => file::download_file(client, config, &params, user_id).await,
 
         // Shell
         "shell_execute" => shell::shell_execute(config, &params).await,

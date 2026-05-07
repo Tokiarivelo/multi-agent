@@ -52,6 +52,8 @@ pub struct PaginatedResponse {
     pub total: i64,
     pub page: u32,
     pub limit: u32,
+    #[serde(rename = "totalPages")]
+    pub total_pages: u32,
 }
 
 // ── Request types ─────────────────────────────────────────────────────────────
@@ -61,6 +63,7 @@ pub struct PaginatedResponse {
 pub struct ListQuery {
     pub page: Option<u32>,
     pub limit: Option<u32>,
+    pub page_size: Option<u32>,
     pub category: Option<String>,
     pub is_built_in: Option<bool>,
 }
@@ -102,7 +105,7 @@ pub async fn list(
     Query(q): Query<ListQuery>,
 ) -> Result<Json<PaginatedResponse>, (StatusCode, String)> {
     let page = q.page.unwrap_or(1).max(1);
-    let limit = q.limit.unwrap_or(20).clamp(1, 100);
+    let limit = q.limit.or(q.page_size).unwrap_or(20).clamp(1, 100);
 
     let (rows, total) = db::list_tools(
         &state.pool,
@@ -114,11 +117,13 @@ pub async fn list(
     .await
     .map_err(internal)?;
 
+    let total_pages = ((total as f64) / (limit as f64)).ceil() as u32;
     Ok(Json(PaginatedResponse {
         data: rows.into_iter().map(ToolResponse::from).collect(),
         total,
         page,
         limit,
+        total_pages,
     }))
 }
 
