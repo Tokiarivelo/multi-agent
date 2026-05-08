@@ -352,6 +352,9 @@ const tools = [
       { name: 'author', type: 'string', description: 'Document author', required: false },
       { name: 'sections', type: 'array', description: 'Document sections (heading, body, level)', required: false },
       { name: 'table', type: 'object', description: 'Document table (headers, rows)', required: false },
+      { name: 'charts', type: 'array', description: 'Charts to embed. Each item: { type: "bar"|"line"|"pie"|"doughnut"|"scatter", title?: string, labels: string[], datasets: [{ label: string, data: number[], color?: string }], width?: number, height?: number }. PDF/DOCX embed PNG; XLSX creates a native chart; HTML uses Chart.js (or canvas_render PNG); MD/TXT/CSV fall back to a data table.', required: false },
+      { name: 'diagrams', type: 'array', description: 'Diagrams to embed. Each item: { type: "flowchart"|"network"|"sequence"|"tree"|"mindmap", title?: string, nodes: [{ id: string, label: string, shape?: "box"|"circle"|"diamond", color?: string }], edges: [{ source: string, target: string, label?: string, style?: "solid"|"dashed" }], direction?: "TB"|"LR", width?: number, height?: number }. Rendered server-side with matplotlib+networkx; embedded as PNG in all formats.', required: false },
+      { name: 'canvas_render', type: 'boolean', description: 'When true, charts in HTML output are pre-rendered server-side to PNG and embedded as base64 <img> elements (works offline, no Chart.js CDN required). Diagrams are always canvas-rendered regardless of this flag.', required: false },
       { name: 'outputPath', type: 'string', description: 'Optional path to save the generated document in the workspace', required: false }
     ],
     code: null,

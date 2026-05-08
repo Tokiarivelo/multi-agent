@@ -37,12 +37,9 @@ import (
 	"github.com/multi-agent/gateway-service-go/internal/users"
 	"github.com/multi-agent/gateway-service-go/internal/ws"
 
-	// Swagger UI — registered only when swaggo docs have been generated.
-	// Run: swag init --dir cmd/server,internal --output docs
-	// to create the docs/ package, then import it here:
-	//   _ "github.com/multi-agent/gateway-service-go/docs"
-	//   swaggerFiles "github.com/swaggo/files"
-	//   ginSwagger "github.com/swaggo/gin-swagger"
+	_ "github.com/multi-agent/gateway-service-go/internal/docs"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func main() {
@@ -100,11 +97,8 @@ func main() {
 	ws.RegisterRoutes(r, wsRelay)        // GET /ws
 	proxy.RegisterRoutes(r, cfg)         // ANY /api/* (catch-all)
 
-	// ── 7. Swagger UI (development only) ──────────────────────────────────────
-	// To enable: run `swag init` then uncomment the import block above and the
-	// line below.
-	//
-	//   r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// ── 7. Swagger UI ──────────────────────────────────────────────────────────
+	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// ── 8. Start ───────────────────────────────────────────────────────────────
 	addr := fmt.Sprintf(":%d", cfg.Port)

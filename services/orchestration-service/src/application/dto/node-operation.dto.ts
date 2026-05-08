@@ -23,6 +23,11 @@ export class AddNodeDto {
   @IsOptional()
   customName?: string;
 
+  @ApiPropertyOptional({ description: 'Node description shown in the editor' })
+  @IsString()
+  @IsOptional()
+  description?: string;
+
   @ApiPropertyOptional({ description: 'Visual position on canvas' })
   @IsOptional()
   position?: { x: number; y: number };
@@ -43,6 +48,11 @@ export class UpdateNodeDto {
   @IsString()
   @IsOptional()
   customName?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  description?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -69,4 +79,9 @@ export class AddEdgeDto {
   @IsString()
   @IsOptional()
   condition?: string;
+
+  @ApiPropertyOptional({ description: 'Named source handle ID (for WHILE/SWITCH routing)' })
+  @IsString()
+  @IsOptional()
+  sourceHandle?: string;
 }

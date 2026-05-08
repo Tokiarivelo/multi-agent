@@ -92,6 +92,7 @@ export interface AddNodePayload {
   id: string;
   type: NodeTypeId;
   customName?: string;
+  description?: string;
   config?: Record<string, unknown>;
   position?: { x: number; y: number };
 }
@@ -101,6 +102,7 @@ export interface AddEdgePayload {
   source: string;
   target: string;
   condition?: string;
+  sourceHandle?: string;
 }
 
 export const workflowsApi = {
@@ -171,9 +173,14 @@ export const workflowsApi = {
 
   // ─── Execution ────────────────────────────────────────────────────
 
-  execute: async (id: string, input?: Record<string, unknown>): Promise<WorkflowExecution> => {
+  execute: async (
+    id: string,
+    input?: Record<string, unknown>,
+    disabledNodeTypes?: string[],
+  ): Promise<WorkflowExecution> => {
     const { data } = await apiClient.post<WorkflowExecution>(`/api/workflows/${id}/execute`, {
       input,
+      ...(disabledNodeTypes && disabledNodeTypes.length > 0 ? { disabledNodeTypes } : {}),
     });
     return data;
   },
@@ -232,6 +239,7 @@ export const workflowsApi = {
     prompt: string;
     modelId: string;
     sessionId?: string;
+    excludedNodeTypes?: string[];
   }): Promise<AiWorkflowResult> => {
     const { data } = await apiClient.post<AiWorkflowResult>('/api/workflows/ai/generate', payload);
     return data;
@@ -239,7 +247,7 @@ export const workflowsApi = {
 
   editWithAi: async (
     workflowId: string,
-    payload: { prompt: string; modelId: string; sessionId?: string },
+    payload: { prompt: string; modelId: string; sessionId?: string; excludedNodeTypes?: string[] },
   ): Promise<AiWorkflowResult> => {
     const { data } = await apiClient.post<AiWorkflowResult>(
       `/api/workflows/${workflowId}/ai/edit`,

@@ -29,8 +29,53 @@ export class WorkflowExecutionService {
       return [];
     }
 
+    const currentNode = workflow.definition.nodes.find((n) => n.id === currentNodeId);
+    const nodeOutput = [...execution.nodeExecutions]
+      .reverse()
+      .find((n) => n.nodeId === currentNodeId)?.output as Record<string, unknown> | undefined;
+
     const nextNodes: string[] = [];
     for (const edge of outgoingEdges) {
+      // CONDITIONAL routing — match _conditionalMatched to sourceHandle
+      if (currentNode?.type === NodeType.CONDITIONAL && edge.sourceHandle) {
+        const matched = String(nodeOutput?._conditionalMatched ?? 'default');
+        if (edge.sourceHandle === matched) nextNodes.push(edge.target);
+        continue;
+      }
+
+      // WHILE routing — use sourceHandle to decide loop vs exit
+      if (currentNode?.type === NodeType.WHILE && edge.sourceHandle) {
+        const whileContinue = Boolean(nodeOutput?._whileContinue);
+        if (edge.sourceHandle === 'loop' && whileContinue) nextNodes.push(edge.target);
+        if (edge.sourceHandle === 'exit' && !whileContinue) nextNodes.push(edge.target);
+        continue;
+      }
+
+      // FOR_EACH routing — body while items remain, exit when done
+      if (currentNode?.type === NodeType.FOR_EACH && edge.sourceHandle) {
+        const forEachContinue = Boolean(nodeOutput?._forEachContinue);
+        if (edge.sourceHandle === 'body' && forEachContinue) nextNodes.push(edge.target);
+        if (edge.sourceHandle === 'exit' && !forEachContinue) nextNodes.push(edge.target);
+        continue;
+      }
+
+      // SWITCH routing — match _switchValue to case value or fall to default
+      if (currentNode?.type === NodeType.SWITCH && edge.sourceHandle) {
+        const switchValue = String(nodeOutput?._switchValue ?? '');
+        const cases = (currentNode.config?.cases as Array<{ value: string }>) ?? [];
+        if (edge.sourceHandle === 'default') {
+          const matched = cases.some((c) => String(c.value) === switchValue);
+          if (!matched) nextNodes.push(edge.target);
+        } else if (edge.sourceHandle.startsWith('case_')) {
+          const idx = parseInt(edge.sourceHandle.slice(5), 10);
+          if (!isNaN(idx) && String(cases[idx]?.value ?? '') === switchValue) {
+            nextNodes.push(edge.target);
+          }
+        }
+        continue;
+      }
+
+      // Standard condition evaluation for all other nodes
       if (edge.condition) {
         if (this.evaluateCondition(edge.condition, execution, currentNodeId)) {
           nextNodes.push(edge.target);

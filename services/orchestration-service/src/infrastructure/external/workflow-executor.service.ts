@@ -1030,8 +1030,63 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         return result;
       }
 
-      case NodeType.CONDITIONAL:
-        return input;
+      case NodeType.CONDITIONAL: {
+        const expr = (node.config?.condition as string | undefined)?.trim() || 'false';
+        let result = false;
+        try {
+          const fn = new Function('input', '$', `return Boolean(${expr})`);
+          result = fn(input, input);
+        } catch {
+          result = false;
+        }
+        return { ...input, _conditionalMatched: result ? 'true' : 'false' };
+      }
+
+      case NodeType.WHILE: {
+        const conditionExpr = (node.config?.condition as string | undefined)?.trim() || 'false';
+        const maxIter = Number(node.config?.maxIterations ?? 100);
+        const iterKey = `_whileIter_${node.id}`;
+        const currentIter = Number(context?.variables?.[iterKey] ?? 0);
+
+        let whileContinue = false;
+        if (currentIter < maxIter) {
+          try {
+            const fn = new Function('input', '$', `return Boolean(${conditionExpr})`);
+            whileContinue = fn(input, input);
+          } catch {
+            whileContinue = false;
+          }
+        }
+
+        if (context?.variables) {
+          context.variables[iterKey] = whileContinue ? currentIter + 1 : 0;
+        }
+
+        return { ...input, _whileContinue: whileContinue, _whileIteration: currentIter };
+      }
+
+      case NodeType.SWITCH: {
+        const switchOnExpr = (node.config?.switchOn as string | undefined)?.trim() || 'undefined';
+        let switchValue: unknown;
+        try {
+          const fn = new Function('input', '$', `return ${switchOnExpr}`);
+          switchValue = fn(input, input);
+        } catch {
+          switchValue = undefined;
+        }
+        return { ...input, _switchValue: switchValue };
+      }
+
+      case NodeType.JSON: {
+        const rawJson = (node.config?.json as string | undefined) ?? '{}';
+        try {
+          return JSON.parse(rawJson);
+        } catch {
+          throw new Error(
+            `JSON node "${node.customName || node.id}" has invalid JSON: ${rawJson.slice(0, 100)}`,
+          );
+        }
+      }
 
       case NodeType.PROMPT: {
         const promptTemplate = (node.config?.prompt as string) || '';
@@ -1196,6 +1251,77 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         if (logSink) logSink.push(`[LOG] LOOP: completed — ${results.length} result(s) produced`);
 
         return { results, count: results.length, collection: collectionPath };
+      }
+
+      case NodeType.FOR_EACH: {
+        const {
+          collection: collectionPath = '',
+          maxIterations = 100,
+          outputKey = '',
+        } = node.config ?? {};
+
+        const resolveDotPath = (obj: any, dotPath: string): any => {
+          const cleaned = (dotPath as string).replace(/^\$\.?/, '');
+          if (!cleaned) return obj;
+          return cleaned.split('.').reduce((acc: any, k: string) => acc?.[k], obj);
+        };
+
+        const iterKey = `_forEachIndex_${node.id}`;
+        const itemsKey = `_forEachItems_${node.id}`;
+        const resultsKey = `_forEachResults_${node.id}`;
+
+        const currentIndex = Number(context?.variables?.[iterKey] ?? 0);
+        const cap = Math.min(Number(maxIterations) || 100, 10_000);
+
+        let items: any[];
+        if (currentIndex === 0) {
+          const raw = resolveDotPath(input, collectionPath as string);
+          items = Array.isArray(raw) ? raw : raw !== undefined ? [raw] : [];
+          if (context?.variables) {
+            context.variables[itemsKey] = items;
+            context.variables[resultsKey] = [];
+          }
+          if (logSink) {
+            logSink.push(
+              `[LOG] FOR_EACH: starting — ${items.length} item(s) from "${collectionPath || 'root'}"`,
+            );
+          }
+        } else {
+          items = (context?.variables?.[itemsKey] as any[]) ?? [];
+          const accumulated = (context?.variables?.[resultsKey] as any[]) ?? [];
+          const bodyOutput = outputKey ? (input as any)[outputKey as string] : input;
+          accumulated.push(bodyOutput);
+          if (context?.variables) context.variables[resultsKey] = accumulated;
+        }
+
+        const hasMore = currentIndex < Math.min(items.length, cap);
+
+        if (hasMore) {
+          const item = items[currentIndex];
+          if (context?.variables) context.variables[iterKey] = currentIndex + 1;
+          if (logSink) {
+            logSink.push(`[LOG] FOR_EACH: processing item[${currentIndex}]`);
+          }
+          return {
+            ...input,
+            _forEachItem: item,
+            _forEachIndex: currentIndex,
+            _forEachTotal: Math.min(items.length, cap),
+            _forEachContinue: true,
+          };
+        }
+
+        // All items processed — collect results and reset state
+        const finalResults = (context?.variables?.[resultsKey] as any[]) ?? [];
+        if (context?.variables) {
+          context.variables[iterKey] = 0;
+          delete context.variables[itemsKey];
+          delete context.variables[resultsKey];
+        }
+        if (logSink) {
+          logSink.push(`[LOG] FOR_EACH: completed — ${finalResults.length} result(s) collected`);
+        }
+        return { results: finalResults, count: finalResults.length, _forEachContinue: false };
       }
 
       case NodeType.WORKSPACE_READ: {

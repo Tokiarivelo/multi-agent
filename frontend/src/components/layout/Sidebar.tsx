@@ -23,6 +23,7 @@ import {
   GitBranch,
   FileDown,
   MessageSquare,
+  Boxes,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +36,7 @@ const navigation = [
   { name: 'Workflows', href: '/workflows', icon: Workflow },
   { name: 'Agents', href: '/agents', icon: Bot },
   { name: 'Tools', href: '/tools', icon: Wrench },
+  { name: 'Nodes', href: '/nodes', icon: Boxes },
   { name: 'Models', href: '/models', icon: Layers },
   { name: 'API Keys', href: '/api-keys', icon: KeyRound },
   { name: 'Executions', href: '/executions', icon: PlayCircle },

@@ -162,11 +162,13 @@ describe('UpdateWorkflowUseCase', () => {
         id: 'edge-1',
         source: 'node-1',
         target: 'node-2',
+        sourceHandle: 'true',
       });
 
       expect(result.definition.edges).toHaveLength(1);
       expect(result.definition.edges[0].source).toBe('node-1');
       expect(result.definition.edges[0].target).toBe('node-2');
+      expect(result.definition.edges[0].sourceHandle).toBe('true');
     });
   });
 

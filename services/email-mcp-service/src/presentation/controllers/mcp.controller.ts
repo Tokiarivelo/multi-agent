@@ -1,4 +1,5 @@
 import { Controller, Post, Body, HttpCode, Get, Logger } from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { McpToolHandler, McpToolResult } from '@domain/email-tool.interface';
 import {
   SendEmailTool,
@@ -37,6 +38,7 @@ const JSON_RPC_ERRORS = {
   INTERNAL_ERROR: -32603,
 } as const;
 
+@ApiTags('MCP — JSON-RPC')
 @Controller('mcp')
 export class McpController {
   private readonly logger = new Logger(McpController.name);
@@ -67,12 +69,32 @@ export class McpController {
   }
 
   @Get('health')
+  @ApiOperation({ summary: 'Health check' })
   health() {
     return { status: 'ok', service: 'email-mcp', tools: this.tools.size };
   }
 
   @Post()
   @HttpCode(200)
+  @ApiOperation({
+    summary: 'JSON-RPC 2.0 endpoint — tools/list and tools/call',
+    description:
+      'Used by AI agents. Send `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gmail_fetch_emails","arguments":{...}}}`. ' +
+      'Use the REST endpoints under Gmail/SMTP tags for easier manual testing.',
+  })
+  @ApiBody({
+    schema: {
+      example: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'gmail_fetch_emails',
+          arguments: { mailbox: 'INBOX', limit: '20', query: 'subject:Candidature' },
+        },
+      },
+    },
+  })
   async handle(@Body() body: unknown): Promise<JsonRpcSuccess | JsonRpcError> {
     const req = body as JsonRpcRequest;
 

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Send, RefreshCw, Sparkles, CheckCheck, Bot, Wrench } from 'lucide-react';
+import { Pencil, Sparkles } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,19 +13,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { useCreateWorkflow } from '../hooks/useWorkflows';
-import { workflowsApi, AiWorkflowResult } from '../api/workflows.api';
-import { ModelSelector } from './ModelSelector';
-import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useCreateWorkflow } from '../hooks/useWorkflows';
+import { AiWorkflowResult } from '../api/workflows.api';
+import { useQueryClient } from '@tanstack/react-query';
+import { CreateWorkflowAiTab, AiTabSession, EMPTY_AI_TAB_SESSION } from './CreateWorkflowAiTab';
 
 interface CreateWorkflowModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-// ─── Manual creation tab ───────────────────────────────────────────────────────
 
 function ManualTab({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
   const { t } = useTranslation();
@@ -83,278 +80,19 @@ function ManualTab({ onCreated, onCancel }: { onCreated: () => void; onCancel: (
           {t('workflows.editor.cancel')}
         </Button>
         <Button type="submit" disabled={createWorkflow.isPending}>
-          {createWorkflow.isPending
-            ? t('workflows.create.creating')
-            : t('workflows.create.submit')}
+          {createWorkflow.isPending ? t('workflows.create.creating') : t('workflows.create.submit')}
         </Button>
       </div>
     </form>
   );
 }
 
-// ─── AI generation tab ────────────────────────────────────────────────────────
-
-function AiTab({
-  onApply,
-  onCancel,
-}: {
-  onApply: (result: AiWorkflowResult) => void;
-  onCancel: () => void;
-}) {
-  const { t } = useTranslation();
-  const [modelId, setModelId] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingPhase, setLoadingPhase] = useState<'designing' | 'provisioning'>('designing');
-  const [result, setResult] = useState<AiWorkflowResult | null>(null);
-  const [messages, setMessages] = useState<Array<{ role: string; content: string; timestamp: string }>>([]);
-
-  const suggestions = [
-    'Automated code review and testing pipeline',
-    'Daily report generation and email delivery',
-    'Customer support ticket triage and routing',
-    'Data transformation and validation workflow',
-  ];
-
-  const handleGenerate = useCallback(async () => {
-    if (!prompt.trim() || !modelId || isLoading) return;
-
-    const userPrompt = prompt.trim();
-    setPrompt('');
-    setIsLoading(true);
-    setLoadingPhase('designing');
-    setMessages((prev) => [
-      ...prev,
-      { role: 'user', content: userPrompt, timestamp: new Date().toISOString() },
-    ]);
-
-    // Switch to provisioning phase after a brief delay to indicate the 2nd step
-    const phaseTimer = setTimeout(() => setLoadingPhase('provisioning'), 4000);
-
-    try {
-      const res = await workflowsApi.generateWithAi({
-        prompt: userPrompt,
-        modelId,
-        sessionId: sessionId ?? undefined,
-      });
-      setSessionId(res.sessionId);
-      setResult(res);
-      setMessages(res.history);
-
-      // Surface provisioning summary as a toast
-      const agentCount = res.provisionedResources?.agents?.length ?? 0;
-      const toolCount = res.provisionedResources?.tools?.length ?? 0;
-      if (agentCount > 0 || toolCount > 0) {
-        const parts = [
-          agentCount > 0 && `${agentCount} agent${agentCount > 1 ? 's' : ''}`,
-          toolCount > 0 && `${toolCount} tool${toolCount > 1 ? 's' : ''}`,
-        ].filter(Boolean).join(' & ');
-        toast.success(t('workflows.ai.provisionedToast', `Auto-created ${parts} for this workflow`));
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('workflows.ai.error', 'Generation failed'));
-      setMessages((prev) => prev.slice(0, -1)); // remove optimistic user message
-    } finally {
-      clearTimeout(phaseTimer);
-      setIsLoading(false);
-      setLoadingPhase('designing');
-    }
-  }, [prompt, modelId, sessionId, isLoading, t]);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleGenerate();
-    }
-  };
-
-  const nodeCount = result?.definition?.nodes?.length ?? 0;
-
-  return (
-    <div className="space-y-4 pt-2">
-      {/* Model selector */}
-      <div className="space-y-1.5">
-        <Label>{t('workflows.ai.model', 'AI Model')}</Label>
-        <ModelSelector
-          value={modelId}
-          onChange={setModelId}
-          disabled={isLoading}
-        />
-      </div>
-
-      {/* Message history */}
-      {messages.length > 0 && (
-        <div className="max-h-40 overflow-y-auto space-y-2 rounded-lg border border-border/50 p-3 bg-muted/20 text-sm">
-          {messages.map((msg, i) => (
-            <div key={i} className={msg.role === 'user' ? 'text-right' : 'text-left'}>
-              <span
-                className={`inline-block px-2.5 py-1.5 rounded-xl text-xs max-w-[85%] ${
-                  msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-foreground'
-                }`}
-              >
-                {msg.role === 'user'
-                  ? msg.content
-                  : (() => {
-                      try {
-                        const p = JSON.parse(msg.content);
-                        return p.message ?? msg.content;
-                      } catch {
-                        return msg.content;
-                      }
-                    })()}
-              </span>
-            </div>
-          ))}
-          {isLoading && (
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <RefreshCw className="h-3 w-3 animate-spin" />
-              <span className="text-xs">
-                {loadingPhase === 'provisioning'
-                  ? t('workflows.ai.provisioning', 'Provisioning agents & tools…')
-                  : t('workflows.ai.thinking', 'Designing workflow…')}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Generated preview */}
-      {result?.definition && (
-        <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-violet-600 dark:text-violet-400">
-              {result.name ?? t('workflows.ai.generatedWorkflow', 'Generated Workflow')}
-            </p>
-            <Badge variant="secondary" className="text-xs">
-              {nodeCount} {t('workflows.canvas.nodes')}
-            </Badge>
-          </div>
-          {result.description && (
-            <p className="text-xs text-muted-foreground">{result.description}</p>
-          )}
-
-          {/* Provisioning summary */}
-          {((result.provisionedResources?.agents?.length ?? 0) > 0 ||
-            (result.provisionedResources?.tools?.length ?? 0) > 0) && (
-            <div className="mt-1 pt-2 border-t border-violet-500/20 space-y-1.5">
-              <p className="text-[11px] font-semibold text-violet-500 uppercase tracking-wide">
-                {t('workflows.ai.newResources', 'New resources created')}
-              </p>
-              {result.provisionedResources?.agents?.map((a) => (
-                <div key={a.id} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <Bot className="h-3 w-3 text-violet-400 shrink-0" />
-                  <span className="truncate">{a.name}</span>
-                  <span className="ml-auto text-[10px] text-violet-400/60 font-mono shrink-0">
-                    {t('workflows.ai.agent', 'Agent')}
-                  </span>
-                </div>
-              ))}
-              {result.provisionedResources?.tools?.map((tool) => (
-                <div key={tool.id} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <Wrench className="h-3 w-3 text-amber-400 shrink-0" />
-                  <span className="truncate">{tool.name}</span>
-                  <span className="ml-auto text-[10px] text-amber-400/60 font-mono shrink-0">
-                    {t('workflows.ai.tool', 'Tool')}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Suggestions */}
-      {messages.length === 0 && (
-        <div className="space-y-1.5">
-          <p className="text-xs text-muted-foreground">
-            {t('workflows.ai.suggestions', 'Try one of these:')}
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {suggestions.map((s) => (
-              <button
-                key={s}
-                className="text-[11px] px-2 py-1 rounded-full border border-border/60 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                onClick={() => setPrompt(s)}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Prompt input */}
-      <div className="relative">
-        <Textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            !modelId
-              ? t('workflows.ai.selectModelFirst', 'Select a model above first…')
-              : messages.length > 0
-              ? t('workflows.ai.refinePrompt', 'Refine or ask for changes…')
-              : t('workflows.ai.generatePlaceholder', 'Describe the workflow you want to create…')
-          }
-          disabled={!modelId || isLoading}
-          rows={3}
-          className="resize-none pr-10 text-sm"
-        />
-        <Button
-          size="icon"
-          variant="ghost"
-          className="absolute bottom-2 right-2 h-7 w-7 disabled:opacity-30"
-          onClick={handleGenerate}
-          disabled={!prompt.trim() || !modelId || isLoading}
-        >
-          {isLoading ? (
-            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Send className="h-3.5 w-3.5" />
-          )}
-        </Button>
-      </div>
-
-      {/* Actions */}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          {t('workflows.editor.cancel')}
-        </Button>
-        {result?.definition ? (
-          <Button
-            className="gap-2 bg-violet-600 hover:bg-violet-700 text-white"
-            onClick={() => onApply(result)}
-          >
-            <CheckCheck className="h-4 w-4" />
-            {t('workflows.ai.createFromThis', 'Create from this')}
-          </Button>
-        ) : (
-          <Button
-            className="gap-2"
-            onClick={handleGenerate}
-            disabled={!prompt.trim() || !modelId || isLoading}
-          >
-            <Sparkles className="h-4 w-4" />
-            {isLoading
-              ? t('workflows.ai.generating', 'Generating…')
-              : t('workflows.ai.generate', 'Generate')}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Modal ────────────────────────────────────────────────────────────────────
-
 export function CreateWorkflowModal({ open, onOpenChange }: CreateWorkflowModalProps) {
   const { t } = useTranslation();
   const createWorkflow = useCreateWorkflow();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<'manual' | 'ai'>('manual');
+  const [aiSession, setAiSession] = useState<AiTabSession>(EMPTY_AI_TAB_SESSION);
 
   const handleClose = () => onOpenChange(false);
 
@@ -368,10 +106,9 @@ export function CreateWorkflowModal({ open, onOpenChange }: CreateWorkflowModalP
       },
       {
         onSuccess: () => {
-          // Invalidate agents & tools so newly-provisioned resources show up
-          // immediately in the NodeEditor dropdowns without a page refresh.
           queryClient.invalidateQueries({ queryKey: ['agents'] });
           queryClient.invalidateQueries({ queryKey: ['tools'] });
+          setAiSession(EMPTY_AI_TAB_SESSION);
           onOpenChange(false);
         },
         onError: (err) => {
@@ -383,7 +120,7 @@ export function CreateWorkflowModal({ open, onOpenChange }: CreateWorkflowModalP
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{t('workflows.create.title')}</DialogTitle>
         </DialogHeader>
@@ -395,7 +132,7 @@ export function CreateWorkflowModal({ open, onOpenChange }: CreateWorkflowModalP
             onClick={() => setTab('manual')}
           >
             <Pencil className="h-3 w-3" />
-            {t('workflows.create.manual', 'Manual')}
+            {t('workflows.create.tabManual')}
           </Button>
           <Button
             size="sm"
@@ -404,11 +141,18 @@ export function CreateWorkflowModal({ open, onOpenChange }: CreateWorkflowModalP
             onClick={() => setTab('ai')}
           >
             <Sparkles className="h-3 w-3" />
-            {t('workflows.create.ai', 'AI Generate')}
+            {t('workflows.create.tabAi')}
           </Button>
         </div>
         {tab === 'manual' && <ManualTab onCreated={handleClose} onCancel={handleClose} />}
-        {tab === 'ai' && <AiTab onApply={handleAiApply} onCancel={handleClose} />}
+        {tab === 'ai' && (
+          <CreateWorkflowAiTab
+            session={aiSession}
+            onSessionUpdate={setAiSession}
+            onApply={handleAiApply}
+            onCancel={handleClose}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

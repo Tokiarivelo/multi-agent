@@ -38,17 +38,26 @@ use config::Config;
         api::health::health,
         api::execute::execute_tool,
         api::wasm::upload_wasm,
+        api::crud::list,
+        api::crud::get_by_id,
+        api::crud::create,
+        api::crud::update,
+        api::crud::delete,
     ),
     components(
         schemas(
             api::execute::ExecuteRequest,
             api::execute::ExecuteResponse,
             api::wasm::UploadWasmResponse,
+            api::crud::ToolResponse,
+            api::crud::PaginatedResponse,
+            api::crud::CreateRequest,
+            api::crud::UpdateRequest,
         )
     ),
     tags(
         (name = "health", description = "Liveness probe"),
-        (name = "tools",  description = "Tool execution — built-in, custom JS, and MCP"),
+        (name = "tools",  description = "Tool execution, CRUD, WASM upload — built-in, custom JS, and MCP"),
     ),
     security(
         ("BearerAuth" = [])

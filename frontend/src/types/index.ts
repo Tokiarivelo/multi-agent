@@ -47,7 +47,11 @@ export type NodeTypeId =
   | 'SUBWORKFLOW'
   | 'ORCHESTRATOR'
   | 'EMAIL'
-  | 'DOWNLOAD_FILE';
+  | 'DOWNLOAD_FILE'
+  | 'JSON'
+  | 'WHILE'
+  | 'SWITCH'
+  | 'FOR_EACH';
 
 export interface WorkflowIOField {
   key: string;
@@ -93,6 +97,7 @@ export interface WorkflowEdge {
   source: string;
   target: string;
   condition?: string;
+  sourceHandle?: string;
 }
 
 // Agent Types

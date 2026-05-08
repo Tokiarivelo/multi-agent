@@ -408,12 +408,15 @@ pub async fn document_generate(
     let output_path = params.get("outputPath").and_then(|v| v.as_str());
 
     let body = json!({
-        "format":   format,
-        "title":    params.get("title").unwrap_or(&json!("Document")),
-        "author":   params.get("author"),
-        "sections": params.get("sections"),
-        "table":    params.get("table"),
-        "userId":   user_id,
+        "format":        format,
+        "title":         params.get("title").unwrap_or(&json!("Document")),
+        "author":        params.get("author"),
+        "sections":      params.get("sections"),
+        "table":         params.get("table"),
+        "charts":        params.get("charts"),
+        "diagrams":      params.get("diagrams"),
+        "canvas_render": params.get("canvas_render").and_then(|v| v.as_bool()).unwrap_or(false),
+        "userId":        user_id,
     });
 
     let resp = client

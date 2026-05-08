@@ -36,6 +36,28 @@ export class ExecuteWorkflowUseCase {
       throw new BadRequestException(`Workflow validation failed: ${validation.errors.join(', ')}`);
     }
 
+    if (dto.disabledNodeTypes && dto.disabledNodeTypes.length > 0) {
+      const disabled = new Set(dto.disabledNodeTypes);
+      const nodes = (workflow.definition?.nodes ?? []) as Array<{
+        id: string;
+        type?: string;
+        customName?: string;
+        data?: { customName?: string };
+      }>;
+      const blocked = nodes.filter((n) => n.type && disabled.has(n.type));
+      if (blocked.length > 0) {
+        const details = blocked
+          .map((n) => {
+            const name = n.customName ?? n.data?.customName ?? n.id;
+            return `"${name}" (${n.type})`;
+          })
+          .join(', ');
+        throw new BadRequestException(
+          `Cannot execute workflow: the following nodes use disabled or deleted node types — ${details}. Re-enable the node types or remove these nodes before running.`,
+        );
+      }
+    }
+
     this.logger.log(`Starting execution of workflow ${dto.workflowId} for user ${userId}`);
 
     try {

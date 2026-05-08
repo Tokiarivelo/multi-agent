@@ -28,12 +28,17 @@ export enum NodeType {
   EMAIL = 'EMAIL',
   CALENDAR = 'CALENDAR',
   DOWNLOAD_FILE = 'DOWNLOAD_FILE',
+  JSON = 'JSON',
+  WHILE = 'WHILE',
+  SWITCH = 'SWITCH',
+  FOR_EACH = 'FOR_EACH',
 }
 
 export interface WorkflowNode {
   id: string;
   type: NodeType;
   customName?: string;
+  description?: string;
   config: Record<string, any>;
   position?: { x: number; y: number };
 }
@@ -43,6 +48,8 @@ export interface WorkflowEdge {
   source: string;
   target: string;
   condition?: string;
+  /** Named handle ID on the source node — used for WHILE/SWITCH routing */
+  sourceHandle?: string;
 }
 
 /** Describes a single input or output field for a workflow */

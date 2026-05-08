@@ -3,6 +3,7 @@ export const common = {
   Workflows: 'Workflows',
   Agents: 'Agents',
   Tools: 'Tools',
+  Nodes: 'Nodes',
   Models: 'Models',
   Executions: 'Executions',
   'Welcome back!': 'Welcome back!',

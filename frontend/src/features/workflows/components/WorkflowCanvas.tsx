@@ -66,6 +66,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
   labelFr: string;
   customName?: string;
+  description?: string;
   nodeType: string;
   config: Record<string, unknown>;
   meta: ReturnType<typeof getNodeTypeMeta>;
@@ -155,6 +156,8 @@ function toFlowNode(
     (typeof dataField === 'object' && dataField !== null ? dataField : {});
   const customName: string | undefined =
     (raw.customName as string | undefined) ?? (dataField?.customName as string | undefined);
+  const description: string | undefined =
+    (raw.description as string | undefined) ?? (dataField?.description as string | undefined);
   const { label, labelFr } = resolveNodeLabel(
     raw.type as string,
     config,
@@ -174,6 +177,7 @@ function toFlowNode(
       labelFr,
       nodeType: raw.type as string,
       customName,
+      description,
       config,
       meta,
       resolvedToolNames,
@@ -183,12 +187,24 @@ function toFlowNode(
 }
 
 function toFlowEdge(edge: Workflow['definition']['edges'][0]): Edge {
+  const raw = edge as unknown as { sourceHandle?: string };
+  const sh = raw.sourceHandle;
+  let displayLabel: string | undefined = edge.condition;
+  if (sh === 'true') displayLabel = '✓ true';
+  else if (sh === 'false') displayLabel = '✗ false';
+  else if (sh === 'loop') displayLabel = '↻ loop';
+  else if (sh === 'exit') displayLabel = '→ exit';
+  else if (sh === 'body') displayLabel = '↻ body';
+  else if (sh === 'default') displayLabel = 'default';
+  else if (sh?.startsWith('case_')) displayLabel = sh.replace('case_', 'case ');
+
   return {
     id: edge.id,
     source: edge.source,
     target: edge.target,
+    sourceHandle: sh,
     type: 'workflowEdge',
-    label: edge.condition,
+    label: displayLabel,
     animated: false,
     selectable: true,
     focusable: true,
@@ -223,6 +239,7 @@ function makeFlowNode(
       labelFr,
       nodeType: node.type as string,
       customName: node.customName,
+      description: node.description,
       config,
       meta,
       resolvedToolNames,
@@ -406,6 +423,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
             id: node.id,
             type: data.nodeType as AddNodePayload['type'],
             customName: data.customName,
+            description: data.description,
             config: data.config,
             position: node.position as { x: number; y: number },
           };
@@ -439,6 +457,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
           id: uuidv4(),
           type: data.nodeType as AddNodePayload['type'],
           customName: data.customName,
+          description: data.description,
           config: { ...data.config },
           position: { x: node.position.x + 40, y: node.position.y + 40 },
         };
@@ -577,28 +596,52 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
   const onConnect = useCallback(
     (connection: Connection) => {
       const exists = edges.some(
-        (e) => e.source === connection.source && e.target === connection.target,
+        (e) =>
+          e.source === connection.source &&
+          e.target === connection.target &&
+          (e.sourceHandle ?? null) === (connection.sourceHandle ?? null),
       );
       if (exists) return;
+
+      const sh = connection.sourceHandle ?? undefined;
+      let displayLabel: string | undefined;
+      if (sh === 'true') displayLabel = '✓ true';
+      else if (sh === 'false') displayLabel = '✗ false';
+      else if (sh === 'loop') displayLabel = '↻ loop';
+      else if (sh === 'exit') displayLabel = '→ exit';
+      else if (sh === 'body') displayLabel = '↻ body';
+      else if (sh === 'default') displayLabel = 'default';
+      else if (sh?.startsWith('case_')) displayLabel = sh.replace('case_', 'case ');
 
       const newEdge: AddEdgePayload = {
         id: uuidv4(),
         source: connection.source!,
         target: connection.target!,
+        sourceHandle: sh,
       };
 
       addEdgeMutation.mutate(newEdge);
 
       setEdges((eds) => {
         // Double check to prevent duplicates in strict mode
-        if (eds.some((e) => e.source === connection.source && e.target === connection.target)) {
+        if (
+          eds.some(
+            (e) =>
+              e.source === connection.source &&
+              e.target === connection.target &&
+              (e.sourceHandle ?? null) === (connection.sourceHandle ?? null),
+          )
+        ) {
           return eds;
         }
         return addEdge(
           {
             ...newEdge,
+            sourceHandle: sh,
+            label: displayLabel,
             type: 'workflowEdge',
             style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
+            labelStyle: { fill: 'hsl(var(--muted-foreground))', fontSize: 11 },
           },
           eds,
         );
@@ -802,6 +845,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
       const before: Partial<AddNodePayload> = {
         type: existingData?.nodeType as AddNodePayload['type'],
         customName: existingData?.customName,
+        description: existingData?.description,
         config: existingData?.config,
         position: existingNode?.position as { x: number; y: number },
       };
@@ -977,6 +1021,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
           id: editingNode.id,
           type: editingData.nodeType as NodeTypeId,
           customName: editingData.customName,
+          description: editingData.description,
           config: editingData.config,
           position: editingNode.position as { x: number; y: number },
         }

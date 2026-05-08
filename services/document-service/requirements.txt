@@ -11,3 +11,5 @@ Pillow==11.1.0
 pytesseract==0.3.13
 beautifulsoup4==4.12.3
 httpx==0.28.1
+matplotlib==3.9.4
+networkx==3.4.2

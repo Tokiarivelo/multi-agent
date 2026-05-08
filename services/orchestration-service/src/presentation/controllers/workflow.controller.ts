@@ -204,10 +204,13 @@ export class WorkflowController {
   async executeById(
     @Param('id') id: string,
     @Query('userId') userId: string,
-    @Body() body: { input?: Record<string, unknown> },
+    @Body() body: { input?: Record<string, unknown>; disabledNodeTypes?: string[] },
   ) {
     this.logger.log(`Executing workflow ${id} for user ${userId}`);
-    return this.executeWorkflowUseCase.execute({ workflowId: id, input: body.input }, userId);
+    return this.executeWorkflowUseCase.execute(
+      { workflowId: id, input: body.input, disabledNodeTypes: body.disabledNodeTypes },
+      userId,
+    );
   }
 
   @Post('execute')

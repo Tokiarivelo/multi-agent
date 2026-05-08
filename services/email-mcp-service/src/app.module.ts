@@ -7,6 +7,10 @@ import { EmailApiService } from '@infrastructure/email/email-api.service';
 import { GmailFetchService } from '@infrastructure/email/gmail-fetch.service';
 import { McpController } from '@presentation/controllers/mcp.controller';
 import {
+  GmailToolsController,
+  SmtpToolsController,
+} from '@presentation/controllers/tools.controller';
+import {
   SendEmailTool,
   SendEmailTemplateTool,
   VerifySmtpTool,
@@ -25,7 +29,7 @@ import {
     }),
     HttpModule,
   ],
-  controllers: [McpController],
+  controllers: [McpController, GmailToolsController, SmtpToolsController],
   providers: [
     EmailApiService,
     GmailFetchService,

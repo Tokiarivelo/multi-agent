@@ -26,6 +26,8 @@ import { WaitingInputModal } from './WaitingInputModal';
 import { WorkflowEditorHeader } from './WorkflowEditorHeader';
 import { WorkflowExecutionPanel } from './WorkflowExecutionPanel';
 import { WorkflowDetailsPanel } from './WorkflowDetailsPanel';
+import { useNodePreferencesStore } from '../store/nodePreferences.store';
+import { getNodeTypeMeta } from './nodeTypes';
 
 interface WorkflowEditorProps {
   workflow?: Workflow;
@@ -223,8 +225,27 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
     );
   };
 
+  const { isAvailable, disabledNodeTypes, deletedNodeTypes } = useNodePreferencesStore();
+  const unavailableNodeTypes = [...new Set([...disabledNodeTypes, ...deletedNodeTypes])];
+
   const handleExecute = () => {
     if (!workflow?.id) return;
+
+    const disabledNodes = (workflow.definition?.nodes ?? []).filter(
+      (n) => n.type && !isAvailable(n.type),
+    );
+    if (disabledNodes.length > 0) {
+      const labels = disabledNodes
+        .map((n) => {
+          const meta = getNodeTypeMeta(n.type ?? '');
+          const name = n.data?.customName || meta.label;
+          return `"${name}" (${n.type})`;
+        })
+        .join(', ');
+      toast.error(t('workflows.execution.disabledNodes', { labels }));
+      return;
+    }
+
     clearLogs();
     setLogsOpen(true);
 
@@ -236,7 +257,7 @@ export function WorkflowEditor({ workflow }: WorkflowEditorProps) {
     };
 
     executeWorkflow.mutate(
-      { id: workflow.id, input },
+      { id: workflow.id, input, disabledNodeTypes: unavailableNodeTypes },
       {
         onSuccess: (execution) => {
           setActiveExecution(execution);

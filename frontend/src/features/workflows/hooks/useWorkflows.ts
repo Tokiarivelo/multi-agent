@@ -197,8 +197,15 @@ export function useExecuteWorkflow() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input?: Record<string, unknown> }) =>
-      workflowsApi.execute(id, input),
+    mutationFn: ({
+      id,
+      input,
+      disabledNodeTypes,
+    }: {
+      id: string;
+      input?: Record<string, unknown>;
+      disabledNodeTypes?: string[];
+    }) => workflowsApi.execute(id, input, disabledNodeTypes),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['executions'] });
     },

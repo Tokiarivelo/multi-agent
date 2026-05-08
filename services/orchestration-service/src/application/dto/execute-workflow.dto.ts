@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsObject } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsObject, IsArray } from 'class-validator';
 
 export class ExecuteWorkflowDto {
   @IsString()
@@ -8,4 +8,8 @@ export class ExecuteWorkflowDto {
   @IsObject()
   @IsOptional()
   input?: Record<string, any>;
+
+  @IsArray()
+  @IsOptional()
+  disabledNodeTypes?: string[];
 }

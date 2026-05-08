@@ -3,6 +3,7 @@ export const common = {
   Workflows: 'Flux de travail',
   Agents: 'Agents',
   Tools: 'Outils',
+  Nodes: 'Nœuds',
   Models: 'Modèles',
   Executions: 'Exécutions',
   'Welcome back!': 'Bienvenue !',

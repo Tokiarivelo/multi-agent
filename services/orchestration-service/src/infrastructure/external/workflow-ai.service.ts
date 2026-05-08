@@ -65,13 +65,54 @@ export interface WorkflowAiResult {
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
 
-const WORKFLOW_SYSTEM_PROMPT = `You are an expert workflow designer for a multi-agent automation platform.
+const NODE_TYPE_DESCRIPTIONS: Record<string, string[]> = {
+  START: ['- START: Entry point (exactly 1 required, no config needed)'],
+  END: ['- END: Exit point (at least 1 required, no config needed)'],
+  AGENT: [
+    '- AGENT: Run an AI agent — config: { agentName: "Descriptive Agent Name", prompt: "optional prompt template using {{input.field}}" }',
+    '  → Use agentName (a human-readable name describing what the agent does), NOT agentId',
+  ],
+  PROMPT: [
+    '- PROMPT: Transform/template input — config: { template: "Hello {{input.name}}, process: {{input.data}}" }',
+  ],
+  TEXT: ['- TEXT: Inject static text — config: { text: "your static content here" }'],
+  CONDITIONAL: [
+    '- CONDITIONAL: Branch logic — config: { condition: "output.score > 0.5" } (JS boolean expression)',
+  ],
+  TRANSFORM: [
+    '- TRANSFORM: Data transformation — config: { transform: "return { result: input.data, count: input.items.length }" } (JS function body)',
+  ],
+  LOOP: ['- LOOP: Repeat steps — config: { maxIterations: 5, condition: "output.done !== true" }'],
+  TOOL: [
+    '- TOOL: Execute a tool — config: { toolName: "Descriptive Tool Name", description: "What this tool does" }',
+    '  → Use toolName (a human-readable name), NOT toolId',
+  ],
+  SUBWORKFLOW: ['- SUBWORKFLOW: Run another workflow — config: { workflowId: "" }'],
+};
+
+function buildWorkflowSystemPrompt(excludedNodeTypes: string[] = []): string {
+  const excluded = new Set(excludedNodeTypes);
+  // START and END are always required — never exclude them
+  excluded.delete('START');
+  excluded.delete('END');
+
+  const availableLines = Object.entries(NODE_TYPE_DESCRIPTIONS)
+    .filter(([type]) => !excluded.has(type))
+    .flatMap(([, lines]) => lines)
+    .join('\n');
+
+  const exclusionSection =
+    excluded.size > 0
+      ? `\nDISABLED NODE TYPES — these types are not available and MUST NOT appear in the output:\n${[...excluded].map((t) => `- ${t}`).join('\n')}\n`
+      : '';
+
+  return `You are an expert workflow designer for a multi-agent automation platform.
 Your task is to generate or modify workflow definitions based on user requirements.
 
 A workflow definition has this structure:
 {
   "name": "Workflow Name",
-  "description": "What this workflow does",
+  "description": "Concise description of what this workflow does and its purpose (REQUIRED — always include this)",
   "message": "Brief explanation of what was created or changed",
   "definition": {
     "nodes": [...],
@@ -81,19 +122,8 @@ A workflow definition has this structure:
 }
 
 Available node types:
-- START: Entry point (exactly 1 required, no config needed)
-- END: Exit point (at least 1 required, no config needed)
-- AGENT: Run an AI agent — config: { agentName: "Descriptive Agent Name", prompt: "optional prompt template using {{input.field}}" }
-  → Use agentName (a human-readable name describing what the agent does), NOT agentId
-- PROMPT: Transform/template input — config: { template: "Hello {{input.name}}, process: {{input.data}}" }
-- TEXT: Inject static text — config: { text: "your static content here" }
-- CONDITIONAL: Branch logic — config: { condition: "output.score > 0.5" } (JS boolean expression)
-- TRANSFORM: Data transformation — config: { transform: "return { result: input.data, count: input.items.length }" } (JS function body)
-- LOOP: Repeat steps — config: { maxIterations: 5, condition: "output.done !== true" }
-- TOOL: Execute a tool — config: { toolName: "Descriptive Tool Name", description: "What this tool does" }
-  → Use toolName (a human-readable name), NOT toolId
-- SUBWORKFLOW: Run another workflow — config: { workflowId: "" }
-
+${availableLines}
+${exclusionSection}
 IMPORTANT for AGENT and TOOL nodes:
 - NEVER use agentId or toolId — always use agentName and toolName respectively
 - Choose descriptive, action-oriented names (e.g. "Code Review Agent", "Email Sender Tool")
@@ -115,7 +145,8 @@ WorkflowEdge schema:
   "id": "edge-source-to-target",
   "source": "source-node-id",
   "target": "target-node-id",
-  "condition": "optional JS boolean expression for conditional routing"
+  "condition": "optional JS boolean expression for conditional routing",
+  "sourceHandle": "optional handle ID (e.g., 'true', 'false', 'loop', 'exit') for nodes with multiple outputs"
 }
 
 Layout rules:
@@ -135,8 +166,10 @@ Validation rules (CRITICAL):
 - CONDITIONAL nodes should have separate outgoing edges each with a condition expression
 - The first edge from a CONDITIONAL node (true branch) uses a JS truthy expression
 - The second edge (false/else branch) uses the negated expression or a catch-all
+- "name" and "description" are REQUIRED top-level fields — never omit them
 
 IMPORTANT: Respond ONLY with valid JSON — no markdown fences, no prose before or after. Pure JSON only.`;
+}
 
 // ─── Node Edit System Prompt ──────────────────────────────────────────────────
 
@@ -194,6 +227,7 @@ export class WorkflowAiService {
     modelId: string;
     sessionId?: string;
     userId?: string;
+    excludedNodeTypes?: string[];
   }): Promise<WorkflowAiResult> {
     const session = this.getOrCreateSession(opts.sessionId, undefined, opts.modelId);
     const userId = opts.userId ?? 'system';
@@ -206,14 +240,18 @@ export class WorkflowAiService {
 
     // ── 2. Compose user message with catalog context ──────────────────────────
     const catalogContext = this.buildCatalogContext(existingAgents, existingTools);
+    const exclusionNote =
+      opts.excludedNodeTypes && opts.excludedNodeTypes.length > 0
+        ? `\n\nDISABLED NODE TYPES (MUST NOT be used): ${opts.excludedNodeTypes.join(', ')}`
+        : '';
     const userMessage: AiMessage = {
       role: 'user',
-      content: `${catalogContext}\n\nUser request: ${opts.prompt}`,
+      content: `${catalogContext}${exclusionNote}\n\nUser request: ${opts.prompt}`,
       timestamp: new Date().toISOString(),
     };
     session.messages.push(userMessage);
 
-    const apiMessages = this.buildApiMessages(session);
+    const apiMessages = this.buildApiMessages(session, opts.excludedNodeTypes);
     const response = await this.callCompletion(opts.modelId, apiMessages, userId);
     const { parsed, raw } = this.parseJsonResponse(response.content);
 
@@ -244,7 +282,7 @@ export class WorkflowAiService {
       message: parsed?.message ?? 'Workflow generated successfully',
       definition: provisionedDefinition,
       name: parsed?.name,
-      description: parsed?.description,
+      description: parsed?.description ?? parsed?.message ?? opts.prompt.slice(0, 200),
       history: session.messages,
       provisionedResources,
     };
@@ -259,6 +297,7 @@ export class WorkflowAiService {
     sessionId?: string;
     currentDefinition: unknown;
     userId?: string;
+    excludedNodeTypes?: string[];
   }): Promise<WorkflowAiResult> {
     const session = this.getOrCreateSession(opts.sessionId, opts.workflowId, opts.modelId);
     const userId = opts.userId ?? 'system';
@@ -271,10 +310,14 @@ export class WorkflowAiService {
 
     // ── 2. Compose user message ──────────────────────────────────────────────
     const catalogContext = this.buildCatalogContext(existingAgents, existingTools);
+    const exclusionNote =
+      opts.excludedNodeTypes && opts.excludedNodeTypes.length > 0
+        ? `\n\nDISABLED NODE TYPES (MUST NOT be used): ${opts.excludedNodeTypes.join(', ')}`
+        : '';
     const userContent =
       `Current workflow definition:\n` +
       JSON.stringify(opts.currentDefinition, null, 2) +
-      `\n\n${catalogContext}` +
+      `\n\n${catalogContext}${exclusionNote}` +
       `\n\nUser request: ${opts.prompt}\n\n` +
       `Please apply the requested changes and return the complete updated workflow JSON.`;
 
@@ -284,7 +327,7 @@ export class WorkflowAiService {
       timestamp: new Date().toISOString(),
     });
 
-    const apiMessages = this.buildApiMessages(session);
+    const apiMessages = this.buildApiMessages(session, opts.excludedNodeTypes);
     const response = await this.callCompletion(opts.modelId, apiMessages, userId);
     const { parsed, raw } = this.parseJsonResponse(response.content);
 
@@ -315,7 +358,7 @@ export class WorkflowAiService {
       message: parsed?.message ?? 'Workflow updated successfully',
       definition: provisionedDefinition,
       name: parsed?.name,
-      description: parsed?.description,
+      description: parsed?.description ?? parsed?.message ?? opts.prompt.slice(0, 200),
       history: session.messages,
       provisionedResources,
     };
@@ -572,9 +615,12 @@ export class WorkflowAiService {
     return session;
   }
 
-  private buildApiMessages(session: AiSession): Array<{ role: string; content: string }> {
+  private buildApiMessages(
+    session: AiSession,
+    excludedNodeTypes: string[] = [],
+  ): Array<{ role: string; content: string }> {
     return [
-      { role: 'system', content: WORKFLOW_SYSTEM_PROMPT },
+      { role: 'system', content: buildWorkflowSystemPrompt(excludedNodeTypes) },
       ...session.messages.map((m) => ({ role: m.role, content: m.content })),
     ];
   }

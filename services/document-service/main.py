@@ -12,10 +12,38 @@ from pydantic import BaseModel
 import uvicorn
 import httpx
 
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    from matplotlib.figure import Figure
+    from matplotlib.patches import Circle, FancyBboxPatch
+    import numpy as np
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+
+try:
+    import networkx as nx
+    NETWORKX_AVAILABLE = True
+except ImportError:
+    NETWORKX_AVAILABLE = False
+
 app = FastAPI(
     title="Document Generation Service",
-    description="Generate PDF, DOCX, XLSX, MD, CSV, HTML, TXT files",
+    description=(
+        "Generate, parse, and manage documents in multiple formats "
+        "(PDF, DOCX, XLSX, MD, CSV, HTML, TXT, JSON). "
+        "Also provides OCR for images and workspace file operations.\n\n"
+        "**Swagger UI** is available at `/docs`; OpenAPI JSON at `/openapi.json`."
+    ),
     version="1.0.0",
+    contact={"name": "Multi-Agent Platform", "url": "https://github.com/multi-agent"},
+    license_info={"name": "MIT"},
+    openapi_tags=[
+        {"name": "health", "description": "Liveness probe"},
+        {"name": "documents", "description": "Generate and parse documents"},
+        {"name": "files", "description": "Workspace file read / write / delete"},
+    ],
 )
 
 app.add_middleware(
@@ -60,13 +88,336 @@ class DocumentMetadata(BaseModel):
     company: Optional[str] = None
 
 
+class ChartDataset(BaseModel):
+    label: str = ""
+    data: List[float] = []
+    color: Optional[str] = None
+
+
+class Chart(BaseModel):
+    type: str = "bar"
+    title: Optional[str] = None
+    labels: List[str] = []
+    datasets: List[ChartDataset] = []
+    width: Optional[int] = 600
+    height: Optional[int] = 400
+
+
+class DiagramNode(BaseModel):
+    id: str
+    label: str
+    shape: str = "box"   # box, circle, diamond, ellipse
+    color: Optional[str] = None
+
+
+class DiagramEdge(BaseModel):
+    source: str
+    target: str
+    label: Optional[str] = None
+    style: str = "solid"  # solid, dashed, dotted
+
+
+class Diagram(BaseModel):
+    type: str = "flowchart"  # flowchart, network, sequence, tree, mindmap
+    title: Optional[str] = None
+    nodes: List[DiagramNode] = []
+    edges: List[DiagramEdge] = []
+    direction: str = "TB"   # TB (top-bottom) or LR (left-right)
+    width: Optional[int] = 700
+    height: Optional[int] = 500
+
+
 class GenerateRequest(BaseModel):
     format: str
     title: str = "Document"
     author: Optional[str] = None
     sections: Optional[List[Section]] = None
     table: Optional[TableData] = None
+    charts: Optional[List[Chart]] = None
+    diagrams: Optional[List[Diagram]] = None
+    canvas_render: bool = False   # pre-render charts to PNG in HTML (offline / no CDN)
     metadata: Optional[DocumentMetadata] = None
+
+
+def _render_chart_to_png(chart: Chart) -> bytes:
+    if not MATPLOTLIB_AVAILABLE:
+        raise HTTPException(status_code=500, detail="matplotlib not installed — charts unavailable")
+
+    dpi = 100
+    width_in = (chart.width or 600) / dpi
+    height_in = (chart.height or 400) / dpi
+    fig = Figure(figsize=(width_in, height_in), dpi=dpi)
+    ax = fig.add_subplot(111)
+
+    chart_type = chart.type.lower()
+    labels = chart.labels
+    datasets = chart.datasets
+
+    if chart_type in ("pie", "doughnut") and datasets:
+        ds = datasets[0]
+        n = len(ds.data)
+        pie_labels = labels[:n] if labels else [str(i) for i in range(n)]
+        colors = [d.color for d in datasets if d.color] or None
+        wedges, texts, autotexts = ax.pie(
+            ds.data, labels=pie_labels, autopct="%1.1f%%",
+            colors=colors if colors and len(colors) >= n else None,
+        )
+        if chart_type == "doughnut":
+            ax.add_artist(Circle((0, 0), 0.5, fc="white"))
+    elif chart_type in ("bar", "line", "scatter"):
+        n_labels = len(labels) or max((len(d.data) for d in datasets), default=0)
+        x = np.arange(n_labels)
+        bar_width = 0.8 / max(len(datasets), 1)
+
+        for i, ds in enumerate(datasets):
+            y = ds.data
+            color = ds.color or None
+            lbl = ds.label or None
+            if chart_type == "bar":
+                offset = (i - (len(datasets) - 1) / 2.0) * bar_width
+                ax.bar(x[:len(y)] + offset, y, width=bar_width, label=lbl, color=color)
+            elif chart_type == "line":
+                ax.plot(x[:len(y)], y, label=lbl, color=color, marker="o", markersize=4)
+            else:
+                ax.scatter(x[:len(y)], y, label=lbl, color=color, s=40)
+
+        if labels:
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=8)
+        if len(datasets) > 1 or (datasets and datasets[0].label):
+            ax.legend(fontsize=8)
+    else:
+        for ds in datasets:
+            ax.bar(range(len(ds.data)), ds.data, label=ds.label or None)
+        if datasets and datasets[0].label:
+            ax.legend(fontsize=8)
+
+    if chart.title:
+        ax.set_title(chart.title, fontsize=11)
+
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    buf.seek(0)
+    return buf.read()
+
+
+def _chart_to_table_rows(chart: Chart) -> tuple[list[str], list[list]]:
+    """Fallback: convert chart data to headers + rows for text-based formats."""
+    headers = ["Label"] + [ds.label or f"Series {i+1}" for i, ds in enumerate(chart.datasets)]
+    n = max((len(ds.data) for ds in chart.datasets), default=0)
+    rows = []
+    for i in range(n):
+        label = chart.labels[i] if i < len(chart.labels) else str(i)
+        row = [label] + [ds.data[i] if i < len(ds.data) else "" for ds in chart.datasets]
+        rows.append(row)
+    return headers, rows
+
+
+# ── Diagram renderers ─────────────────────────────────────────────────────────
+
+def _hierarchical_pos(G, direction: str = "TB") -> dict:
+    """Level-based layout for DAGs without requiring graphviz binary."""
+    try:
+        topo = list(nx.topological_sort(G))
+    except Exception:
+        return nx.spring_layout(G, seed=42, k=2.5)
+
+    levels: dict = {}
+    for node in topo:
+        preds = list(G.predecessors(node))
+        levels[node] = 0 if not preds else max(levels.get(p, 0) for p in preds) + 1
+
+    level_groups: dict = {}
+    for node, lvl in levels.items():
+        level_groups.setdefault(lvl, []).append(node)
+
+    pos: dict = {}
+    for lvl, nodes in level_groups.items():
+        n = len(nodes)
+        for i, node in enumerate(nodes):
+            x = (i - (n - 1) / 2.0) * 2.0
+            y = -float(lvl) * 2.0
+            pos[node] = (y, x) if direction == "LR" else (x, y)
+    return pos
+
+
+def _render_sequence_diagram_png(diagram: Diagram, w: float, h: float, dpi: int) -> bytes:
+    fig = Figure(figsize=(w, h), dpi=dpi)
+    ax = fig.add_subplot(111)
+    ax.axis("off")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+
+    actors = [n.id for n in diagram.nodes]
+    if not actors:
+        all_ids = {e.source for e in diagram.edges} | {e.target for e in diagram.edges}
+        actors = sorted(all_ids)
+    actor_label = {n.id: n.label for n in diagram.nodes}
+
+    n_actors = len(actors)
+    if n_actors == 0:
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png")
+        buf.seek(0)
+        return buf.read()
+
+    actor_x = {a: (i + 0.5) / n_actors for i, a in enumerate(actors)}
+
+    for aid, x in actor_x.items():
+        lbl = actor_label.get(aid, aid)
+        ax.text(x, 0.95, lbl, ha="center", va="center", fontsize=9,
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="#4f46e5", edgecolor="none"),
+                color="white", fontweight="bold")
+        ax.plot([x, x], [0.05, 0.91], color="#cbd5e1", linewidth=1, linestyle="dashed")
+
+    n_msgs = len(diagram.edges)
+    y_start, y_end = 0.85, 0.10
+    y_step = (y_start - y_end) / max(n_msgs, 1)
+    for i, edge in enumerate(diagram.edges):
+        y = y_start - i * y_step
+        x1 = actor_x.get(edge.source, 0.1)
+        x2 = actor_x.get(edge.target, 0.9)
+        ls = "dashed" if edge.style == "dashed" else "solid"
+        ax.annotate("", xy=(x2, y), xytext=(x1, y),
+                    arrowprops=dict(arrowstyle="->", color="#334155", lw=1.5, linestyle=ls))
+        if edge.label:
+            ax.text((x1 + x2) / 2, y + 0.025, edge.label,
+                    ha="center", va="bottom", fontsize=8, color="#475569")
+
+    if diagram.title:
+        ax.set_title(diagram.title, fontsize=11)
+
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", facecolor="white")
+    buf.seek(0)
+    return buf.read()
+
+
+_NODE_COLORS = ["#4f46e5", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444",
+                "#8b5cf6", "#06b6d4", "#84cc16", "#f97316", "#ec4899"]
+
+
+def _render_diagram_to_png(diagram: Diagram) -> bytes:
+    if not MATPLOTLIB_AVAILABLE:
+        raise HTTPException(status_code=500, detail="matplotlib not installed — diagrams unavailable")
+
+    dpi = 100
+    w = (diagram.width or 700) / dpi
+    h = (diagram.height or 500) / dpi
+
+    if diagram.type == "sequence":
+        return _render_sequence_diagram_png(diagram, w, h, dpi)
+
+    if not NETWORKX_AVAILABLE:
+        raise HTTPException(status_code=500, detail="networkx not installed — graph diagrams unavailable")
+
+    fig = Figure(figsize=(w, h), dpi=dpi)
+    ax = fig.add_subplot(111)
+    ax.axis("off")
+    ax.set_facecolor("white")
+
+    is_directed = diagram.type in ("flowchart", "tree")
+    G = nx.DiGraph() if is_directed else nx.Graph()
+
+    node_label_map: dict = {}
+    node_color_map: dict = {}
+    node_shape_map: dict = {}
+    for i, node in enumerate(diagram.nodes):
+        G.add_node(node.id)
+        node_label_map[node.id] = node.label
+        node_color_map[node.id] = node.color or _NODE_COLORS[i % len(_NODE_COLORS)]
+        node_shape_map[node.id] = node.shape or "box"
+
+    edge_label_map: dict = {}
+    edge_style_map: dict = {}
+    for edge in diagram.edges:
+        if edge.source not in G:
+            G.add_node(edge.source)
+            node_label_map[edge.source] = edge.source
+            node_color_map[edge.source] = _NODE_COLORS[len(G) % len(_NODE_COLORS)]
+        if edge.target not in G:
+            G.add_node(edge.target)
+            node_label_map[edge.target] = edge.target
+            node_color_map[edge.target] = _NODE_COLORS[len(G) % len(_NODE_COLORS)]
+        G.add_edge(edge.source, edge.target)
+        if edge.label:
+            edge_label_map[(edge.source, edge.target)] = edge.label
+        edge_style_map[(edge.source, edge.target)] = edge.style
+
+    if len(G.nodes) == 0:
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png")
+        buf.seek(0)
+        return buf.read()
+
+    # Choose layout
+    if diagram.type in ("tree", "flowchart") and is_directed:
+        try:
+            pos = _hierarchical_pos(G, diagram.direction)
+        except Exception:
+            pos = nx.spring_layout(G, seed=42, k=2.5)
+    elif diagram.type == "mindmap":
+        pos = nx.shell_layout(G)
+    else:
+        pos = nx.spring_layout(G, seed=42, k=2.5)
+
+    node_ids = list(G.nodes())
+    colors = [node_color_map.get(n, "#4f46e5") for n in node_ids]
+    labels = {n: node_label_map.get(n, n) for n in node_ids}
+
+    # Separate diamond (decision) nodes — drawn manually
+    diamond_nodes = [n for n in node_ids if node_shape_map.get(n) == "diamond"]
+    circle_nodes = [n for n in node_ids if node_shape_map.get(n) in ("circle", "ellipse")]
+    box_nodes = [n for n in node_ids if n not in diamond_nodes and n not in circle_nodes]
+
+    nx.draw_networkx_nodes(G, pos, nodelist=box_nodes, ax=ax,
+                           node_color=[node_color_map.get(n, "#4f46e5") for n in box_nodes],
+                           node_size=2200, node_shape="s", alpha=0.92)
+    nx.draw_networkx_nodes(G, pos, nodelist=circle_nodes, ax=ax,
+                           node_color=[node_color_map.get(n, "#0ea5e9") for n in circle_nodes],
+                           node_size=2200, node_shape="o", alpha=0.92)
+    nx.draw_networkx_nodes(G, pos, nodelist=diamond_nodes, ax=ax,
+                           node_color=[node_color_map.get(n, "#f59e0b") for n in diamond_nodes],
+                           node_size=2200, node_shape="D", alpha=0.92)
+
+    nx.draw_networkx_labels(G, pos, labels=labels, ax=ax,
+                            font_color="white", font_size=8, font_weight="bold")
+
+    solid_edges = [(u, v) for u, v in G.edges() if edge_style_map.get((u, v), "solid") != "dashed"]
+    dashed_edges = [(u, v) for u, v in G.edges() if edge_style_map.get((u, v)) == "dashed"]
+
+    draw_kw = dict(ax=ax, arrows=is_directed, arrowsize=16,
+                   edge_color="#64748b", width=1.8, connectionstyle="arc3,rad=0.05")
+    if solid_edges:
+        nx.draw_networkx_edges(G, pos, edgelist=solid_edges, **draw_kw)
+    if dashed_edges:
+        nx.draw_networkx_edges(G, pos, edgelist=dashed_edges, style="dashed", **draw_kw)
+    if edge_label_map:
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_label_map, ax=ax, font_size=8)
+
+    if diagram.title:
+        ax.set_title(diagram.title, fontsize=11, pad=10)
+
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", facecolor="white")
+    buf.seek(0)
+    return buf.read()
+
+
+def _diagram_to_text_lines(diagram: Diagram) -> list[str]:
+    heading = diagram.title or f"{diagram.type.capitalize()} Diagram"
+    lines = [heading, "-" * len(heading)]
+    lines.append(f"Type: {diagram.type}  Direction: {diagram.direction}")
+    if diagram.nodes:
+        lines.append("Nodes: " + ", ".join(f"{n.id}({n.label})" for n in diagram.nodes))
+    for edge in diagram.edges:
+        arrow = "-->" if edge.style != "dashed" else "- ->"
+        lbl = f" [{edge.label}]" if edge.label else ""
+        lines.append(f"  {edge.source} {arrow} {edge.target}{lbl}")
+    return lines
 
 
 def _generate_pdf(req: GenerateRequest) -> bytes:
@@ -131,6 +482,26 @@ def _generate_pdf(req: GenerateRequest) -> bytes:
             )
             story.append(t)
 
+        from reportlab.platypus import Image as RLImage
+
+        for chart in req.charts or []:
+            story.append(Spacer(1, 0.5 * cm))
+            if chart.title:
+                story.append(Paragraph(chart.title, h1_style))
+            png_bytes = _render_chart_to_png(chart)
+            img = RLImage(io.BytesIO(png_bytes), width=14 * cm,
+                          height=(14 * cm * (chart.height or 400)) / (chart.width or 600))
+            story.append(img)
+
+        for diagram in req.diagrams or []:
+            story.append(Spacer(1, 0.5 * cm))
+            if diagram.title:
+                story.append(Paragraph(diagram.title, h1_style))
+            png_bytes = _render_diagram_to_png(diagram)
+            img = RLImage(io.BytesIO(png_bytes), width=14 * cm,
+                          height=(14 * cm * (diagram.height or 500)) / (diagram.width or 700))
+            story.append(img)
+
         doc.build(story)
         return buf.getvalue()
     except ImportError as e:
@@ -186,6 +557,22 @@ def _generate_docx(req: GenerateRequest) -> bytes:
                 cells = t.add_row().cells
                 for i, val in enumerate(row):
                     cells[i].text = str(val)
+
+        from docx.shared import Inches
+
+        for chart in req.charts or []:
+            doc.add_paragraph()
+            if chart.title:
+                doc.add_heading(chart.title, level=2)
+            png_bytes = _render_chart_to_png(chart)
+            doc.add_picture(io.BytesIO(png_bytes), width=Inches(5))
+
+        for diagram in req.diagrams or []:
+            doc.add_paragraph()
+            if diagram.title:
+                doc.add_heading(diagram.title, level=2)
+            png_bytes = _render_diagram_to_png(diagram)
+            doc.add_picture(io.BytesIO(png_bytes), width=Inches(5.5))
 
         buf = io.BytesIO()
         doc.save(buf)
@@ -249,6 +636,75 @@ def _generate_xlsx(req: GenerateRequest) -> bytes:
                 col_letter = get_column_letter(col_idx)
                 ws.column_dimensions[col_letter].width = 18
 
+        for chart in req.charts or []:
+            from openpyxl.chart import BarChart, LineChart, PieChart, Reference
+            from openpyxl.chart.series import DataPoint
+
+            # Write chart data starting 2 rows after current content
+            data_start_row = row_offset + 2
+            ws.cell(row=data_start_row, column=1, value="Label")
+            for ds_idx, ds in enumerate(chart.datasets):
+                ws.cell(row=data_start_row, column=ds_idx + 2, value=ds.label or f"Series {ds_idx + 1}")
+
+            n_points = max((len(ds.data) for ds in chart.datasets), default=0)
+            for i in range(n_points):
+                label = chart.labels[i] if i < len(chart.labels) else str(i + 1)
+                ws.cell(row=data_start_row + 1 + i, column=1, value=label)
+                for ds_idx, ds in enumerate(chart.datasets):
+                    val = ds.data[i] if i < len(ds.data) else None
+                    ws.cell(row=data_start_row + 1 + i, column=ds_idx + 2, value=val)
+
+            chart_type = chart.type.lower()
+            if chart_type == "line":
+                xl_chart = LineChart()
+            elif chart_type == "pie":
+                xl_chart = PieChart()
+            else:
+                xl_chart = BarChart()
+                xl_chart.type = "col"
+                xl_chart.grouping = "clustered"
+
+            xl_chart.title = chart.title or ""
+            xl_chart.style = 10
+
+            data_ref = Reference(
+                ws,
+                min_col=2,
+                max_col=1 + len(chart.datasets),
+                min_row=data_start_row,
+                max_row=data_start_row + n_points,
+            )
+            cats_ref = Reference(
+                ws,
+                min_col=1,
+                min_row=data_start_row + 1,
+                max_row=data_start_row + n_points,
+            )
+            xl_chart.add_data(data_ref, titles_from_data=True)
+            if chart_type != "pie":
+                xl_chart.set_categories(cats_ref)
+
+            chart_anchor = f"A{data_start_row + n_points + 3}"
+            ws.add_chart(xl_chart, chart_anchor)
+            row_offset = data_start_row + n_points + 20
+
+        for diagram in req.diagrams or []:
+            from openpyxl.drawing.image import Image as XLImage
+            import tempfile, os as _os
+
+            png_bytes = _render_diagram_to_png(diagram)
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                tmp.write(png_bytes)
+                tmp_path = tmp.name
+            try:
+                xl_img = XLImage(tmp_path)
+                xl_img.width = 480
+                xl_img.height = int(480 * (diagram.height or 500) / (diagram.width or 700))
+                ws.add_image(xl_img, f"A{row_offset + 2}")
+                row_offset += int(xl_img.height / 20) + 4
+            finally:
+                _os.unlink(tmp_path)
+
         buf = io.BytesIO()
         wb.save(buf)
         return buf.getvalue()
@@ -279,6 +735,20 @@ def _generate_md(req: GenerateRequest) -> bytes:
         for row in req.table.rows:
             lines.append("| " + " | ".join(str(v) for v in row) + " |")
         lines.append("")
+    for chart in req.charts or []:
+        heading = chart.title or f"{chart.type.capitalize()} Chart"
+        lines += [f"## {heading}", ""]
+        headers, rows = _chart_to_table_rows(chart)
+        lines.append("| " + " | ".join(headers) + " |")
+        lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
+        for row in rows:
+            lines.append("| " + " | ".join(str(v) for v in row) + " |")
+        lines.append("")
+    for diagram in req.diagrams or []:
+        lines.append("")
+        for line in _diagram_to_text_lines(diagram):
+            lines.append(line)
+        lines.append("")
     return "\n".join(lines).encode("utf-8")
 
 
@@ -294,6 +764,18 @@ def _generate_csv(req: GenerateRequest) -> bytes:
         writer.writerow(["Heading", "Body"])
         for s in req.sections:
             writer.writerow([s.heading or "", s.body or ""])
+    for chart in req.charts or []:
+        writer.writerow([])
+        writer.writerow([f"# {chart.title or chart.type} chart"])
+        headers, rows = _chart_to_table_rows(chart)
+        writer.writerow(headers)
+        for row in rows:
+            writer.writerow(row)
+    for diagram in req.diagrams or []:
+        writer.writerow([])
+        writer.writerow([f"# {diagram.title or diagram.type} diagram"])
+        for line in _diagram_to_text_lines(diagram):
+            writer.writerow([line])
     return buf.getvalue().encode("utf-8")
 
 
@@ -320,14 +802,79 @@ def _generate_html(req: GenerateRequest) -> bytes:
           <tbody>{rows_html}</tbody>
         </table>"""
 
+    import base64 as _b64
+
+    charts_html = ""
+    charts_scripts = ""
+
+    for idx, chart in enumerate(req.charts or []):
+        title_tag = f"<h2>{chart.title}</h2>" if chart.title else ""
+        if req.canvas_render:
+            # Server-side canvas render — embed pre-rendered PNG as <img>
+            png_bytes = _render_chart_to_png(chart)
+            b64 = _b64.b64encode(png_bytes).decode()
+            charts_html += f"""
+  <div class="media-container">
+    {title_tag}
+    <img src="data:image/png;base64,{b64}" width="{chart.width or 600}" height="{chart.height or 400}" alt="{chart.title or 'chart'}" style="max-width:100%;border-radius:8px;">
+  </div>"""
+        else:
+            canvas_id = f"chart_{idx}"
+            chart_type_js = "doughnut" if chart.type == "doughnut" else chart.type.lower()
+            datasets_js = json.dumps([
+                {
+                    "label": ds.label,
+                    "data": ds.data,
+                    "backgroundColor": ds.color or f"hsl({idx * 60 + i * 37}, 65%, 55%)",
+                    "borderColor": ds.color or f"hsl({idx * 60 + i * 37}, 65%, 45%)",
+                    "fill": False,
+                    "tension": 0.3,
+                }
+                for i, ds in enumerate(chart.datasets)
+            ])
+            labels_js = json.dumps(chart.labels)
+            title_js = json.dumps(chart.title or "")
+            charts_html += f"""
+  <div class="media-container">
+    {title_tag}
+    <canvas id="{canvas_id}" width="{chart.width or 600}" height="{chart.height or 400}"></canvas>
+  </div>"""
+            charts_scripts += f"""
+  new Chart(document.getElementById({json.dumps(canvas_id)}), {{
+    type: {json.dumps(chart_type_js)},
+    data: {{ labels: {labels_js}, datasets: {datasets_js} }},
+    options: {{
+      responsive: false,
+      plugins: {{ legend: {{ position: "bottom" }}, title: {{ display: !!{title_js}, text: {title_js} }} }},
+    }},
+  }});"""
+
+    diagrams_html = ""
+    for diagram in req.diagrams or []:
+        png_bytes = _render_diagram_to_png(diagram)
+        b64 = _b64.b64encode(png_bytes).decode()
+        title_tag = f"<h2>{diagram.title}</h2>" if diagram.title else ""
+        diagrams_html += f"""
+  <div class="media-container">
+    {title_tag}
+    <img src="data:image/png;base64,{b64}" width="{diagram.width or 700}" height="{diagram.height or 500}" alt="{diagram.title or 'diagram'}" style="max-width:100%;border-radius:8px;">
+  </div>"""
+
+    chartjs_script = (
+        '<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>'
+        if req.charts and not req.canvas_render
+        else ""
+    )
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{req.title}</title>
+  {chartjs_script}
   <style>
-    body {{ font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #1e293b; }}
+    body {{ font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1e293b; }}
     h1 {{ color: #4f46e5; border-bottom: 2px solid #e2e8f0; padding-bottom: .5rem; }}
     h2, h3 {{ color: #334155; }}
     p {{ line-height: 1.7; }}
@@ -336,6 +883,7 @@ def _generate_html(req: GenerateRequest) -> bytes:
     td {{ padding: .5rem 1rem; border-bottom: 1px solid #e2e8f0; }}
     tr:nth-child(even) td {{ background: #f8fafc; }}
     .meta {{ color: #64748b; font-size: .9rem; margin-bottom: 1.5rem; }}
+    .media-container {{ margin: 2rem 0; }}
   </style>
 </head>
 <body>
@@ -343,6 +891,9 @@ def _generate_html(req: GenerateRequest) -> bytes:
   <p class="meta">{f'Author: {req.author}' if req.author else ''}</p>
   {sections_html}
   {table_html}
+  {charts_html}
+  {diagrams_html}
+  {f'<script>{charts_scripts}</script>' if charts_scripts else ''}
 </body>
 </html>"""
     return html.encode("utf-8")
@@ -365,6 +916,19 @@ def _generate_txt(req: GenerateRequest) -> bytes:
         lines.append("-" * len(header_row))
         for row in req.table.rows:
             lines.append(" | ".join(str(v).ljust(col_widths[i]) for i, v in enumerate(row)))
+    for chart in req.charts or []:
+        heading = chart.title or f"{chart.type.capitalize()} Chart"
+        lines += ["", heading, "-" * len(heading)]
+        headers, rows = _chart_to_table_rows(chart)
+        col_widths = [max(len(str(h)), *(len(str(r[i])) for r in rows), 0) + 2 for i, h in enumerate(headers)]
+        header_row = " | ".join(str(h).ljust(col_widths[i]) for i, h in enumerate(headers))
+        lines.append(header_row)
+        lines.append("-" * len(header_row))
+        for row in rows:
+            lines.append(" | ".join(str(v).ljust(col_widths[i]) for i, v in enumerate(row)))
+    for diagram in req.diagrams or []:
+        lines.append("")
+        lines.extend(_diagram_to_text_lines(diagram))
     return "\n".join(lines).encode("utf-8")
 
 
@@ -374,6 +938,8 @@ def _generate_json_doc(req: GenerateRequest) -> bytes:
         "author": req.author,
         "sections": [s.model_dump() for s in (req.sections or [])],
         "table": req.table.model_dump() if req.table else None,
+        "charts": [c.model_dump() for c in (req.charts or [])],
+        "diagrams": [d.model_dump() for d in (req.diagrams or [])],
         "metadata": req.metadata.model_dump() if req.metadata else None,
     }
     return json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
@@ -391,12 +957,12 @@ GENERATORS = {
 }
 
 
-@app.get("/api/documents/health")
+@app.get("/api/documents/health", tags=["health"], summary="Health check")
 def health():
     return {"status": "ok", "service": "document-service"}
 
 
-@app.get("/api/documents/formats")
+@app.get("/api/documents/formats", tags=["documents"], summary="List supported output formats")
 def list_formats():
     return {
         "formats": [
@@ -412,7 +978,13 @@ def list_formats():
     }
 
 
-@app.post("/api/documents/generate")
+@app.post(
+    "/api/documents/generate",
+    tags=["documents"],
+    summary="Generate a document",
+    description="Generate a document in the requested format. Returns the file as a binary stream with an appropriate Content-Disposition header.",
+    response_class=StreamingResponse,
+)
 def generate_document(req: GenerateRequest):
     fmt = req.format.lower()
     if fmt not in SUPPORTED_FORMATS:
@@ -643,7 +1215,7 @@ def _parse_image_bytes(content: bytes, filename: str) -> dict:
 
 # ─── Parse endpoints ──────────────────────────────────────────────────────────
 
-@app.post("/api/documents/parse")
+@app.post("/api/documents/parse", tags=["documents"], summary="Parse an uploaded document")
 async def parse_document_upload(file: UploadFile = File(...)):
     """Parse an uploaded file and return structured text/data."""
     content = await file.read()
@@ -656,7 +1228,7 @@ async def parse_document_upload(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@app.post("/api/documents/parse-path")
+@app.post("/api/documents/parse-path", tags=["documents"], summary="Parse a document from a server path")
 def parse_document_path(req: ParsePathRequest):
     """Parse a file from an absolute server-side path."""
     path = _safe_workspace_path(req.path)
@@ -671,7 +1243,7 @@ def parse_document_path(req: ParsePathRequest):
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@app.post("/api/documents/parse-image")
+@app.post("/api/documents/parse-image", tags=["documents"], summary="OCR an uploaded image")
 async def parse_image_upload(file: UploadFile = File(...)):
     """Parse an uploaded image (OCR + metadata)."""
     content = await file.read()
@@ -684,7 +1256,7 @@ async def parse_image_upload(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@app.post("/api/documents/parse-image-path")
+@app.post("/api/documents/parse-image-path", tags=["documents"], summary="OCR an image from a server path")
 def parse_image_path_endpoint(req: ParseImagePathRequest):
     """Parse an image from an absolute server-side path (OCR + metadata)."""
     path = _safe_workspace_path(req.path)
@@ -699,7 +1271,7 @@ def parse_image_path_endpoint(req: ParseImagePathRequest):
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@app.get("/api/documents/read")
+@app.get("/api/documents/read", tags=["files"], summary="Read a text file from the workspace")
 def read_text_file(
     path: str = Query(..., description="Absolute server path to a text file"),
     encoding: str = Query("utf-8"),
@@ -719,7 +1291,7 @@ def read_text_file(
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@app.post("/api/documents/write")
+@app.post("/api/documents/write", tags=["files"], summary="Write a text file to the workspace")
 async def write_text_file(req: WriteFileRequest):
     """Write a plain-text file to the workspace or cloud if outside."""
     path, is_safe = _resolve_path(req.path, req.workspaceRoot)
@@ -757,7 +1329,7 @@ async def write_text_file(req: WriteFileRequest):
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@app.post("/api/documents/delete")
+@app.post("/api/documents/delete", tags=["files"], summary="Delete a file from the workspace")
 def delete_workspace_file(req: DeleteFileRequest):
     """Delete a file from the workspace."""
     safe_path = _safe_workspace_path(req.path, check_exists=True)

@@ -39,7 +39,7 @@ function formatRelativeTime(ts: string): string {
 export const WorkflowFlowNode = memo(
   ({ data, selected, id }: NodeProps & { data: WorkflowNodeData; selected?: boolean }) => {
     const { i18n } = useTranslation();
-    const { meta, label, labelFr, config, nodeType, resolvedToolNames, resolvedSubAgents } = data;
+    const { meta, label, labelFr, description, config, nodeType, resolvedToolNames, resolvedSubAgents } = data;
     const Icon = meta?.icon;
 
     const nodeStatus = useWorkflowExecutionStore((s) => s.nodeStatuses[id]);
@@ -103,6 +103,13 @@ export const WorkflowFlowNode = memo(
     const isCondition = nodeType === 'CONDITIONAL';
     const isAgent = nodeType === 'AGENT';
     const isOrchestrator = nodeType === 'ORCHESTRATOR';
+    const isWhile = nodeType === 'WHILE';
+    const isForEach = nodeType === 'FOR_EACH';
+    const isSwitchNode = nodeType === 'SWITCH';
+    const switchCases = isSwitchNode
+      ? ((config?.cases as Array<{ value: string; label: string }>) ?? [])
+      : [];
+    const isConditional = nodeType === 'CONDITIONAL';
 
     // Config summary line (for non-agent nodes)
     let configSummary = '';
@@ -163,11 +170,11 @@ export const WorkflowFlowNode = memo(
     }
 
     // Different shapes based on type
-    let shapeClass = 'rounded-2xl px-4 py-3 min-w-[150px] max-w-[220px]'; // default (Agent, Tool, Transform)
+    let shapeClass = 'rounded-2xl px-4 py-3 min-w-[150px] max-w-[240px]'; // default
     if (isStart || isEnd) {
       shapeClass = 'rounded-full px-5 py-2.5 flex justify-center min-w-[120px]';
-    } else if (isCondition) {
-      shapeClass = 'rounded-lg px-4 py-3 border-dashed border-[2.5px] min-w-[150px]';
+    } else if (isCondition || isSwitchNode) {
+      shapeClass = 'rounded-xl px-4 py-3 min-w-[180px] max-w-[260px]';
     }
 
     const isDeletable = !isStart && !isEnd;
@@ -275,6 +282,12 @@ export const WorkflowFlowNode = memo(
               </p>
             </div>
           </div>
+
+          {typeof description === 'string' && description && (
+            <p className="mt-1.5 text-[10px] leading-tight text-muted-foreground italic line-clamp-2">
+              {description}
+            </p>
+          )}
 
           {configSummary && (
             <p className="mt-2 text-[10px] leading-tight text-foreground/70 font-medium truncate border-t border-foreground/10 pt-1.5 mix-blend-luminosity">
@@ -398,6 +411,50 @@ export const WorkflowFlowNode = memo(
             </div>
           )}
 
+          {/* WHILE: show condition + max-iterations */}
+          {isWhile && (
+            <div className="mt-2 border-t border-foreground/10 pt-1.5 space-y-0.5">
+              {typeof config?.condition === 'string' && config.condition && (
+                <p className="text-[10px] font-mono text-teal-500/90 truncate" title={config.condition as string}>
+                  {(config.condition as string).slice(0, 28)}
+                  {(config.condition as string).length > 28 ? '…' : ''}
+                </p>
+              )}
+              <p className="text-[9px] text-muted-foreground/60">
+                max {(config?.maxIterations as number) ?? 100} iter
+              </p>
+            </div>
+          )}
+
+          {/* CONDITIONAL: show condition preview */}
+          {isConditional && (
+            <div className="mt-2 border-t border-foreground/10 pt-1.5">
+              {typeof config?.condition === 'string' && config.condition ? (
+                <p className="text-[10px] font-mono text-sky-500/90 truncate" title={config.condition as string}>
+                  {(config.condition as string).slice(0, 30)}
+                  {(config.condition as string).length > 30 ? '…' : ''}
+                </p>
+              ) : (
+                <p className="text-[10px] text-muted-foreground/50 italic">no condition set</p>
+              )}
+            </div>
+          )}
+
+          {/* SWITCH: show expression + case count */}
+          {isSwitchNode && (
+            <div className="mt-2 border-t border-foreground/10 pt-1.5 space-y-0.5">
+              {typeof config?.switchOn === 'string' && config.switchOn && (
+                <p className="text-[10px] font-mono text-amber-500/90 truncate" title={config.switchOn as string}>
+                  {(config.switchOn as string).slice(0, 28)}
+                  {(config.switchOn as string).length > 28 ? '…' : ''}
+                </p>
+              )}
+              <p className="text-[9px] text-muted-foreground/60">
+                {switchCases.length} {switchCases.length === 1 ? 'case' : 'cases'} + default
+              </p>
+            </div>
+          )}
+
           {/* ORCHESTRATOR node: loop + sub-agent badges */}
           {isOrchestrator && (
             <div className="mt-2 border-t border-foreground/10 pt-1.5 space-y-1">
@@ -433,8 +490,75 @@ export const WorkflowFlowNode = memo(
             </div>
           )}
 
-          {/* Output handle (bottom) — not for END */}
-          {!isEnd && (
+          {/* ── Branch label rows (visual only, no handles inside) ── */}
+          {isConditional && (
+            <div className="mt-3 border-t border-foreground/10 pt-1.5 pb-2 flex justify-around text-[9px] font-semibold">
+              <span className="text-emerald-500">✓ true</span>
+              <span className="text-muted-foreground/60">✗ false</span>
+            </div>
+          )}
+
+          {isWhile && (
+            <div className="mt-3 border-t border-foreground/10 pt-1.5 pb-2 flex justify-around text-[9px] font-medium text-muted-foreground">
+              <span className="text-teal-500">↻ loop</span>
+              <span>→ exit</span>
+            </div>
+          )}
+
+          {isForEach && (
+            <div className="mt-2 border-t border-foreground/10 pt-1.5 space-y-0.5">
+              {typeof config?.collection === 'string' && config.collection && (
+                <p className="text-[10px] font-mono text-cyan-500/90 truncate" title={config.collection as string}>
+                  {(config.collection as string).slice(0, 28)}
+                  {(config.collection as string).length > 28 ? '…' : ''}
+                </p>
+              )}
+              <p className="text-[9px] text-muted-foreground/60">
+                max {(config?.maxIterations as number) ?? 100} iter
+              </p>
+            </div>
+          )}
+
+          {isForEach && (
+            <div className="mt-3 border-t border-foreground/10 pt-1.5 pb-2 flex justify-around text-[9px] font-medium text-muted-foreground">
+              <span className="text-cyan-500">↻ body</span>
+              <span>→ exit</span>
+            </div>
+          )}
+
+          {isSwitchNode && (
+            <div className="mt-3 border-t border-foreground/10 pt-1.5 pb-2 flex justify-around text-[9px] font-medium text-muted-foreground overflow-hidden">
+              {switchCases.map((c, i) => (
+                <span key={i} className="text-amber-500 truncate max-w-[40px]" title={c.label || c.value}>
+                  {(c.label || c.value || `case_${i}`).slice(0, 6)}
+                </span>
+              ))}
+              <span className="opacity-60">default</span>
+            </div>
+          )}
+
+          {/* FOR_EACH: body + exit handles */}
+          {isForEach && (
+            <>
+              <Handle
+                type="source"
+                position={Position.Bottom}
+                id="body"
+                style={{ left: '30%' }}
+                className="bg-cyan-500/80! border-background! w-3! h-3!"
+              />
+              <Handle
+                type="source"
+                position={Position.Bottom}
+                id="exit"
+                style={{ left: '70%' }}
+                className="bg-primary/80! border-background! w-3! h-3!"
+              />
+            </>
+          )}
+
+          {/* Output handle (bottom) — not for END, WHILE, FOR_EACH, SWITCH, or CONDITIONAL */}
+          {!isEnd && !isWhile && !isForEach && !isSwitchNode && !isConditional && (
             <Handle
               type="source"
               position={Position.Bottom}
@@ -529,6 +653,72 @@ export const WorkflowFlowNode = memo(
             </div>
           )}
         </div>
+
+        {/* ── Multi-branch source handles: direct children of the node root so
+            ReactFlow measures their positions relative to the same element it
+            uses to compute the node bounding box. ── */}
+        {isConditional && (
+          <>
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id="true"
+              style={{ left: '30%' }}
+              className="bg-emerald-500/80! border-background! w-3! h-3!"
+            />
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id="false"
+              style={{ left: '70%' }}
+              className="bg-primary/80! border-background! w-3! h-3!"
+            />
+          </>
+        )}
+
+        {isWhile && (
+          <>
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id="loop"
+              style={{ left: '30%' }}
+              className="bg-teal-500/80! border-background! w-3! h-3!"
+            />
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id="exit"
+              style={{ left: '70%' }}
+              className="bg-primary/80! border-background! w-3! h-3!"
+            />
+          </>
+        )}
+
+        {isSwitchNode && (
+          <>
+            {switchCases.map((_, i) => {
+              const pct = ((i + 1) / (switchCases.length + 2)) * 100;
+              return (
+                <Handle
+                  key={i}
+                  type="source"
+                  position={Position.Bottom}
+                  id={`case_${i}`}
+                  style={{ left: `${pct}%` }}
+                  className="bg-amber-500/80! border-background! w-3! h-3!"
+                />
+              );
+            })}
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id="default"
+              style={{ left: `${((switchCases.length + 1) / (switchCases.length + 2)) * 100}%` }}
+              className="bg-primary/80! border-background! w-3! h-3!"
+            />
+          </>
+        )}
       </div>
     );
   },

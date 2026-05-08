@@ -5,12 +5,13 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::{db, AppState};
 
 // ── Response type ─────────────────────────────────────────────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolResponse {
     pub id: String,
@@ -46,7 +47,7 @@ impl From<db::FullToolRow> for ToolResponse {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct PaginatedResponse {
     pub data: Vec<ToolResponse>,
     pub total: i64,
@@ -58,17 +59,22 @@ pub struct PaginatedResponse {
 
 // ── Request types ─────────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
 pub struct ListQuery {
+    /// Page number (1-based, default 1).
     pub page: Option<u32>,
+    /// Number of items per page (default 20, max 100).
     pub limit: Option<u32>,
+    /// Alias for `limit`.
     pub page_size: Option<u32>,
+    /// Filter by category (e.g. "MCP", "CUSTOM", "BUILT_IN").
     pub category: Option<String>,
+    /// Filter to built-in tools only.
     pub is_built_in: Option<bool>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateRequest {
     pub name: String,
@@ -83,15 +89,14 @@ pub struct CreateRequest {
     pub repo_full_name: Option<String>,
 }
 
-// For PUT/PATCH: all fields optional; caller merges against current values
-#[derive(Deserialize)]
+/// Partial update — omitted fields are left unchanged; `null` clears nullable fields.
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub category: Option<String>,
     pub parameters: Option<Value>,
-    // Value so the client can send `null` to clear a nullable field
     pub code: Option<Value>,
     pub icon: Option<Value>,
     pub mcp_config: Option<Value>,
@@ -100,6 +105,17 @@ pub struct UpdateRequest {
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
+/// List tools (paginated)
+#[utoipa::path(
+    get,
+    path = "/api/tools",
+    tag = "tools",
+    params(ListQuery),
+    responses(
+        (status = 200, description = "Paginated list of tools", body = PaginatedResponse),
+    ),
+    security(("BearerAuth" = []))
+)]
 pub async fn list(
     State(state): State<AppState>,
     Query(q): Query<ListQuery>,
@@ -127,6 +143,18 @@ pub async fn list(
     }))
 }
 
+/// Get a single tool by ID
+#[utoipa::path(
+    get,
+    path = "/api/tools/{id}",
+    tag = "tools",
+    params(("id" = String, Path, description = "Tool UUID")),
+    responses(
+        (status = 200, description = "Tool found", body = ToolResponse),
+        (status = 404, description = "Tool not found"),
+    ),
+    security(("BearerAuth" = []))
+)]
 pub async fn get_by_id(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -138,6 +166,18 @@ pub async fn get_by_id(
         .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Tool {id} not found")))
 }
 
+/// Create a new tool
+#[utoipa::path(
+    post,
+    path = "/api/tools",
+    tag = "tools",
+    request_body = CreateRequest,
+    responses(
+        (status = 201, description = "Tool created", body = ToolResponse),
+        (status = 400, description = "Validation error"),
+    ),
+    security(("BearerAuth" = []))
+)]
 pub async fn create(
     State(state): State<AppState>,
     Json(req): Json<CreateRequest>,
@@ -162,6 +202,19 @@ pub async fn create(
     Ok((StatusCode::CREATED, Json(ToolResponse::from(tool))))
 }
 
+/// Update a tool (PUT or PATCH — all fields optional)
+#[utoipa::path(
+    put,
+    path = "/api/tools/{id}",
+    tag = "tools",
+    params(("id" = String, Path, description = "Tool UUID")),
+    request_body = UpdateRequest,
+    responses(
+        (status = 200, description = "Tool updated", body = ToolResponse),
+        (status = 404, description = "Tool not found"),
+    ),
+    security(("BearerAuth" = []))
+)]
 pub async fn update(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -193,6 +246,18 @@ pub async fn update(
     Ok(Json(ToolResponse::from(updated)))
 }
 
+/// Delete a tool
+#[utoipa::path(
+    delete,
+    path = "/api/tools/{id}",
+    tag = "tools",
+    params(("id" = String, Path, description = "Tool UUID")),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 404, description = "Tool not found"),
+    ),
+    security(("BearerAuth" = []))
+)]
 pub async fn delete(
     State(state): State<AppState>,
     Path(id): Path<String>,

@@ -53,6 +53,7 @@ export class UpdateWorkflowUseCase {
       id: dto.id || uuidv4(),
       type: dto.type,
       customName: dto.customName,
+      description: dto.description,
       config: dto.config ?? {},
       position: dto.position ?? { x: 0, y: 0 },
     };
@@ -75,6 +76,7 @@ export class UpdateWorkflowUseCase {
             ...n,
             type: dto.type ?? n.type,
             customName: dto.customName !== undefined ? dto.customName : n.customName,
+            description: dto.description !== undefined ? dto.description : n.description,
             config: dto.config ?? n.config,
             position: dto.position ?? n.position,
           }
@@ -111,6 +113,7 @@ export class UpdateWorkflowUseCase {
       source: dto.source,
       target: dto.target,
       condition: dto.condition,
+      sourceHandle: dto.sourceHandle,
     };
 
     const definition = {

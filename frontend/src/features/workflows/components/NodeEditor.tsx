@@ -44,8 +44,12 @@ import { FileConfigEditor } from './FileConfigEditor';
 import { useWorkspaceStore, type FileNode } from '@/features/workspace/store/workspaceStore';
 import { SubWorkflowConfig } from './SubWorkflowConfig';
 import { useWorkflowExecutionStore } from '../store/workflowExecution.store';
+import { useNodePreferencesStore } from '../store/nodePreferences.store';
 import { DocPanel } from '@/components/shared/DocPanel';
 import { TestNodePanel } from './TestNodePanel';
+import { WhileNodeConfig } from './WhileNodeConfig';
+import { SwitchNodeConfig } from './SwitchNodeConfig';
+import { ConditionalNodeConfig } from './ConditionalNodeConfig';
 
 /** Sub-agent configuration inside an AGENT node */
 export interface SubAgentConfig {
@@ -551,6 +555,7 @@ export interface NodeEditorProps {
     id: string;
     type: NodeTypeId | string;
     customName?: string;
+    description?: string;
     config?: Record<string, unknown>;
     position?: { x: number; y: number };
   };
@@ -598,9 +603,15 @@ function NodeEditorForm({
   const [type, setType] = useState<NodeTypeId>((initialNode?.type as NodeTypeId) ?? 'AGENT');
   const [config, setConfig] = useState<Record<string, unknown>>(initialNode?.config ?? {});
   const [customName, setCustomName] = useState<string>(initialNode?.customName ?? '');
+  const [description, setDescription] = useState<string>(initialNode?.description ?? '');
 
 
   const meta: NodeTypeMeta = NODE_TYPE_REGISTRY.find((n) => n.id === type) ?? NODE_TYPE_REGISTRY[0];
+
+  const { isAvailable } = useNodePreferencesStore();
+  const availableNodeTypes = NODE_TYPE_REGISTRY.filter(
+    (n) => n.id === type || isAvailable(n.id),
+  );
 
   const activeWs = useWorkspaceStore((s) => s.getActiveWorkspace?.() ?? null);
   const nodeExecutionData = useWorkflowExecutionStore((s) =>
@@ -665,6 +676,7 @@ function NodeEditorForm({
       id: initialNode?.id ?? uuidv4(),
       type,
       customName: customName.trim() || undefined,
+      description: description.trim() || undefined,
       config,
       position: initialNode?.position ?? defaultPosition ?? { x: 100, y: 100 },
     });
@@ -770,7 +782,7 @@ function NodeEditorForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {NODE_TYPE_REGISTRY.map((n) => (
+                    {availableNodeTypes.map((n) => (
                       <SelectItem key={n.id} value={n.id}>
                         <span className="flex items-center gap-2">
                           <n.icon className={`h-4 w-4 ${n.color}`} />
@@ -795,6 +807,17 @@ function NodeEditorForm({
                 }
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
+              />
+            </div>
+
+            {/* Node Description */}
+            <div className="space-y-2">
+              <Label>{t('workflows.node_editor.description') || 'Description'}</Label>
+              <Textarea
+                placeholder={t('workflows.node_editor.descriptionPlaceholder') || 'Describe what this node does…'}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="min-h-[60px] resize-none text-sm"
               />
             </div>
 
@@ -1838,101 +1861,11 @@ function NodeEditorForm({
 
             {/* CONDITIONAL config */}
             {type === 'CONDITIONAL' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>{t('workflows.node_editor.condition')}</Label>
-                  <Select
-                    value={(config.language as string) || 'javascript'}
-                    onValueChange={(v) => handleConfigChange('language', v)}
-                  >
-                    <SelectTrigger className="w-[130px] h-8 text-xs">
-                      <SelectValue placeholder="Language" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="javascript">JavaScript</SelectItem>
-                      <SelectItem value="python">Python</SelectItem>
-                      <SelectItem value="json">JSON</SelectItem>
-                      <SelectItem value="text">Text</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div
-                  className={
-                    isFullscreen
-                      ? 'fixed inset-0 z-999 bg-background flex flex-col p-8 animate-in fade-in duration-200'
-                      : 'border border-border/50 rounded-md overflow-hidden bg-background relative group'
-                  }
-                >
-                  {isFullscreen && (
-                    <div className="flex items-center justify-between mb-4 border-b border-border/50 pb-4">
-                      <div className="flex items-center gap-4">
-                        <Label className="text-lg font-semibold">
-                          {t('workflows.node_editor.condition')}
-                        </Label>
-                        <Select
-                          value={(config.language as string) || 'javascript'}
-                          onValueChange={(v) => handleConfigChange('language', v)}
-                        >
-                          <SelectTrigger className="w-[130px] h-8 text-xs">
-                            <SelectValue placeholder="Language" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="javascript">JavaScript</SelectItem>
-                            <SelectItem value="python">Python</SelectItem>
-                            <SelectItem value="json">JSON</SelectItem>
-                            <SelectItem value="text">Text</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Button variant="outline" onClick={() => setIsFullscreen(false)}>
-                        <Minimize2 className="h-4 w-4 mr-2" /> Exit Fullscreen
-                      </Button>
-                    </div>
-                  )}
-                  {!isFullscreen && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute bottom-2 right-6 z-10 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity bg-background border border-border/50 text-muted-foreground hover:text-foreground"
-                      onClick={() => setIsFullscreen(true)}
-                    >
-                      <Maximize2 className="h-3 w-3" />
-                    </Button>
-                  )}
-                  <div className="flex-1 relative min-h-0 border border-border/20 rounded-sm">
-                    <Editor
-                      height={isFullscreen ? '100%' : '160px'}
-                      language={(config.language as string) || 'javascript'}
-                      theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
-                      value={(config.condition as string) ?? ''}
-                      onChange={(val: string | undefined) =>
-                        handleConfigChange('condition', val || '')
-                      }
-                      options={{
-                        minimap: { enabled: false },
-                        fontSize: 12,
-                        fontFamily:
-                          'ui-monospace,SFMono-Regular,SF Mono,Consolas,Liberation Mono,Menlo,monospace',
-                        formatOnPaste: true,
-                        formatOnType: true,
-                        scrollBeyondLastLine: false,
-                        wordWrap: 'on',
-                        lineNumbersMinChars: 3,
-                        padding: { top: 12 },
-                      }}
-                      beforeMount={handleEditorBeforeMount}
-                      loading={
-                        <div className="h-full flex items-center justify-center text-xs text-muted-foreground animate-pulse py-8">
-                          Loading Editor...
-                        </div>
-                      }
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {t('workflows.node_editor.conditionDesc')}
-                </p>
-              </div>
+              <ConditionalNodeConfig
+                config={config}
+                onConfigChange={handleConfigChange}
+                theme={resolvedTheme ?? 'light'}
+              />
             )}
 
             {/* TRANSFORM config */}
@@ -2112,6 +2045,44 @@ function NodeEditorForm({
                     }
                   />
                 </div>
+              </div>
+            )}
+
+            {/* JSON config */}
+            {type === 'JSON' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>JSON Object</Label>
+                </div>
+                <div className="border border-border/50 rounded-md overflow-hidden bg-background relative min-h-0">
+                  <Editor
+                    height="200px"
+                    language="json"
+                    theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
+                    value={(config.json as string) ?? '{}'}
+                    onChange={(val: string | undefined) => handleConfigChange('json', val ?? '{}')}
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 12,
+                      fontFamily:
+                        'ui-monospace,SFMono-Regular,SF Mono,Consolas,Liberation Mono,Menlo,monospace',
+                      formatOnPaste: true,
+                      formatOnType: true,
+                      scrollBeyondLastLine: false,
+                      wordWrap: 'on',
+                      lineNumbersMinChars: 3,
+                      padding: { top: 12 },
+                    }}
+                    loading={
+                      <div className="h-full flex items-center justify-center text-xs text-muted-foreground animate-pulse py-8">
+                        Loading Editor...
+                      </div>
+                    }
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Output: the parsed JSON object passed to downstream nodes.
+                </p>
               </div>
             )}
 
@@ -2842,6 +2813,96 @@ function NodeEditorForm({
                 currentWorkflowId={workflowId}
                 onConfigChange={handleConfigChange}
               />
+            )}
+
+            {/* WHILE config */}
+            {type === 'WHILE' && (
+              <WhileNodeConfig
+                config={config}
+                onConfigChange={handleConfigChange}
+                theme={resolvedTheme ?? 'light'}
+              />
+            )}
+
+            {/* SWITCH config */}
+            {type === 'SWITCH' && (
+              <SwitchNodeConfig
+                config={config}
+                onConfigChange={handleConfigChange}
+                theme={resolvedTheme ?? 'light'}
+              />
+            )}
+
+            {/* FOR_EACH config */}
+            {type === 'FOR_EACH' && (
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {t('workflows.forEach.collectionLabel')}
+                    <span className="ml-1 text-muted-foreground font-normal">
+                      {t('workflows.forEach.collectionHint')}
+                    </span>
+                  </Label>
+                  <Input
+                    placeholder="e.g. results  or  data.items  or  $.users"
+                    value={(config.collection as string) ?? ''}
+                    onChange={(e) => handleConfigChange('collection', e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
+                  <p className="text-[11px] text-muted-foreground/70">
+                    {t('workflows.forEach.collectionDesc')}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {t('workflows.forEach.outputKeyLabel')}
+                    <span className="ml-1 text-muted-foreground font-normal">
+                      {t('workflows.forEach.outputKeyHint')}
+                    </span>
+                  </Label>
+                  <Input
+                    placeholder="e.g. result  (leave empty to collect full output)"
+                    value={(config.outputKey as string) ?? ''}
+                    onChange={(e) => handleConfigChange('outputKey', e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {t('workflows.forEach.maxIterLabel')}{' '}
+                    <span className="text-muted-foreground font-normal">
+                      {t('workflows.forEach.maxIterHint')}
+                    </span>
+                  </Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    value={(config.maxIterations as number) ?? 100}
+                    onChange={(e) =>
+                      handleConfigChange('maxIterations', parseInt(e.target.value) || 100)
+                    }
+                    className="h-8 text-xs w-32"
+                  />
+                </div>
+
+                <div className="rounded-md bg-muted/40 border border-border/40 p-3 space-y-1">
+                  <p className="text-[11px] font-semibold text-muted-foreground">
+                    {t('workflows.forEach.contextTitle')}
+                  </p>
+                  <p className="text-[10px] font-mono text-cyan-500/90">
+                    {'_forEachItem'} — {t('workflows.forEach.contextItem')}
+                  </p>
+                  <p className="text-[10px] font-mono text-cyan-500/90">
+                    {'_forEachIndex'} — {t('workflows.forEach.contextIndex')}
+                  </p>
+                  <p className="text-[10px] font-mono text-cyan-500/90">
+                    {'_forEachTotal'} — {t('workflows.forEach.contextTotal')}
+                  </p>
+                </div>
+              </div>
             )}
 
             {/* In / Out Type Declarations (for Autocomplete) */}
