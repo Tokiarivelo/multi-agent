@@ -306,15 +306,23 @@ if res is not None:
     execution: WorkflowExecution,
     context: ExecutionContext,
   ): any {
-    if (path.startsWith('output.')) {
-      const nodeId = path.split('.')[1];
+    // Strip a leading dot so "$._forEachItem" works like "$variables._forEachItem"
+    const p = path.startsWith('.') ? 'variables' + path : path;
+
+    if (p.startsWith('output.')) {
+      const nodeId = p.split('.')[1];
       const nodeExecution = execution.getNodeExecution(nodeId);
       return nodeExecution?.output;
     }
 
-    if (path.startsWith('variables.')) {
-      const varName = path.substring('variables.'.length);
+    if (p.startsWith('variables.')) {
+      const varName = p.substring('variables.'.length);
       return context.variables[varName];
+    }
+
+    // Bare key with no prefix — treat as a direct context variable lookup
+    if (!p.includes('.')) {
+      return context.variables[p];
     }
 
     return undefined;

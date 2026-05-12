@@ -27,6 +27,8 @@ type Config struct {
 	DocumentServiceURL       string
 	GitHubMCPServiceURL      string
 	TrelloMCPServiceURL      string
+	EmailMCPServiceURL       string
+	CalendarMCPServiceURL    string
 }
 
 func CleanDatabaseURL(dbURL string) string {
@@ -83,6 +85,8 @@ func Load() (*Config, error) {
 		DocumentServiceURL:      getEnv("DOCUMENT_SERVICE_URL", "http://localhost:3009"),
 		GitHubMCPServiceURL:     getEnv("GITHUB_MCP_SERVICE_URL", "http://localhost:3010"),
 		TrelloMCPServiceURL:     getEnv("TRELLO_MCP_SERVICE_URL", "http://localhost:3011"),
+		EmailMCPServiceURL:      getEnv("EMAIL_MCP_SERVICE_URL", "http://localhost:3012"),
+		CalendarMCPServiceURL:   getEnv("CALENDAR_MCP_SERVICE_URL", "http://localhost:3013"),
 	}, nil
 }
 

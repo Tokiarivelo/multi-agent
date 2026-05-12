@@ -24,6 +24,7 @@ import {
   RefreshCcw,
   SplitSquareHorizontal,
   ListOrdered,
+  FileText,
   type LucideIcon,
 } from 'lucide-react';
 import { NodeTypeId } from '@/types';
@@ -77,7 +78,7 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     color: 'text-violet-500',
     bgColor: 'bg-violet-500/10',
     borderColor: 'border-violet-500/40',
-    defaultConfig: { agentId: '' },
+    defaultConfig: { agentId: '', nodePrompt: '', outputFormat: 'text', outputKey: '', outputTemplate: '' },
   },
   {
     id: 'TOOL',
@@ -276,6 +277,7 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     borderColor: 'border-indigo-500/40',
     defaultConfig: {
       agentId: '',
+      nodePrompt: '',
       maxIterations: 10,
       maxRetries: 3,
       retryBackoffMs: 1000,
@@ -353,6 +355,29 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
       mailbox: '', query: '', limit: 20,
       manipulateAction: 'mark_read', uids: '', targetMailbox: '',
       imapUser: '', imapPass: '', imapHost: '', imapPort: '',
+    },
+  },
+  {
+    id: 'DOCUMENT',
+    label: 'Document',
+    labelFr: 'Document',
+    description: 'Generate, read, write, or delete documents (PDF, DOCX, XLSX…)',
+    descriptionFr: 'Générer, lire, écrire ou supprimer des documents (PDF, DOCX, XLSX…)',
+    icon: FileText,
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-500/10',
+    borderColor: 'border-blue-500/40',
+    defaultConfig: {
+      action: 'generate',
+      format: 'pdf',
+      title: '',
+      author: '',
+      sections: '',
+      table: '',
+      outputPath: '',
+      path: '',
+      encoding: 'utf-8',
+      content: '',
     },
   },
   {

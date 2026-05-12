@@ -1,6 +1,6 @@
 # Makefile for Multi-Agent Platform Kubernetes Deployment
 
-.PHONY: help install install-py setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-tools seed-agents seed-all test-subworkflow dev-document dev-sandbox-rs build-rust test-sandbox-rs benchmark-gateway benchmark-sandbox test-contract-sandbox build-chat dev-chat
+.PHONY: help install install-py setup build deploy dev prod clean status logs port-forward test test-frontend test-frontend-watch test-frontend-cov validate prisma-generate prisma-migrate prisma-studio prisma-reset test-orchestration test-orchestration-watch dev-orchestration dev-agent test-agent test-agent-watch test-mcp seed-tools seed-agents seed-all test-subworkflow dev-document dev-sandbox-rs build-rust test-sandbox-rs benchmark-gateway benchmark-sandbox test-contract-sandbox build-chat dev-chat dev-email-mcp test-email-mcp test-gmail-webhook
 
 # Ensure ~/go/bin (air) is available
 export PATH := $(HOME)/go/bin:$(PATH)
@@ -260,6 +260,24 @@ test-mcp: ## Smoke-test the MCP endpoint (requires agent-service running on :300
 	curl -s -X POST http://localhost:3002/mcp \
 	  -H 'Content-Type: application/json' \
 	  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | jq .
+
+dev-email-mcp: ## Start email-mcp-service in dev/watch mode (port 3012)
+	@echo "$(GREEN)Starting email-mcp-service in dev mode…$(NC)"
+	cd services/email-mcp-service && pnpm dev
+
+test-email-mcp: ## Run email-mcp-service tests
+	@echo "$(GREEN)Running email-mcp-service tests…$(NC)"
+	cd services/email-mcp-service && pnpm test
+
+test-gmail-webhook: ## Smoke-test Gmail push webhook (requires orchestration-service on :3003)
+	@echo "$(GREEN)Smoke-testing Gmail push webhook endpoint…$(NC)"
+	@PAYLOAD=$$(echo -n '{"emailAddress":"test@gmail.com","historyId":12345}' | base64 -w0); \
+	curl -s -X POST http://localhost:3003/api/webhooks/gmail/push \
+	  -H 'Content-Type: application/json' \
+	  -d "{\"message\":{\"data\":\"$$PAYLOAD\",\"messageId\":\"smoke-1\"},\"subscription\":\"test\"}" \
+	  -w "\nHTTP %{http_code}\n" | tail -1
+
+
 
 seed-tools: ## Seed built-in tools into the database
 	@echo "$(GREEN)Seeding built-in tools…$(NC)"

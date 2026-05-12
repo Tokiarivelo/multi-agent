@@ -220,3 +220,82 @@ export function useCancelExecution() {
     onError: (error) => toast.error(extractErrorMessage(error, 'Failed to cancel execution')),
   });
 }
+
+// ─── Gmail Trigger hooks ────────────────────────────
+
+export function useGmailSubscriptions(workflowId: string | null) {
+  return useQuery({
+    queryKey: ['gmail-subscriptions', workflowId],
+    queryFn: () => workflowsApi.getGmailSubscriptions(workflowId!),
+    enabled: !!workflowId,
+  });
+}
+
+export function useRegisterGmailSubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      workflowId: string;
+      userId: string;
+      gmailUser: string;
+      topicName: string;
+      labelIds?: string[];
+      historyId?: string;
+      expiration?: string;
+    }) => workflowsApi.registerGmailSubscription(payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['gmail-subscriptions', variables.workflowId] });
+      toast.success('Gmail trigger registered');
+    },
+    onError: (error) => toast.error(extractErrorMessage(error, 'Failed to register Gmail trigger')),
+  });
+}
+
+export function useUnregisterGmailSubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { workflowId: string; gmailUser: string }) =>
+      workflowsApi.unregisterGmailSubscription(payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['gmail-subscriptions', variables.workflowId] });
+      toast.success('Gmail trigger removed');
+    },
+    onError: (error) => toast.error(extractErrorMessage(error, 'Failed to remove Gmail trigger')),
+  });
+}
+
+export function useResumeGmailSubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { workflowId: string; gmailUser: string }) =>
+      workflowsApi.resumeGmailSubscription(payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['gmail-subscriptions', variables.workflowId] });
+      toast.success('Gmail trigger resumed');
+    },
+    onError: (error) => toast.error(extractErrorMessage(error, 'Failed to resume Gmail trigger')),
+  });
+}
+
+export function useCallGmailWatch() {
+  return useMutation({
+    mutationFn: (payload: { refreshToken: string; topicName: string; labelIds?: string }) =>
+      workflowsApi.callGmailWatch(payload),
+    onError: (error) => toast.error(extractErrorMessage(error, 'Failed to start Gmail watch')),
+  });
+}
+
+export function usePullGmailNotifications() {
+  return useMutation({
+    mutationFn: () => workflowsApi.pullGmailNotifications(),
+    onSuccess: (data) => {
+      if (data.processed === 0) {
+        toast.info('No new Gmail notifications');
+      } else {
+        toast.success(`Pulled ${data.processed} notification(s)`);
+      }
+    },
+    onError: (error) =>
+      toast.error(extractErrorMessage(error, 'Failed to pull Gmail notifications')),
+  });
+}

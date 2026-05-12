@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule, ConfigService } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
+import { ScheduleModule } from '@nestjs/schedule';
 
 // Infrastructure
 import { ConfigModule } from './infrastructure/config/config.module';
@@ -34,9 +35,14 @@ import { WorkflowAiService } from './infrastructure/external/workflow-ai.service
 import { ResourceProvisioningService } from './infrastructure/external/resource-provisioning.service';
 import { WorkflowHealingService } from './infrastructure/external/workflow-healing.service';
 import { HealingController } from './presentation/controllers/healing.controller';
+import { GmailWebhookController } from './presentation/controllers/gmail-webhook.controller';
+import { GmailTriggerService } from './domain/services/gmail-trigger.service';
+import { GmailPollerService } from './domain/services/gmail-poller.service';
+import { GmailNotificationProcessorService } from './domain/services/gmail-notification-processor.service';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule,
     HttpModule.registerAsync({
       imports: [NestConfigModule],
@@ -54,6 +60,7 @@ import { HealingController } from './presentation/controllers/healing.controller
     HealthController,
     InternalController,
     HealingController,
+    GmailWebhookController,
   ],
   providers: [
     PrismaService,
@@ -64,6 +71,9 @@ import { HealingController } from './presentation/controllers/healing.controller
     ResourceProvisioningService,
     WorkflowHealingService,
     WorkflowGateway,
+    GmailPollerService,
+    GmailTriggerService,
+    GmailNotificationProcessorService,
 
     // Use Cases
     CreateWorkflowUseCase,

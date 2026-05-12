@@ -52,6 +52,21 @@ export const workflows = {
   'workflows.node_editor.agent': 'Agent',
   'workflows.node_editor.selectAgent': 'Sélectionner un agent...',
   'workflows.node_editor.agentId': "ID de l'agent",
+  'workflows.node_editor.outputFormat': 'Format de sortie',
+  'workflows.node_editor.outputFormatText': 'Texte (défaut)',
+  'workflows.node_editor.outputFormatJson': 'Objet JSON',
+  'workflows.node_editor.outputFormatJsonArray': 'Tableau JSON (itérable)',
+  'workflows.node_editor.outputFormatDesc':
+    'Choisir "Tableau JSON" pour itérer les résultats avec un nœud Pour Chaque.',
+  'workflows.node_editor.outputKey': 'Nom de la variable de sortie',
+  'workflows.node_editor.outputKeyPlaceholder': 'ex. emails',
+  'workflows.node_editor.outputKeyDesc':
+    'Nom de la variable de contexte qui contiendra le résultat parsé.',
+  'workflows.node_editor.outputTemplate': 'Template de sortie',
+  'workflows.node_editor.outputTemplatePlaceholder':
+    '{"mails": [{"uid": 0, "from": "", "subject": "", "date": ""}]}',
+  'workflows.node_editor.outputTemplateDesc':
+    "Structure JSON que l'agent doit retourner. Injectée dans le prompt système — l'agent respectera exactement vos clés et votre imbrication.",
   'workflows.node_editor.tool': 'Outil',
   'workflows.node_editor.selectTool': 'Sélectionner un outil...',
   'workflows.node_editor.toolId': "ID de l'outil",
@@ -65,6 +80,10 @@ export const workflows = {
   'workflows.node_editor.saving': 'Enregistrement...',
   'workflows.node_editor.updateNode': 'Mettre à jour le nœud',
   'workflows.node_editor.addNode': 'Ajouter un nœud',
+  'workflows.node_editor.updateSuccess': 'Nœud mis à jour avec succès',
+  'workflows.node_editor.updateError': 'Échec de la mise à jour du nœud : {{message}}',
+  'workflows.node_editor.addSuccess': 'Nœud ajouté avec succès',
+  'workflows.node_editor.addError': "Échec de l'ajout du nœud : {{message}}",
   'workflows.logs.title': "Journaux d'exécution",
   'workflows.logs.live': 'En direct',
   'workflows.logs.offline': 'Hors ligne',
@@ -76,7 +95,8 @@ export const workflows = {
   'workflows.logs.thinking_for': 'Réflexion pour',
   'workflows.logs.thinking_all': 'Flux de réflexion global',
   'workflows.logs.steps': 'étapes',
-  'workflows.logs.no_thinking': "Aucune étape de réflexion enregistrée. Les nœuds d'agent diffuseront leur raisonnement ici.",
+  'workflows.logs.no_thinking':
+    "Aucune étape de réflexion enregistrée. Les nœuds d'agent diffuseront leur raisonnement ici.",
   'workflows.logs.execution_plan': "Plan d'exécution",
   'workflows.logs.planned_tool_calls': "Appels d'outils planifiés",
   'workflows.node.configure': 'Configurer le nœud',
@@ -170,9 +190,10 @@ export const workflows = {
   'workflows.ai.hideJson': 'Masquer JSON',
   'workflows.nodeAi.title': 'Édition IA du nœud',
   'workflows.nodeAi.selectModel': 'Choisir un modèle…',
-  'workflows.nodeAi.hint': 'Décrivez les changements souhaités. Ex : "Activer le mode strict avec validation du champ de sortie"',
+  'workflows.nodeAi.hint':
+    'Décrivez les changements souhaités. Ex : "Activer le mode strict avec validation du champ de sortie"',
   'workflows.nodeAi.placeholder': 'Décrivez ce à modifier… (Entrée pour envoyer)',
-  'workflows.nodeAi.selectModelFirst': 'Sélectionnez un modèle d\'abord…',
+  'workflows.nodeAi.selectModelFirst': "Sélectionnez un modèle d'abord…",
   'workflows.nodeAi.thinking': 'Réflexion…',
   'workflows.nodeAi.pending': 'Modifications de config prêtes à appliquer',
   'workflows.nodeAi.pendingWithName': 'Config + nom prêts à appliquer',
@@ -187,12 +208,14 @@ export const workflows = {
   'workflows.waitingInput.cancelExecution': "Annuler l'exécution",
   'workflows.waitingInput.cancelling': 'Annulation…',
   'workflows.agentReply.githubAuthTitle': 'Accès GitHub requis',
-  'workflows.agentReply.githubAuthDesc': 'Cette action nécessite un accès à votre compte GitHub. Connectez-vous une fois et le workflow reprendra automatiquement.',
+  'workflows.agentReply.githubAuthDesc':
+    'Cette action nécessite un accès à votre compte GitHub. Connectez-vous une fois et le workflow reprendra automatiquement.',
   'workflows.agentReply.githubConnectButton': 'Connecter GitHub',
   'workflows.agentReply.githubConnecting': 'Connexion…',
   'workflows.agentReply.githubConnected': 'GitHub connecté — reprise du workflow…',
   'workflows.agentReply.githubAuthDone': 'Connecté — reprise…',
-  'workflows.agentReply.githubPopupBlocked': 'Fenêtre pop-up bloquée — autorisez les pop-ups et réessayez.',
+  'workflows.agentReply.githubPopupBlocked':
+    'Fenêtre pop-up bloquée — autorisez les pop-ups et réessayez.',
   'workflows.fullscreen.viewFullscreen': 'Voir en plein écran',
   'workflows.fullscreen.copy': 'Copier',
   'workflows.fullscreen.copied': 'Copié !',
@@ -200,11 +223,12 @@ export const workflows = {
   'workflows.palette.tools_load_more': 'Charger plus',
   'workflows.palette.tools_loading_more': 'Chargement...',
   'workflows.execution.disabledNodes':
-    'Impossible d\'exécuter : les types de nœuds suivants sont désactivés — {{labels}}. Activez-les dans la page Nœuds avant de lancer.',
+    "Impossible d'exécuter : les types de nœuds suivants sont désactivés — {{labels}}. Activez-les dans la page Nœuds avant de lancer.",
 
   'workflows.forEach.collectionLabel': 'Chemin de collection',
   'workflows.forEach.collectionHint': '(chemin pointé vers le tableau)',
-  'workflows.forEach.collectionDesc': 'Laisser vide pour itérer directement l\'entrée si c\'est déjà un tableau.',
+  'workflows.forEach.collectionDesc':
+    "Laisser vide pour itérer directement l'entrée si c'est déjà un tableau.",
   'workflows.forEach.outputKeyLabel': 'Clé de sortie',
   'workflows.forEach.outputKeyHint': '(optionnel)',
   'workflows.forEach.maxIterLabel': 'Itérations max',
@@ -212,5 +236,28 @@ export const workflows = {
   'workflows.forEach.contextTitle': 'Variables disponibles dans chaque itération du corps :',
   'workflows.forEach.contextItem': 'élément courant',
   'workflows.forEach.contextIndex': 'index base 0',
-  'workflows.forEach.contextTotal': 'nombre total d\'éléments',
+  'workflows.forEach.contextTotal': "nombre total d'éléments",
+  'workflows.node_editor.forwardContextLabel': 'Transmettre les variables de contexte',
+  'workflows.node_editor.forwardContextDesc':
+    "Si activé, toutes les variables de contexte du workflow sont transmises à l'agent en entrée.",
+  'workflows.node_editor.forwardContextOn': 'TOUT TRANSMETTRE',
+  'workflows.node_editor.forwardContextOff': 'ENTRÉE PERSONNALISÉE',
+  'workflows.node_editor.inputMappingDesc':
+    'Mappez des noms de champs vers des chemins de contexte (ex. $variables.maCle, $variables._forEachItem, $output.nodeId).',
+  'workflows.node_editor.inputMappingAdd': 'Ajouter un champ',
+
+  // ─── Triggers ────────────────────────────
+  'workflows.triggers.title': 'Déclencheurs Automatiques',
+  'workflows.triggers.empty': 'Aucun déclencheur automatique configuré.',
+  'workflows.triggers.pullNotifications': 'Récupérer les notifications',
+  'workflows.triggers.info':
+    'Le watch Google expire tous les 7 jours. Vous devrez renouveler ce déclencheur manuellement ou via un workflow planifié. Les notifications sont récupérées automatiquement toutes les 30 secondes.',
+  'workflows.triggers.gmail.add': 'Ajouter un déclencheur Gmail Push',
+  'workflows.triggers.gmail.user': 'Adresse Gmail',
+  'workflows.triggers.gmail.refreshToken': 'Refresh Token',
+  'workflows.triggers.gmail.topic': 'Sujet Pub/Sub',
+  'workflows.triggers.gmail.labels': 'IDs de labels (optionnel)',
+  'workflows.triggers.gmail.register': 'Enregistrer le déclencheur',
+  'workflows.triggers.gmail.renewHint':
+    'Le watch Google expire tous les 7 jours. Vous devrez renouveler ce déclencheur manuellement ou via un workflow planifié.',
 };

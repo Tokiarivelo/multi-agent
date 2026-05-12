@@ -46,6 +46,7 @@ model Workflow {
   executions         Execution[]
   workflowExecutions WorkflowExecution[]
   user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gmailSubscriptions GmailWatchSubscription[]
 
   @@index([userId])
   @@index([status])
@@ -407,4 +408,41 @@ model FileIndexingStatus {
   file         File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
 
   @@map("file_indexing_statuses")
+}
+
+/// Stores Gmail push-notification watch subscriptions linked to workflows.
+/// When a Pub/Sub push arrives, the orchestration service looks up all active
+/// subscriptions for that Gmail account and fires the mapped workflow.
+model GmailWatchSubscription {
+  id           String    @id @default(uuid())
+  /// Workflow to trigger when a new email arrives for this Gmail account
+  workflowId   String
+  /// userId that owns this subscription (used to run the workflow)
+  userId       String
+  /// Gmail email address being watched (used as the lookup key for incoming pushes)
+  gmailUser    String
+  /// Pub/Sub topic name used when registering with Gmail API
+  topicName    String
+  /// Gmail label IDs being watched (JSON array, e.g. ["INBOX"])
+  labelIds     Json      @default("[\"INBOX\"]")
+  /// Gmail historyId at the time the watch was created (used for history-based fetching)
+  historyId    String?
+  /// Unix-epoch ms when Google's watch subscription expires (max 7 days, must be renewed)
+  expiration   String?
+  /// Whether this subscription is currently active
+  isActive     Boolean   @default(true)
+  /// OAuth2 refresh token for the watched Gmail account (used to call Gmail History API)
+  refreshToken String?
+  /// JSON conditions for filtering which emails trigger the workflow
+  /// Shape: { fromContains?, subjectContains?, bodyContains?, hasAttachment? }
+  /// Empty object {} means "always trigger" (no filtering)
+  conditions   Json      @default("{}")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  workflow     Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, gmailUser])
+  @@index([gmailUser])
+  @@index([isActive])
+  @@map("gmail_watch_subscriptions")
 }

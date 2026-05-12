@@ -18,13 +18,24 @@ import { ToolClientService } from '../../infrastructure/external/tool-client.ser
 import { WorkflowClientService } from '../../infrastructure/external/workflow-client.service';
 import { AgentExecutionService } from '../../domain/services/agent-execution.service';
 import { ConversationMessage } from '../../domain/entities/agent.entity';
-import { ChatMessage, ChatThinkingStep, ChatToolCall, ChatToolRequest } from '../../domain/entities/chat.entity';
+import {
+  ChatMessage,
+  ChatThinkingStep,
+  ChatToolCall,
+  ChatToolRequest,
+} from '../../domain/entities/chat.entity';
 import { SendChatMessageDto } from '../dto/chat.dto';
 
 export interface ChatStreamCallbacks {
   onToken: (token: string) => void;
   onThinking: (step: ChatThinkingStep) => void;
-  onWorkflowChoice: (payload: { nodeId: string; prompt: string; choices: string[]; multiSelect: boolean; agentMessage?: string }) => Promise<string>;
+  onWorkflowChoice: (payload: {
+    nodeId: string;
+    prompt: string;
+    choices: string[];
+    multiSelect: boolean;
+    agentMessage?: string;
+  }) => Promise<string>;
   onToolRequest: (payload: ChatToolRequest) => Promise<string[]>;
   onComplete: (message: ChatMessage) => void;
   onError: (error: Error) => void;
@@ -83,7 +94,10 @@ export class ChatMessageUseCase {
 
       await this.workflowClient.streamExecution(executionId, {
         onNodeRunning: (node) => {
-          const step: ChatThinkingStep = { step: 'planning', thought: `Running: ${node.nodeName ?? node.nodeId}` };
+          const step: ChatThinkingStep = {
+            step: 'planning',
+            thought: `Running: ${node.nodeName ?? node.nodeId}`,
+          };
           thinkingSteps.push(step);
           callbacks.onThinking(step);
         },
@@ -114,7 +128,9 @@ export class ChatMessageUseCase {
         onComplete: (output) => {
           if (!outputText) outputText = this.workflowClient.extractOutputText(output);
         },
-        onError: (error) => { callbacks.onError(new Error(error)); },
+        onError: (error) => {
+          callbacks.onError(new Error(error));
+        },
       });
 
       const assistantMessage = await this.chatRepository.addMessage({
@@ -160,8 +176,6 @@ export class ChatMessageUseCase {
       content: m.content,
     }));
 
-    const context = this.agentExecutionService.buildContext(conversationMessages, systemPrompt);
-
     // Proactive tool suggestion when no tools are configured:
     // - on the first message (fresh session), OR
     // - when the session previously used tools but user deselected them
@@ -190,10 +204,30 @@ export class ChatMessageUseCase {
       tools = await this.toolClient.getTools(toolIds);
     }
 
+    // ── Tool usage instructions ────────────────────────────────────────
+    if (tools.length > 0) {
+      const toolNames = tools.map((t) => t.name || t.function?.name || 'unknown').join(', ');
+      const toolInstructionsBlock =
+        `\n\n[TOOL USAGE — CRITICAL]\n` +
+        `You have access to the following tools: ${toolNames}\n\n` +
+        `IMPORTANT: You MUST use these tools when they can help answer the user's question or perform the requested action.\n` +
+        `- Analyze the user's request carefully\n` +
+        `- If a tool can provide the information or perform the action, USE IT — do not fabricate answers\n` +
+        `- Call tools proactively; do not ask for permission unless absolutely necessary\n` +
+        `- You may call multiple tools if needed to complete the task\n` +
+        `- Always use the tool when it's the most accurate way to get information or perform an action\n\n` +
+        `DO NOT respond with generic answers if a tool can provide specific, real data.`;
+      systemPrompt += toolInstructionsBlock;
+    }
+
+    const context = this.agentExecutionService.buildContext(conversationMessages, systemPrompt);
+
     callbacks.onThinking({ step: 'planning', thought: 'Preparing response...' });
 
     let fullContent = '';
-    const thinkingSteps: ChatThinkingStep[] = [{ step: 'planning', thought: 'Preparing response...' }];
+    const thinkingSteps: ChatThinkingStep[] = [
+      { step: 'planning', thought: 'Preparing response...' },
+    ];
     const allToolCalls: ChatToolCall[] = [];
 
     const streamCallbacks: StreamingOptions = {
@@ -298,10 +332,17 @@ export class ChatMessageUseCase {
       this.logger.log(`[tool →] ${toolCall.name} args=${JSON.stringify(toolCall.args)}`);
       const t0 = Date.now();
       try {
-        const raw = await this.toolClient.executeTool(toolCall.name, toolCall.args, userId, workspacePath);
+        const raw = await this.toolClient.executeTool(
+          toolCall.name,
+          toolCall.args,
+          userId,
+          workspacePath,
+        );
         const elapsed = Date.now() - t0;
         const rawStr = JSON.stringify(raw);
-        this.logger.log(`[tool ←] ${toolCall.name} (${elapsed}ms) result=${rawStr.slice(0, 500)}${rawStr.length > 500 ? '…' : ''}`);
+        this.logger.log(
+          `[tool ←] ${toolCall.name} (${elapsed}ms) result=${rawStr.slice(0, 500)}${rawStr.length > 500 ? '…' : ''}`,
+        );
         toolContent = this.formatToolContent(raw);
 
         const resultStep: ChatThinkingStep = {

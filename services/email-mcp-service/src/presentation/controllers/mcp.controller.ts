@@ -9,6 +9,9 @@ import {
   ManipulateEmailsTool,
   ListAttachmentsTool,
   DownloadAttachmentTool,
+  GmailWatchTool,
+  GmailStopWatchTool,
+  GmailPullNotificationsTool,
 } from '../tools';
 
 export interface JsonRpcRequest {
@@ -52,6 +55,9 @@ export class McpController {
     manipulateEmails: ManipulateEmailsTool,
     listAttachments: ListAttachmentsTool,
     downloadAttachment: DownloadAttachmentTool,
+    gmailWatch: GmailWatchTool,
+    gmailStopWatch: GmailStopWatchTool,
+    gmailPullNotifications: GmailPullNotificationsTool,
   ) {
     const handlers: McpToolHandler[] = [
       sendEmail,
@@ -61,6 +67,9 @@ export class McpController {
       manipulateEmails,
       listAttachments,
       downloadAttachment,
+      gmailWatch,
+      gmailStopWatch,
+      gmailPullNotifications,
     ];
     this.tools = new Map(handlers.map((h) => [h.schema().name, h]));
     this.logger.log(

@@ -5,6 +5,9 @@ import configuration from '@infrastructure/config/configuration';
 import { envValidationSchema } from '@infrastructure/config/env.validation';
 import { EmailApiService } from '@infrastructure/email/email-api.service';
 import { GmailFetchService } from '@infrastructure/email/gmail-fetch.service';
+import { GmailWatchService } from '@infrastructure/email/gmail-watch.service';
+import { GmailPubSubService } from '@infrastructure/email/gmail-pubsub.service';
+import { GmailHistoryService } from '@infrastructure/email/gmail-history.service';
 import { McpController } from '@presentation/controllers/mcp.controller';
 import {
   GmailToolsController,
@@ -18,6 +21,10 @@ import {
   ManipulateEmailsTool,
   ListAttachmentsTool,
   DownloadAttachmentTool,
+  GmailWatchTool,
+  GmailStopWatchTool,
+  GmailPullNotificationsTool,
+  GmailFetchHistoryTool,
 } from '@presentation/tools';
 
 @Module({
@@ -33,6 +40,9 @@ import {
   providers: [
     EmailApiService,
     GmailFetchService,
+    GmailWatchService,
+    GmailPubSubService,
+    GmailHistoryService,
     SendEmailTool,
     SendEmailTemplateTool,
     VerifySmtpTool,
@@ -40,6 +50,10 @@ import {
     ManipulateEmailsTool,
     ListAttachmentsTool,
     DownloadAttachmentTool,
+    GmailWatchTool,
+    GmailStopWatchTool,
+    GmailPullNotificationsTool,
+    GmailFetchHistoryTool,
   ],
 })
 export class AppModule {}

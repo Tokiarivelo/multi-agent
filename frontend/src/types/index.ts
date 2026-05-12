@@ -51,7 +51,8 @@ export type NodeTypeId =
   | 'JSON'
   | 'WHILE'
   | 'SWITCH'
-  | 'FOR_EACH';
+  | 'FOR_EACH'
+  | 'DOCUMENT';
 
 export interface WorkflowIOField {
   key: string;

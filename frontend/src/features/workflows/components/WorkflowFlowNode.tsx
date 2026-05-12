@@ -522,6 +522,7 @@ export const WorkflowFlowNode = memo(
           {isForEach && (
             <div className="mt-3 border-t border-foreground/10 pt-1.5 pb-2 flex justify-around text-[9px] font-medium text-muted-foreground">
               <span className="text-cyan-500">↻ body</span>
+              <span className="text-amber-500">↩ loop</span>
               <span>→ exit</span>
             </div>
           )}
@@ -537,21 +538,28 @@ export const WorkflowFlowNode = memo(
             </div>
           )}
 
-          {/* FOR_EACH: body + exit handles */}
+          {/* FOR_EACH: body + exit source handles + loop target handle */}
           {isForEach && (
             <>
               <Handle
                 type="source"
                 position={Position.Bottom}
                 id="body"
-                style={{ left: '30%' }}
+                style={{ left: '25%' }}
                 className="bg-cyan-500/80! border-background! w-3! h-3!"
+              />
+              <Handle
+                type="target"
+                position={Position.Left}
+                id="loop"
+                style={{ top: '60%' }}
+                className="bg-amber-500/80! border-background! w-3! h-3!"
               />
               <Handle
                 type="source"
                 position={Position.Bottom}
                 id="exit"
-                style={{ left: '70%' }}
+                style={{ left: '75%' }}
                 className="bg-primary/80! border-background! w-3! h-3!"
               />
             </>

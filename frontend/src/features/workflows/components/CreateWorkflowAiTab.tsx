@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Send, RefreshCw, Sparkles, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -53,7 +53,10 @@ export function CreateWorkflowAiTab({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { disabledNodeTypes, deletedNodeTypes } = useNodePreferencesStore();
-  const excludedNodeTypes = [...new Set([...disabledNodeTypes, ...deletedNodeTypes])];
+  const excludedNodeTypes = useMemo(
+    () => [...new Set([...disabledNodeTypes, ...deletedNodeTypes])],
+    [disabledNodeTypes, deletedNodeTypes],
+  );
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -95,7 +98,9 @@ export function CreateWorkflowAiTab({
         ]
           .filter(Boolean)
           .join(' & ');
-        toast.success(t('workflows.ai.provisionedToast', `Auto-created ${parts} for this workflow`));
+        toast.success(
+          t('workflows.ai.provisionedToast', `Auto-created ${parts} for this workflow`),
+        );
       }
 
       onSessionUpdate({ sessionId: res.sessionId, messages: res.history, result: res });

@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bot, Send, X, RefreshCw, CheckCheck, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import { Workflow } from '@/types';
 import { workflowsApi, AiMessage, AiWorkflowResult } from '../api/workflows.api';
 import { ModelSelector } from './ModelSelector';
@@ -18,7 +17,11 @@ interface WorkflowAiPanelProps {
   workflow?: Workflow;
   isOpen: boolean;
   onClose: () => void;
-  onApplyDefinition: (definition: Workflow['definition'], name?: string, description?: string) => void;
+  onApplyDefinition: (
+    definition: Workflow['definition'],
+    name?: string,
+    description?: string,
+  ) => void;
 }
 
 interface LocalSession {
@@ -47,11 +50,14 @@ export function WorkflowAiPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { disabledNodeTypes, deletedNodeTypes } = useNodePreferencesStore();
-  const excludedNodeTypes = [...new Set([...disabledNodeTypes, ...deletedNodeTypes])];
+  const excludedNodeTypes = useMemo(
+    () => [...new Set([...disabledNodeTypes, ...deletedNodeTypes])],
+    [disabledNodeTypes, deletedNodeTypes],
+  );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const lastResult = session.lastResult;
-  const hasDefinition = !!(lastResult?.definition);
+  const hasDefinition = !!lastResult?.definition;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -139,7 +145,7 @@ export function WorkflowAiPanel({
   if (!isOpen) return null;
 
   return (
-    <div className="w-[400px] h-full flex flex-col gap-0 pointer-events-auto overflow-hidden rounded-xl border border-border/50 shadow-xl backdrop-blur-xl bg-white/40 dark:bg-black/40">
+    <div className="w-100 h-full flex flex-col gap-0 pointer-events-auto overflow-hidden rounded-xl border border-border/50 shadow-xl backdrop-blur-xl bg-white/40 dark:bg-black/40">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 shrink-0">
         <div className="flex items-center gap-2">
@@ -207,10 +213,7 @@ export function WorkflowAiPanel({
                       'workflows.ai.editHint',
                       'Describe the changes you want to make to this workflow.',
                     )
-                  : t(
-                      'workflows.ai.generateHint',
-                      'Describe the workflow you want to create.',
-                    )}
+                  : t('workflows.ai.generateHint', 'Describe the workflow you want to create.')}
               </p>
               <div className="flex flex-wrap gap-1.5 justify-center mt-1">
                 {(workflow
@@ -236,9 +239,7 @@ export function WorkflowAiPanel({
               </div>
             </div>
           ) : (
-            session.messages.map((msg, i) => (
-              <AiMessageBubble key={i} msg={msg} />
-            ))
+            session.messages.map((msg, i) => <AiMessageBubble key={i} msg={msg} />)
           )}
 
           {isLoading && (
@@ -280,8 +281,11 @@ export function WorkflowAiPanel({
               !modelId
                 ? t('workflows.ai.selectModelFirst', 'Select a model first…')
                 : workflow
-                ? t('workflows.ai.editPlaceholder', 'Describe the changes you want…')
-                : t('workflows.ai.generatePlaceholder', 'Describe the workflow you want to create…')
+                  ? t('workflows.ai.editPlaceholder', 'Describe the changes you want…')
+                  : t(
+                      'workflows.ai.generatePlaceholder',
+                      'Describe the workflow you want to create…',
+                    )
             }
             disabled={!modelId || isLoading}
             rows={3}

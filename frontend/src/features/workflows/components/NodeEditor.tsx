@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   Sparkles,
+  Braces,
 } from 'lucide-react';
 import { NodeAiPanel } from './NodeAiPanel';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +36,7 @@ import {
 } from '@/components/ui/select';
 
 import { NODE_TYPE_REGISTRY, NodeTypeMeta, NodeTypeId } from './nodeTypes';
+import { NODE_INPUT_CONTRACTS } from './nodeInputContracts';
 import { AddNodePayload } from '../api/workflows.api';
 import { v4 as uuidv4 } from 'uuid';
 import { useTheme } from 'next-themes';
@@ -216,6 +218,74 @@ function schemaToTypeScript(fields: SchemaField[]): string {
   return `{
 ${lines.join('\n')}
 }`;
+}
+
+// ─── InputContractPanel ───────────────────────────────────────────────────────
+function InputContractPanel({
+  nodeType,
+  config,
+}: {
+  nodeType: NodeTypeId;
+  config?: Record<string, unknown>;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const baseContract = NODE_INPUT_CONTRACTS[nodeType];
+  if (!baseContract) return null;
+
+  // For AGENT nodes, reflect the actual inputMapping config dynamically
+  const inputMapping =
+    nodeType === 'AGENT' && config
+      ? (config.inputMapping as Record<string, string> | undefined)
+      : undefined;
+  const hasCustomMapping = inputMapping && Object.keys(inputMapping).length > 0;
+
+  const contract = hasCustomMapping
+    ? {
+        summary: 'Receives custom-mapped fields as the agent input.',
+        fields: Object.entries(inputMapping).map(([k, v]) => ({
+          name: k || '(unnamed)',
+          type: 'any',
+          note: v || '—',
+        })),
+      }
+    : baseContract;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors group"
+          type="button"
+        >
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-border/50 bg-muted/30 group-hover:bg-muted/60 transition-colors">
+            <GitFork className="h-2.5 w-2.5 rotate-180" />
+            Accepts
+          </span>
+          {open ? (
+            <ChevronDown className="h-3 w-3" />
+          ) : (
+            <ChevronRight className="h-3 w-3" />
+          )}
+          <span className="font-normal italic truncate max-w-[220px]">{contract.summary}</span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pt-2 animate-in slide-in-from-top-1">
+        <div className="rounded-md border border-border/40 bg-muted/20 px-3 py-2 space-y-1">
+          {contract.fields.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground italic">No dynamic input consumed.</p>
+          ) : (
+            contract.fields.map((f, i) => (
+              <div key={i} className="flex items-start gap-2 text-[10px]">
+                <code className="font-mono text-cyan-500 shrink-0">{f.name}</code>
+                <span className="text-muted-foreground/60 shrink-0">: {f.type}</span>
+                <span className="text-muted-foreground">{f.note}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 // ─── PipelineStepEditor ───────────────────────────────────────────────────────
@@ -601,7 +671,16 @@ function NodeEditorForm({
   const [aiPanelOpen, setAiPanelOpen] = useState(initialAiOpen);
 
   const [type, setType] = useState<NodeTypeId>((initialNode?.type as NodeTypeId) ?? 'AGENT');
-  const [config, setConfig] = useState<Record<string, unknown>>(initialNode?.config ?? {});
+  const [config, setConfig] = useState<Record<string, unknown>>(() => {
+    const cfg = initialNode?.config ?? {};
+    // Migrate legacy 'prompt' → 'nodePrompt' so the Monaco editor shows it
+    const nodeType = (initialNode?.type as string ?? '').toUpperCase();
+    if (nodeType === 'AGENT' && cfg.prompt !== undefined && !cfg.nodePrompt) {
+      const { prompt, ...rest } = cfg;
+      return { ...rest, nodePrompt: prompt };
+    }
+    return cfg;
+  });
   const [customName, setCustomName] = useState<string>(initialNode?.customName ?? '');
   const [description, setDescription] = useState<string>(initialNode?.description ?? '');
 
@@ -672,12 +751,41 @@ function NodeEditorForm({
   };
 
   const handleSave = () => {
+    const finalConfig: Record<string, unknown> = { ...config };
+
+    // Snapshot resolved agent name so the JSON is human-readable without DB lookups
+    if (finalConfig.agentId) {
+      const name = agents.find((a) => a.id === finalConfig.agentId)?.name;
+      if (name) finalConfig.agentName = name;
+    }
+
+    // Snapshot resolved tool name for TOOL / MCP nodes
+    if (finalConfig.toolId) {
+      const name = tools.find((tl) => tl.id === finalConfig.toolId)?.name;
+      if (name) finalConfig.toolName = name;
+    }
+
+    // Snapshot resolved names for per-node tool overrides (AGENT / ORCHESTRATOR)
+    if (Array.isArray(finalConfig.toolIds) && finalConfig.toolIds.length > 0) {
+      finalConfig.toolNames = (finalConfig.toolIds as string[]).map(
+        (tid) => tools.find((tl) => tl.id === tid)?.name ?? tid,
+      );
+    }
+
+    // Snapshot resolved agent names inside sub-agent entries
+    if (Array.isArray(finalConfig.subAgents) && finalConfig.subAgents.length > 0) {
+      finalConfig.subAgents = (finalConfig.subAgents as SubAgentConfig[]).map((sa) => ({
+        ...sa,
+        agentName: agents.find((a) => a.id === sa.agentId)?.name ?? sa.agentId,
+      }));
+    }
+
     onSave({
       id: initialNode?.id ?? uuidv4(),
       type,
       customName: customName.trim() || undefined,
       description: description.trim() || undefined,
-      config,
+      config: finalConfig,
       position: initialNode?.position ?? defaultPosition ?? { x: 100, y: 100 },
     });
   };
@@ -709,11 +817,20 @@ function NodeEditorForm({
             }}
             onApplyDirectly={(newConfig, newName) => {
               const finalName = newName ?? customName;
+              const aiConfig: Record<string, unknown> = { ...newConfig };
+              if (aiConfig.agentId) {
+                const n = agents.find((a) => a.id === aiConfig.agentId)?.name;
+                if (n) aiConfig.agentName = n;
+              }
+              if (aiConfig.toolId) {
+                const n = tools.find((tl) => tl.id === aiConfig.toolId)?.name;
+                if (n) aiConfig.toolName = n;
+              }
               onSave({
                 ...initialNode,
                 type,
                 customName: finalName,
-                config: newConfig,
+                config: aiConfig,
               });
               setAiPanelOpen(false);
               onClose();
@@ -821,6 +938,9 @@ function NodeEditorForm({
               />
             </div>
 
+            {/* Input Contract — shown for non-AGENT nodes only; AGENT has it inline */}
+            {type !== 'AGENT' && <InputContractPanel nodeType={type as NodeTypeId} config={config} />}
+
             {/* AGENT config */}
             {type === 'AGENT' &&
               (() => {
@@ -863,6 +983,117 @@ function NodeEditorForm({
                         />
                       )}
                     </div>
+
+                    {/* Node Prompt — per-node instruction appended to agent system prompt */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs flex items-center gap-1.5">
+                          <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+                          Node Prompt
+                          <span className="text-muted-foreground font-normal">
+                            — appended to the agent&apos;s system prompt for this node only
+                          </span>
+                        </Label>
+                        <Select onValueChange={(v) => {
+                          const cur = (config.nodePrompt as string) ?? (config.prompt as string) ?? '';
+                          handleConfigChange('nodePrompt', cur + `{{${v}}}`);
+                        }}>
+                          <SelectTrigger className="w-[160px] h-7 text-[10px]">
+                            <SelectValue placeholder="Insert variable…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="input">input</SelectItem>
+                            <SelectItem value="context">context</SelectItem>
+                            <SelectItem value="agent.output">agent.output</SelectItem>
+                            <SelectItem value="tool.result">tool.result</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="border border-border/50 rounded-md overflow-hidden bg-background min-h-0">
+                        <Editor
+                          height="140px"
+                          language="markdown"
+                          theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
+                          value={(config.nodePrompt as string) ?? (config.prompt as string) ?? ''}
+                          onChange={(val) => handleConfigChange('nodePrompt', val || '')}
+                          options={{
+                            minimap: { enabled: false },
+                            fontSize: 12,
+                            fontFamily:
+                              'ui-monospace,SFMono-Regular,SF Mono,Consolas,Liberation Mono,Menlo,monospace',
+                            wordWrap: 'on',
+                            scrollBeyondLastLine: false,
+                            lineNumbersMinChars: 2,
+                            padding: { top: 8 },
+                          }}
+                          loading={
+                            <div className="h-full flex items-center justify-center text-xs text-muted-foreground animate-pulse py-4">
+                              Loading Editor...
+                            </div>
+                          }
+                        />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Leave empty to use the agent&apos;s own system prompt unchanged.
+                      </p>
+                    </div>
+
+                    {/* Output Format */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs flex items-center gap-1.5">
+                        <Braces className="h-3.5 w-3.5 text-yellow-500" />
+                        {t('workflows.node_editor.outputFormat')}
+                      </Label>
+                      <Select
+                        value={(config.outputFormat as string) ?? 'text'}
+                        onValueChange={(v) => handleConfigChange('outputFormat', v)}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="text">{t('workflows.node_editor.outputFormatText')}</SelectItem>
+                          <SelectItem value="json">{t('workflows.node_editor.outputFormatJson')}</SelectItem>
+                          <SelectItem value="json_array">{t('workflows.node_editor.outputFormatJsonArray')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground">
+                        {t('workflows.node_editor.outputFormatDesc')}
+                      </p>
+                    </div>
+
+                    {/* Output Key — only relevant when outputFormat is json/json_array */}
+                    {((config.outputFormat as string) === 'json' || (config.outputFormat as string) === 'json_array') && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">{t('workflows.node_editor.outputKey')}</Label>
+                        <Input
+                          className="h-8 text-xs font-mono"
+                          placeholder={t('workflows.node_editor.outputKeyPlaceholder')}
+                          value={(config.outputKey as string) ?? ''}
+                          onChange={(e) => handleConfigChange('outputKey', e.target.value)}
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          {t('workflows.node_editor.outputKeyDesc')}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Output Template — injected into system prompt to force the agent's JSON shape */}
+                    {((config.outputFormat as string) === 'json' || (config.outputFormat as string) === 'json_array') && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">{t('workflows.node_editor.outputTemplate')}</Label>
+                        <Textarea
+                          className="text-xs font-mono resize-y"
+                          rows={4}
+                          placeholder={t('workflows.node_editor.outputTemplatePlaceholder')}
+                          value={(config.outputTemplate as string) ?? ''}
+                          onChange={(e) => handleConfigChange('outputTemplate', e.target.value)}
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          {t('workflows.node_editor.outputTemplateDesc')}
+                        </p>
+                      </div>
+                    )}
 
                     {/* Agent's inherited tools — read-only preview */}
                     {selectedAgent && (
@@ -1188,6 +1419,101 @@ function NodeEditorForm({
                       </button>
                     </div>
 
+                    {/* Input Control */}
+                    <div className="pt-2 border-t border-border/40 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-medium">{t('workflows.node_editor.forwardContextLabel')}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {t('workflows.node_editor.forwardContextDesc')}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const isCurrentlyForwarding = !config.inputMapping || Object.keys(config.inputMapping as Record<string, string>).length === 0;
+                            if (isCurrentlyForwarding) {
+                              // Switching to custom mapping — seed with an empty entry
+                              handleConfigChange('inputMapping', { '': '' });
+                            } else {
+                              // Switching back to forward-all — clear the mapping
+                              handleConfigChange('inputMapping', {});
+                            }
+                          }}
+                          className={`flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[10px] font-semibold border transition-colors shrink-0 ${
+                            !config.inputMapping || Object.keys(config.inputMapping as Record<string, string>).length === 0
+                              ? 'bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/30 hover:bg-green-500/25'
+                              : 'bg-muted/40 text-muted-foreground border-border/40 hover:bg-muted/80'
+                          }`}
+                        >
+                          <span
+                            className={`w-2 h-2 rounded-full ${!config.inputMapping || Object.keys(config.inputMapping as Record<string, string>).length === 0 ? 'bg-green-500' : 'bg-muted-foreground/30'}`}
+                          />
+                          {!config.inputMapping || Object.keys(config.inputMapping as Record<string, string>).length === 0
+                            ? t('workflows.node_editor.forwardContextOn')
+                            : t('workflows.node_editor.forwardContextOff')}
+                        </button>
+                      </div>
+
+                      {/* Live status — what the agent currently receives */}
+                      <InputContractPanel nodeType="AGENT" config={config} />
+
+                      {/* Input mapping editor — visible when forward-all is OFF */}
+                      {!!(config.inputMapping) && Object.keys(config.inputMapping as Record<string, string>).length > 0 && (
+                        <div className="space-y-2 rounded-md border border-border/40 bg-muted/20 p-2.5">
+                          <p className="text-[10px] text-muted-foreground">
+                            {t('workflows.node_editor.inputMappingDesc')}
+                          </p>
+                          {Object.entries(config.inputMapping as Record<string, string>).map(([k, v], idx, arr) => (
+                            <div key={idx} className="flex items-center gap-1.5">
+                              <Input
+                                className="h-7 text-xs font-mono flex-1"
+                                placeholder="field"
+                                value={k}
+                                onChange={(e) => {
+                                  const next = Object.fromEntries(arr.map(([ek, ev], i) => [i === idx ? e.target.value : ek, ev]));
+                                  handleConfigChange('inputMapping', next);
+                                }}
+                              />
+                              <span className="text-muted-foreground text-xs">→</span>
+                              <Input
+                                className="h-7 text-xs font-mono flex-1"
+                                placeholder="$variables.key"
+                                value={v}
+                                onChange={(e) => {
+                                  const next = Object.fromEntries(arr.map(([ek, ev], i) => [ek, i === idx ? e.target.value : ev]));
+                                  handleConfigChange('inputMapping', next);
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                                onClick={() => {
+                                  const next = Object.fromEntries(arr.filter((_, i) => i !== idx));
+                                  handleConfigChange('inputMapping', next);
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-[10px] gap-1 px-2"
+                            onClick={() => {
+                              const cur = config.inputMapping as Record<string, string>;
+                              handleConfigChange('inputMapping', { ...cur, '': '' });
+                            }}
+                          >
+                            <Plus className="h-3 w-3" />
+                            {t('workflows.node_editor.inputMappingAdd')}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Pipeline Steps */}
                     <div className="pt-2 border-t border-border/40">
                       <Collapsible>
@@ -1273,6 +1599,44 @@ function NodeEditorForm({
                           onChange={(e) => handleConfigChange('agentId', e.target.value)}
                         />
                       )}
+                    </div>
+
+                    {/* Node Prompt — per-node instruction appended to orchestrator agent system prompt */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                        Node Prompt
+                        <span className="text-muted-foreground font-normal">
+                          — appended to the orchestrator agent&apos;s system prompt for this node only
+                        </span>
+                      </Label>
+                      <div className="border border-border/50 rounded-md overflow-hidden bg-background min-h-0">
+                        <Editor
+                          height="120px"
+                          language="markdown"
+                          theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
+                          value={(cfg.nodePrompt as string) ?? ''}
+                          onChange={(val) => handleConfigChange('nodePrompt', val || '')}
+                          options={{
+                            minimap: { enabled: false },
+                            fontSize: 12,
+                            fontFamily:
+                              'ui-monospace,SFMono-Regular,SF Mono,Consolas,Liberation Mono,Menlo,monospace',
+                            wordWrap: 'on',
+                            scrollBeyondLastLine: false,
+                            lineNumbersMinChars: 2,
+                            padding: { top: 8 },
+                          }}
+                          loading={
+                            <div className="flex items-center justify-center text-xs text-muted-foreground animate-pulse py-4">
+                              Loading Editor...
+                            </div>
+                          }
+                        />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Leave empty to use the orchestrator agent&apos;s own system prompt unchanged.
+                      </p>
                     </div>
 
                     {/* Loop settings */}
@@ -2776,6 +3140,192 @@ function NodeEditorForm({
                         </div>
                       </CollapsibleContent>
                     </Collapsible>
+                  </>
+                )}
+
+                <p className="text-[10px] text-muted-foreground">
+                  Use{' '}
+                  <code className="font-mono bg-muted px-0.5 rounded">{'{{variable}}'}</code> in
+                  any field to inject a value from a previous node&apos;s output.
+                </p>
+              </div>
+            )}
+
+            {/* DOCUMENT config */}
+            {type === 'DOCUMENT' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Action</Label>
+                  <Select
+                    value={(config.action as string) ?? 'generate'}
+                    onValueChange={(v) => handleConfigChange('action', v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="generate">Generate Document</SelectItem>
+                      <SelectItem value="read">Read / Parse Document</SelectItem>
+                      <SelectItem value="write">Write File</SelectItem>
+                      <SelectItem value="parse_image">OCR Image</SelectItem>
+                      <SelectItem value="delete">Delete Document</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {config.action === 'generate' && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Format</Label>
+                      <Select
+                        value={(config.format as string) ?? 'pdf'}
+                        onValueChange={(v) => handleConfigChange('format', v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pdf">PDF</SelectItem>
+                          <SelectItem value="docx">DOCX</SelectItem>
+                          <SelectItem value="xlsx">XLSX</SelectItem>
+                          <SelectItem value="md">Markdown</SelectItem>
+                          <SelectItem value="csv">CSV</SelectItem>
+                          <SelectItem value="html">HTML</SelectItem>
+                          <SelectItem value="txt">TXT</SelectItem>
+                          <SelectItem value="json">JSON</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Title</Label>
+                      <Input
+                        placeholder="Document title or {{title}}"
+                        value={(config.title as string) ?? ''}
+                        onChange={(e) => handleConfigChange('title', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        Author{' '}
+                        <span className="text-muted-foreground font-normal">(optional)</span>
+                      </Label>
+                      <Input
+                        placeholder="Author name or {{author}}"
+                        value={(config.author as string) ?? ''}
+                        onChange={(e) => handleConfigChange('author', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        Sections{' '}
+                        <span className="text-muted-foreground font-normal">(optional)</span>
+                      </Label>
+                      <Textarea
+                        placeholder='{{sections}} or JSON: [{"heading":"H1","body":"text"}]'
+                        rows={3}
+                        value={(config.sections as string) ?? ''}
+                        onChange={(e) => handleConfigChange('sections', e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Array of{' '}
+                        <code className="font-mono bg-muted px-0.5 rounded">
+                          {'{"heading","body","level"}'}
+                        </code>{' '}
+                        objects, or a{' '}
+                        <code className="font-mono bg-muted px-0.5 rounded">{'{{variable}}'}</code>{' '}
+                        from a previous node.
+                      </p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        Table{' '}
+                        <span className="text-muted-foreground font-normal">(optional)</span>
+                      </Label>
+                      <Textarea
+                        placeholder='{{table}} or JSON: {"headers":["A","B"],"rows":[[1,2]]}'
+                        rows={2}
+                        value={(config.table as string) ?? ''}
+                        onChange={(e) => handleConfigChange('table', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        Output Path{' '}
+                        <span className="text-muted-foreground font-normal">(optional)</span>
+                      </Label>
+                      <Input
+                        placeholder="reports/output.pdf or {{outputPath}}"
+                        value={(config.outputPath as string) ?? ''}
+                        onChange={(e) => handleConfigChange('outputPath', e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Workspace-relative path. If empty, the file is uploaded to the cloud and a
+                        download URL is returned.
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {(config.action === 'read' ||
+                  config.action === 'parse_image' ||
+                  config.action === 'delete') && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Path</Label>
+                    <Input
+                      placeholder="workspace/file.pdf or {{path}}"
+                      value={(config.path as string) ?? ''}
+                      onChange={(e) => handleConfigChange('path', e.target.value)}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Workspace-relative path to the document.
+                    </p>
+                  </div>
+                )}
+
+                {config.action === 'read' && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">
+                      Encoding{' '}
+                      <span className="text-muted-foreground font-normal">(optional)</span>
+                    </Label>
+                    <Input
+                      placeholder="utf-8"
+                      value={(config.encoding as string) ?? 'utf-8'}
+                      onChange={(e) => handleConfigChange('encoding', e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {config.action === 'write' && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Path</Label>
+                      <Input
+                        placeholder="workspace/output.md or {{path}}"
+                        value={(config.path as string) ?? ''}
+                        onChange={(e) => handleConfigChange('path', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Content</Label>
+                      <Textarea
+                        placeholder="File content... or {{content}}"
+                        rows={4}
+                        value={(config.content as string) ?? ''}
+                        onChange={(e) => handleConfigChange('content', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        Encoding{' '}
+                        <span className="text-muted-foreground font-normal">(optional)</span>
+                      </Label>
+                      <Input
+                        placeholder="utf-8"
+                        value={(config.encoding as string) ?? 'utf-8'}
+                        onChange={(e) => handleConfigChange('encoding', e.target.value)}
+                      />
+                    </div>
                   </>
                 )}
 

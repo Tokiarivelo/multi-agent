@@ -116,6 +116,7 @@ func isPublicRoute(method, path string) bool {
 		"/api/auth/social-login",
 		"/api/github/",
 		"/api/mcp",
+		"/api/webhooks/gmail/push",
 	}
 
 	for _, pub := range publicPaths {

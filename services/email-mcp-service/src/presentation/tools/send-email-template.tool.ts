@@ -37,12 +37,20 @@ export class SendEmailTemplateTool implements McpToolHandler {
   }
 
   async execute(args: Record<string, unknown>): Promise<McpToolResult> {
+    const to = args['to'] as string | undefined;
+    const subjectRaw = args['subject'] as string | undefined;
+    const templateRaw = args['template'] as string | undefined;
+
+    if (!to) throw new Error('email_send_template: missing required argument "to"');
+    if (!subjectRaw) throw new Error('email_send_template: missing required argument "subject"');
+    if (!templateRaw) throw new Error('email_send_template: missing required argument "template"');
+
     const variables = (args['variables'] as Record<string, string>) ?? {};
     const replace = (str: string): string =>
       str.replace(/\{\{([^}]+)\}\}/g, (_, key) => variables[key.trim()] ?? '');
 
-    const subject = replace(args['subject'] as string);
-    const body = replace(args['template'] as string);
+    const subject = replace(subjectRaw);
+    const body = replace(templateRaw);
     const isHtml = body.trimStart().startsWith('<');
 
     const result = await this.email.sendEmail({

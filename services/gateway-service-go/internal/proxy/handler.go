@@ -95,6 +95,17 @@ func buildReverseProxy(target *url.URL) *httputil.ReverseProxy {
 		originalDirector(req)
 		// Ensure the Host header matches the upstream, not the client's Host.
 		req.Host = target.Host
+
+		// Rewrite the path to remove the service segment for MCP routes
+		if strings.HasPrefix(req.URL.Path, "/api/email/") {
+			req.URL.Path = strings.Replace(req.URL.Path, "/api/email/", "/api/", 1)
+		} else if strings.HasPrefix(req.URL.Path, "/api/calendar/") {
+			req.URL.Path = strings.Replace(req.URL.Path, "/api/calendar/", "/api/", 1)
+		} else if strings.HasPrefix(req.URL.Path, "/api/trello/") {
+			req.URL.Path = strings.Replace(req.URL.Path, "/api/trello/", "/api/", 1)
+		} else if strings.HasPrefix(req.URL.Path, "/api/github/") {
+			req.URL.Path = strings.Replace(req.URL.Path, "/api/github/", "/api/", 1)
+		}
 	}
 
 	// Strip CORS headers from the upstream response — the gateway's

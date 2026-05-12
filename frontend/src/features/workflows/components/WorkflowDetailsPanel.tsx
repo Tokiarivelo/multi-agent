@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslation } from 'react-i18next';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { WorkflowIOPanel, WorkflowIOField } from './WorkflowIOPanel';
+import { WorkflowTriggersPanel } from './WorkflowTriggersPanel';
 import { Workflow } from '@/types';
 
 const STATUS_OPTIONS = ['DRAFT', 'ACTIVE', 'INACTIVE', 'ARCHIVED'] as const;
@@ -45,9 +47,11 @@ export function WorkflowDetailsPanel({
   onOutputSchemaChange,
 }: WorkflowDetailsPanelProps) {
   const { t, i18n } = useTranslation();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? '';
 
   return (
-    <div className="w-[400px] h-full flex flex-col gap-4 overflow-y-auto pointer-events-auto pb-4 pr-1">
+    <div className="w-100 h-full flex flex-col gap-4 overflow-y-auto pointer-events-auto pb-4 pr-1">
       <Card className="backdrop-blur-xl bg-white/40 dark:bg-black/40 border-border/50 shadow-xl shrink-0">
         <CardHeader>
           <CardTitle className="text-base">{t('workflows.editor.details')}</CardTitle>
@@ -119,6 +123,8 @@ export function WorkflowDetailsPanel({
           />
         </CardContent>
       </Card>
+
+      {workflow?.id && <WorkflowTriggersPanel workflowId={workflow.id} userId={userId} />}
     </div>
   );
 }

@@ -88,6 +88,34 @@ export interface PaginatedExecutionSummaries {
   limit: number;
 }
 
+export interface GmailSubscription {
+  id: string;
+  workflowId: string;
+  userId: string;
+  gmailUser: string;
+  topicName: string;
+  labelIds: string[];
+  historyId: string;
+  expiration: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GmailWatchResponse {
+  result: {
+    content: Array<{
+      type: string;
+      text: string;
+    }>;
+  };
+  error?:
+    | {
+        message: string;
+      }
+    | string;
+}
+
 export interface AddNodePayload {
   id: string;
   type: NodeTypeId;
@@ -343,6 +371,77 @@ export const workflowsApi = {
 
   createWorkspaceItem: async (path: string, type: 'file' | 'directory') => {
     const { data } = await apiClient.post('/api/workspace/item', { path, type });
+    return data;
+  },
+  // ─── Gmail Subscriptions ────────────────────────────
+
+  getGmailSubscriptions: async (workflowId: string): Promise<GmailSubscription[]> => {
+    const { data } = await apiClient.get<GmailSubscription[]>(
+      `/api/webhooks/gmail/subscriptions/${workflowId}`,
+    );
+    return data;
+  },
+
+  registerGmailSubscription: async (payload: {
+    workflowId: string;
+    userId: string;
+    gmailUser: string;
+    topicName: string;
+    labelIds?: string[];
+    historyId?: string;
+    expiration?: string;
+  }): Promise<GmailSubscription> => {
+    const { data } = await apiClient.post<GmailSubscription>(
+      '/api/webhooks/gmail/subscriptions',
+      payload,
+    );
+    return data;
+  },
+
+  unregisterGmailSubscription: async (payload: {
+    workflowId: string;
+    gmailUser: string;
+  }): Promise<void> => {
+    await apiClient.delete('/api/webhooks/gmail/subscriptions', { data: payload });
+  },
+
+  resumeGmailSubscription: async (payload: {
+    workflowId: string;
+    gmailUser: string;
+  }): Promise<void> => {
+    await apiClient.post('/api/webhooks/gmail/subscriptions/resume', payload);
+  },
+
+  callGmailWatch: async (payload: {
+    refreshToken: string;
+    topicName: string;
+    labelIds?: string;
+  }): Promise<GmailWatchResponse> => {
+    // Note: This calls the email-mcp-service tool via the JSON-RPC endpoint
+    // Usually this is done via the agent-service/mcp-gateway, but here we might need a dedicated proxy
+    // For now, let's assume orchestration-service or a proxy handles this or we call it directly if reachable
+    const { data } = await apiClient.post<GmailWatchResponse>('/api/email/mcp', {
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method: 'tools/call',
+      params: {
+        name: 'gmail_watch',
+        arguments: payload,
+      },
+    });
+    return data;
+  },
+
+  pullGmailNotifications: async (): Promise<{
+    processed: number;
+    notifications: Array<{
+      emailAddress: string;
+      historyId: string;
+      workflowsTriggered?: number;
+      error?: string;
+    }>;
+  }> => {
+    const { data } = await apiClient.post('/api/webhooks/gmail/pull-notifications');
     return data;
   },
 };

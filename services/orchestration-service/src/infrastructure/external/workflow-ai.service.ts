@@ -69,8 +69,9 @@ const NODE_TYPE_DESCRIPTIONS: Record<string, string[]> = {
   START: ['- START: Entry point (exactly 1 required, no config needed)'],
   END: ['- END: Exit point (at least 1 required, no config needed)'],
   AGENT: [
-    '- AGENT: Run an AI agent — config: { agentName: "Descriptive Agent Name", prompt: "optional prompt template using {{input.field}}" }',
+    '- AGENT: Run an AI agent — config: { agentName: "Descriptive Agent Name", nodePrompt?: "optional instruction override", outputFormat?: "text"|"json"|"json_array", outputKey?: "variable name to store result", outputTemplate?: "{\\"key\\": []}" }',
     '  → Use agentName (a human-readable name describing what the agent does), NOT agentId',
+    '  → Set outputTemplate to a JSON example of the exact structure the agent must return (injected into the system prompt)',
   ],
   PROMPT: [
     '- PROMPT: Transform/template input — config: { template: "Hello {{input.name}}, process: {{input.data}}" }',
@@ -88,6 +89,12 @@ const NODE_TYPE_DESCRIPTIONS: Record<string, string[]> = {
     '  → Use toolName (a human-readable name), NOT toolId',
   ],
   SUBWORKFLOW: ['- SUBWORKFLOW: Run another workflow — config: { workflowId: "" }'],
+  EMAIL: [
+    '- EMAIL: Send/fetch/manipulate emails — config: { action: "send"|"fetch"|"manipulate", to?, subject?, body?, mailbox?, query?, limit? }',
+  ],
+  DOCUMENT: [
+    '- DOCUMENT: Generate, read, write, or delete documents — config: { action: "generate"|"read"|"write"|"parse_image"|"delete", format?: "pdf"|"docx"|"xlsx"|"md"|"csv"|"html"|"txt"|"json", title?, sections?, table?, outputPath?, path?, content? }',
+  ],
 };
 
 function buildWorkflowSystemPrompt(excludedNodeTypes: string[] = []): string {
@@ -177,7 +184,8 @@ const NODE_EDIT_SYSTEM_PROMPT = `You are an expert node configuration assistant 
 The user will describe changes to a specific workflow node's configuration.
 
 Node type configs:
-- AGENT: { agentId, inputMapping?, pipelineSteps?, strictMode?, inputFields?, outputFields? }
+- AGENT: { agentId, nodePrompt?, outputFormat?: "text"|"json"|"json_array", outputKey?, outputTemplate?, inputMapping?, pipelineSteps?, toolIds?, subAgents?, maxTokens? }
+  → outputTemplate: JSON example of the exact structure the agent must return — injected into system prompt
 - TOOL/MCP: { toolId, strictMode?, inputFields?, outputFields? }
 - CONDITIONAL: { condition (JS bool expression on "output") }
 - TRANSFORM: { script (JS or Python fn body), language ("javascript"|"python") }
@@ -190,6 +198,8 @@ Node type configs:
 - WHATSAPP: { token, phoneNumberId, to, message }
 - SUBWORKFLOW: { workflowId, inputMapping?, outputMapping? }
 - ORCHESTRATOR: { agentId, maxIterations?, maxRetries?, terminateWhen?, subAgentStrategy?, toolIds?, subAgents?, maxTokens? }
+- EMAIL: { action: "send"|"fetch"|"manipulate", to?, from?, subject?, body?, html?, mailbox?, query?, limit?, manipulateAction?, uids?, targetMailbox? }
+- DOCUMENT: { action: "generate"|"read"|"write"|"parse_image"|"delete", format?: "pdf"|"docx"|"xlsx"|"md"|"csv"|"html"|"txt"|"json", title?, author?, sections?, table?, outputPath?, path?, content?, encoding? }
 
 RESPONSE FORMAT — always respond with ONLY valid JSON (no markdown fences):
 {

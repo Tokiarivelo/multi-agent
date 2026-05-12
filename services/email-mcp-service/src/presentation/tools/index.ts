@@ -4,3 +4,7 @@ export { VerifySmtpTool } from './verify-smtp.tool';
 export { FetchEmailsTool } from './fetch-emails.tool';
 export { ManipulateEmailsTool } from './manipulate-emails.tool';
 export { ListAttachmentsTool, DownloadAttachmentTool } from './attachment.tool';
+export { GmailWatchTool } from './gmail-watch.tool';
+export { GmailStopWatchTool } from './gmail-stop-watch.tool';
+export { GmailPullNotificationsTool } from './gmail-pull-notifications.tool';
+export { GmailFetchHistoryTool } from './gmail-fetch-history.tool';

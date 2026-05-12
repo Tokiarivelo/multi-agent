@@ -96,6 +96,8 @@ export class GmailFetchService {
     const mailbox = params.mailbox ?? 'INBOX';
     const limit = params.limit ?? 20;
 
+    console.log('params :>> ', params);
+
     this.logger.log(`Fetching emails — mailbox: ${mailbox}, limit: ${limit}`);
 
     const client = this.buildClient(params);
@@ -206,28 +208,56 @@ export class GmailFetchService {
   }
 
   async listAttachments(params: ListAttachmentsParams): Promise<AttachmentInfo[]> {
-    const client = this.buildClient(params);
     const mailbox = params.mailbox ?? 'INBOX';
 
-    await client.connect();
-    try {
-      const lock = await client.getMailboxLock(mailbox);
+    // Retry logic for transient network issues
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      // Create a fresh client for each attempt (ImapFlow cannot be reused)
+      const client = this.buildClient(params);
       try {
-        const msg = await client.fetchOne(
-          String(params.uid),
-          { bodyStructure: true },
-          { uid: true },
+        this.logger.debug(`Connecting to IMAP (attempt ${attempt}/3)...`);
+        await client.connect();
+        try {
+          const lock = await client.getMailboxLock(mailbox);
+          try {
+            const msg = await client.fetchOne(
+              String(params.uid),
+              { bodyStructure: true },
+              { uid: true },
+            );
+            if (!msg || !msg.bodyStructure) return [];
+            const attachments: AttachmentInfo[] = [];
+            this.collectAttachments(msg.bodyStructure, attachments);
+            return attachments;
+          } finally {
+            lock.release();
+          }
+        } finally {
+          await client.logout();
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        this.logger.warn(
+          `IMAP connection attempt ${attempt}/3 failed for listAttachments(uid=${params.uid}): ${lastError.message}`,
         );
-        if (!msg || !msg.bodyStructure) return [];
-        const attachments: AttachmentInfo[] = [];
-        this.collectAttachments(msg.bodyStructure, attachments);
-        return attachments;
-      } finally {
-        lock.release();
+
+        // Don't retry on auth errors
+        if (
+          lastError.message.includes('authentication') ||
+          lastError.message.includes('Invalid credentials')
+        ) {
+          throw lastError;
+        }
+
+        // Wait before retry with exponential backoff
+        if (attempt < 3) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+        }
       }
-    } finally {
-      await client.logout();
     }
+
+    throw new Error(`Failed to list attachments after 3 attempts: ${lastError?.message}`);
   }
 
   async downloadAttachment(params: DownloadAttachmentParams): Promise<DownloadedAttachment> {
@@ -304,7 +334,23 @@ export class GmailFetchService {
     const port = params.imapPort ?? this.defaultImap.port;
     const user = params.imapUser ?? this.defaultImap.user;
     const pass = params.imapPass ?? this.defaultImap.pass;
-    return new ImapFlow({ host, port, secure: port === 993, auth: { user, pass }, logger: false });
+
+    if (!user || !pass) {
+      throw new Error(
+        'IMAP credentials not configured. Set IMAP_USER and IMAP_PASS env variables.',
+      );
+    }
+
+    return new ImapFlow({
+      host,
+      port,
+      secure: port === 993,
+      auth: { user, pass },
+      logger: false,
+      connectionTimeout: 30_000, // Increased from 10s to 30s
+      greetingTimeout: 20_000, // Increased from 10s to 20s
+      socketTimeout: 60_000, // Increased from 30s to 60s
+    });
   }
 
   private collectAttachments(node: MessageStructureObject, parts: AttachmentInfo[]): void {

@@ -9,6 +9,7 @@ onlyBuiltDependencies:
   - '@prisma/engines'
   - '@scarf/scarf'
   - bcrypt
+  - esbuild
   - isolated-vm
   - prisma
   - protobufjs

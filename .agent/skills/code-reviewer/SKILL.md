@@ -4,10 +4,8 @@ description: Quality assurance and syntax review agent.
 ---
 # Code Reviewer Skill
 
-You are the active Code Review reviewer subagent. 
-
-**Instructions**:
-- Scan `frontend/` files to ensure all hooks are decoupled from `tsx` logic templates. No `useState` nested deeply without standard separations.
-- Reject manual fetch methods in favor of `@tanstack/react-query`.
-- Enforce strict NestJS controller/service mappings in `backend/`.
-- Prevent code duplicates across services, suggest migration to `packages/common`.
+**Review checklist:**
+- `frontend/`: hooks decoupled from JSX. No deep `useState` nesting. No manual fetch — use `@tanstack/react-query`.
+- `backend/`: strict NestJS Controller/Service separation. Swagger updated per endpoint/DTO change.
+- Cross-service: no duplicated code — suggest migration to `packages/common`.
+- All i18n strings via `t()`. No hardcoded UI text.

@@ -204,18 +204,34 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
     }
 
     const input = this.workflowExecutionService.buildNodeInput(node, execution, context);
+    // displayInput shows only this node's direct predecessors' outputs, not the full accumulated context
+    const displayInput: unknown = node.config?.inputMapping
+      ? input
+      : this.computeNodeDisplayInput(nodeId, workflow, execution);
 
     if (this.workflowExecutionService.isEndNode(workflow, nodeId)) {
+      // If inside a FOR_EACH body, continue iteration instead of ending
+      const forEachStack = (context?.variables?._forEachNodeStack as string[] | undefined) ?? [];
+      if (forEachStack.length > 0) {
+        const loopNodeId = forEachStack[forEachStack.length - 1];
+        this.logger.log(
+          `FOR_EACH auto-loop: END node reached inside body, looping back to ${loopNodeId}`,
+        );
+        context.variables[`_forEachLastBody_${loopNodeId}`] = nodeId;
+        await this.executeNode(loopNodeId, workflow, execution, context);
+        return;
+      }
+
       this.logger.log(`Reached END node ${nodeId}`);
 
-      execution.startNodeExecution(nodeId, node.customName || node.type, input, node.type);
+      execution.startNodeExecution(nodeId, node.customName || node.type, displayInput, node.type);
       await this.updateExecution(execution);
       this.workflowGateway.sendNodeUpdate(
         execution.id,
         nodeId,
         node.customName || node.type,
         'RUNNING',
-        { input },
+        { input: displayInput },
       );
 
       execution.completeNodeExecution(nodeId, input);
@@ -225,13 +241,13 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         nodeId,
         node.customName || node.type,
         'COMPLETED',
-        { input, output: input },
+        { input: displayInput, output: input },
       );
 
       return;
     }
 
-    execution.startNodeExecution(nodeId, node.customName || node.type, input, node.type);
+    execution.startNodeExecution(nodeId, node.customName || node.type, displayInput, node.type);
     await this.updateExecution(execution);
     this.workflowGateway.sendExecutionUpdate(execution);
     this.workflowGateway.sendNodeUpdate(
@@ -239,7 +255,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       nodeId,
       node.customName || node.type,
       'RUNNING',
-      { input },
+      { input: displayInput },
     );
 
     try {
@@ -281,6 +297,14 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         execution,
       );
 
+      // Track last body node for any FOR_EACH node reached via explicit edge
+      for (const nextNodeId of nextNodes) {
+        const nextNode = workflow.definition.nodes.find((n: any) => n.id === nextNodeId);
+        if (nextNode?.type === NodeType.FOR_EACH) {
+          context.variables[`_forEachLastBody_${nextNodeId}`] = nodeId;
+        }
+      }
+
       await this.updateExecution(execution);
       this.workflowGateway.sendExecutionUpdate(execution);
       this.workflowGateway.sendNodeUpdate(
@@ -288,10 +312,20 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         nodeId,
         node.customName || node.type,
         'COMPLETED',
-        { input, output, logs: nodeLogs.length > 0 ? nodeLogs : undefined },
+        { input: displayInput, output, logs: nodeLogs.length > 0 ? nodeLogs : undefined },
       );
 
       if (nextNodes.length === 0) {
+        const forEachStack = (context?.variables?._forEachNodeStack as string[] | undefined) ?? [];
+        if (forEachStack.length > 0) {
+          const loopNodeId = forEachStack[forEachStack.length - 1];
+          this.logger.log(
+            `FOR_EACH auto-loop: branch ended at ${nodeId}, looping back to ${loopNodeId}`,
+          );
+          context.variables[`_forEachLastBody_${loopNodeId}`] = nodeId;
+          await this.executeNode(loopNodeId, workflow, execution, context);
+          return;
+        }
         this.logger.log(`No next nodes found after ${nodeId}, assuming implicit END of branch`);
       } else {
         await Promise.allSettled(
@@ -363,7 +397,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
                 node.customName || node.type,
                 'RUNNING',
                 {
-                  input,
+                  input: displayInput,
                   healing: { applied: true, fixSummary: suggestion.fixSummary },
                 },
               );
@@ -385,7 +419,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           nodeId,
           node.customName || node.type,
           'FAILED',
-          { input, error: errorMessage },
+          { input: displayInput, error: errorMessage },
         );
       }
     }
@@ -414,11 +448,31 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           `[AGENT node] executionId=${context?.executionId ?? 'MISSING'} nodeId=${node.id} workflowId=${context?.workflowId ?? 'MISSING'}`,
         );
 
+        // Augment nodePrompt with JSON format instructions when outputFormat is specified
+        const outputFormat = node.config.outputFormat as string | undefined;
+        const augmentedConfig = { ...node.config };
+
+        if (outputFormat === 'json' || outputFormat === 'json_array') {
+          const formatType = outputFormat === 'json_array' ? 'JSON array' : 'JSON object';
+          const bracketHint = outputFormat === 'json_array' ? '[ … ]' : '{ … }';
+          const formatInstruction = [
+            '',
+            'CRITICAL OUTPUT FORMAT REQUIREMENT:',
+            `You MUST return ONLY a valid ${formatType} (${bracketHint}).`,
+            'Do not include any explanatory text, markdown code fences, or comments.',
+            'Do not say "Here is the result" or similar prose.',
+            'Return the raw JSON value only.',
+          ].join('\n');
+
+          const existingPrompt = (augmentedConfig.nodePrompt as string | undefined)?.trim() || '';
+          augmentedConfig.nodePrompt = existingPrompt + formatInstruction;
+        }
+
         const agentCallConfig = {
-          agentId: node.config.agentId as string,
+          agentId: augmentedConfig.agentId as string,
           input,
           config: {
-            ...node.config,
+            ...augmentedConfig,
             ...(workspacePath ? { workspacePath } : {}),
             userId: context?.userId,
             workflowId: context?.workflowId,
@@ -426,9 +480,9 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
             nodeId: node.id,
             isTest: context?.isTest ?? false,
           },
-          toolIds: (node.config.toolIds as string[] | undefined) ?? [],
-          subAgents: (node.config.subAgents as any[] | undefined) ?? [],
-          maxTokens: node.config.maxTokens as number | undefined,
+          toolIds: (augmentedConfig.toolIds as string[] | undefined) ?? [],
+          subAgents: (augmentedConfig.subAgents as any[] | undefined) ?? [],
+          maxTokens: augmentedConfig.maxTokens as number | undefined,
         };
 
         let agentResult = await this.agentClient.executeAgent(agentCallConfig);
@@ -439,16 +493,9 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         console.log('agentResult :>> ', JSON.stringify(agentResult, null, 2));
 
         // ── Smart Ask-user: auto-detect __ASK_USER__ sentinel ──────────────
-        //
-        // The agent embeds the sentinel ANYWHERE in its response text:
-        //   __ASK_USER__:{"question":"...","type":"...","choices":[...]}
-        //
-        // Because the agent-service wraps output in multiple layers of
-        // JSON.stringify, we must deep-scan EVERY string value in the
-        // agentResult.output tree — not just the top-level fields.
-        //
-        // Detection is automatic — no node config flag required.
-        if (execution) {
+        // Only active when the node has allowAskUser: true in its config.
+        // When disabled the agent output is passed through as-is.
+        if (execution && node.config.allowAskUser) {
           interface AskUserPayload {
             question: string;
             type: 'single_choice' | 'multiple_choice' | 'danger_choice' | 'custom';
@@ -658,6 +705,171 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
         let pipelineData: any = agentResult.output;
 
+        // Parse structured output when the node declares outputFormat = json | json_array.
+        // agentResult.output is an AgentExecution entity; dig through nested .output/.text/.content
+        // fields and JSON-encoded strings to reach the raw LLM text, then parse it as JSON.
+        if (outputFormat === 'json' || outputFormat === 'json_array') {
+          const extractText = (value: unknown, depth = 0): string => {
+            if (depth > 8) return typeof value === 'string' ? value : '';
+            if (typeof value === 'string') {
+              try {
+                return extractText(JSON.parse(value), depth + 1);
+              } catch {
+                return value;
+              }
+            }
+            if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+              const obj = value as Record<string, unknown>;
+              if (typeof obj['output'] !== 'undefined')
+                return extractText(obj['output'], depth + 1);
+              if (typeof obj['text'] !== 'undefined') return extractText(obj['text'], depth + 1);
+              if (typeof obj['content'] !== 'undefined')
+                return extractText(obj['content'], depth + 1);
+            }
+            return typeof value === 'string' ? value : JSON.stringify(value);
+          };
+
+          const rawText = extractText(pipelineData);
+
+          // Progressive JSON extraction: handles prose-wrapped responses where the
+          // agent narrates before/after the JSON value. Returns null when nothing found.
+          const tryExtractJson = (text: string): unknown | null => {
+            // 1. Direct parse
+            try {
+              return JSON.parse(text.trim());
+            } catch {}
+
+            // 2. Code fence (```json ... ``` or ``` ... ```)
+            const fence = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (fence) {
+              try {
+                return JSON.parse(fence[1].trim());
+              } catch {}
+            }
+
+            // 3. Scan for first JSON object or array and match balanced braces
+            const opener = outputFormat === 'json_array' ? '[' : '{';
+            const closer = outputFormat === 'json_array' ? ']' : '}';
+            const altOpener = opener === '[' ? '{' : '[';
+            const altCloser = closer === ']' ? '}' : ']';
+
+            for (const [open, close] of [
+              [opener, closer],
+              [altOpener, altCloser],
+            ]) {
+              const start = text.indexOf(open);
+              if (start === -1) continue;
+              let depth = 0;
+              let inString = false;
+              let escape = false;
+              for (let i = start; i < text.length; i++) {
+                const ch = text[i]!;
+                if (escape) {
+                  escape = false;
+                  continue;
+                }
+                if (ch === '\\' && inString) {
+                  escape = true;
+                  continue;
+                }
+                if (ch === '"') {
+                  inString = !inString;
+                  continue;
+                }
+                if (inString) continue;
+                if (ch === open) depth++;
+                else if (ch === close) {
+                  depth--;
+                  if (depth === 0) {
+                    try {
+                      return JSON.parse(text.slice(start, i + 1));
+                    } catch {
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+
+            return null;
+          };
+
+          let parsed = tryExtractJson(rawText);
+
+          // Multi-retry: the agent returned prose (no JSON found). Send its own output back
+          // with increasingly firm reformat instructions (up to 3 attempts).
+          const MAX_FORMAT_RETRIES = 3;
+          let retryAttempt = 0;
+
+          while (parsed === null && retryAttempt < MAX_FORMAT_RETRIES) {
+            retryAttempt++;
+            this.logger.warn(
+              `AGENT node "${node.customName || node.type}" returned prose instead of ${outputFormat} — retry attempt ${retryAttempt}/${MAX_FORMAT_RETRIES}`,
+            );
+
+            const bracketHint = outputFormat === 'json_array' ? '[ … ]' : '{ … }';
+            const formatType = outputFormat === 'json_array' ? 'array' : 'object';
+            const examples =
+              outputFormat === 'json_array' ? '[{"key": "value"}]' : '{"key": "value"}';
+
+            const urgencyLevel =
+              retryAttempt === 1 ? 'IMPORTANT' : retryAttempt === 2 ? 'CRITICAL' : 'FINAL ATTEMPT';
+
+            const retryInput = [
+              `${urgencyLevel}: You MUST return ONLY valid JSON.`,
+              '',
+              'Your previous response contained prose/text instead of pure JSON:',
+              '---',
+              rawText.slice(0, 3000),
+              '---',
+              '',
+              `REQUIRED FORMAT: ${formatType.toUpperCase()} ${bracketHint}`,
+              `Example: ${examples}`,
+              '',
+              'RULES:',
+              `1. Return ONLY a valid JSON ${formatType} — start with ${bracketHint[0]} and end with ${bracketHint[bracketHint.length - 1]}`,
+              '2. NO explanatory text before or after the JSON',
+              '3. NO markdown code fences like ```json',
+              '4. NO comments or annotations',
+              '5. Just the raw JSON value',
+              '',
+              `Extract the data from your previous response and format it as a pure JSON ${formatType} now:`,
+            ].join('\n');
+
+            const retryResult = await this.agentClient.executeAgent({
+              ...agentCallConfig,
+              input: retryInput,
+              toolIds: [], // no tools — just reformatting
+              config: {
+                ...agentCallConfig.config,
+                nodePrompt: '', // Clear previous prompt to avoid confusion
+              },
+            });
+
+            if (retryResult.success) {
+              const retryText = extractText(retryResult.output);
+              parsed = tryExtractJson(retryText);
+
+              if (parsed === null) {
+                this.logger.error(
+                  `AGENT retry ${retryAttempt} still returned non-JSON: ${retryText.slice(0, 200)}`,
+                );
+              } else {
+                this.logger.log(`AGENT retry ${retryAttempt} succeeded — valid JSON extracted`);
+              }
+            }
+          }
+
+          if (parsed === null) {
+            throw new Error(
+              `AGENT node "${node.customName || node.type}" declared outputFormat="${outputFormat}" but failed to return valid JSON after ${MAX_FORMAT_RETRIES} retries. Last output: ${rawText.slice(0, 300)}`,
+            );
+          }
+
+          const outputKey = (node.config.outputKey as string | undefined)?.trim();
+          pipelineData = outputKey ? { [outputKey]: parsed } : parsed;
+        }
+
         for (const step of pipelineSteps) {
           if (step.type === 'TOOL') {
             const toolRes = await this.toolClient.executeTool({
@@ -684,9 +896,50 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
       case NodeType.TOOL:
       case NodeType.MCP: {
+        // Merge data fields from node.config into input so workflow designers can
+        // configure tool args (e.g. to/subject/template) directly on the node.
+        // Internal executor-only keys are excluded.
+        const TOOL_INTERNAL_KEYS = new Set([
+          'toolId',
+          'toolName',
+          'description',
+          'strictMode',
+          'inputFields',
+          'outputFields',
+          'timeout',
+          'allowAskUser',
+          'pipelineSteps',
+          'workspacePath',
+          'maxTokens',
+        ]);
+        const prevInput: Record<string, unknown> =
+          typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+        const configOverrides: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(node.config ?? {})) {
+          if (TOOL_INTERNAL_KEYS.has(key)) continue;
+          if (typeof val === 'string') {
+            configOverrides[key] = val.replace(/\{\{([^}]+)\}\}/g, (_, path: string) => {
+              const v = path
+                .trim()
+                .split('.')
+                .reduce(
+                  (acc: unknown, k: string) =>
+                    acc && typeof acc === 'object'
+                      ? (acc as Record<string, unknown>)[k]
+                      : undefined,
+                  prevInput as unknown,
+                );
+              return v !== undefined ? (typeof v === 'object' ? JSON.stringify(v) : String(v)) : '';
+            });
+          } else {
+            configOverrides[key] = val;
+          }
+        }
+        const toolInput = { ...prevInput, ...configOverrides };
+
         const toolResult = await this.toolClient.executeTool({
           toolId: node.config.toolId,
-          input,
+          input: toolInput,
           config: node.config,
         });
         if (!toolResult.success) {
@@ -866,6 +1119,84 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         });
         if (!res.success) throw new Error(res.error || 'Email execution failed');
         return res.output;
+      }
+
+      case NodeType.DOCUMENT: {
+        const docAction = (node.config.action as string) || 'generate';
+        const docToolMap: Record<string, string> = {
+          generate: 'document_generate',
+          read: 'document_read',
+          write: 'document_write',
+          parse_image: 'document_parse_image',
+          delete: 'document_delete',
+        };
+        const docTool = docToolMap[docAction] ?? 'document_generate';
+
+        const prevDoc: Record<string, unknown> =
+          typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+
+        const resolveDocField = (configVal: unknown, inputKey: string): unknown => {
+          if (typeof configVal === 'string' && configVal.trim() !== '') {
+            return configVal.replace(/\{\{([^}]+)\}\}/g, (_, path: string) => {
+              const v = path
+                .trim()
+                .split('.')
+                .reduce(
+                  (acc: unknown, k: string) =>
+                    acc && typeof acc === 'object'
+                      ? (acc as Record<string, unknown>)[k]
+                      : undefined,
+                  prevDoc as unknown,
+                );
+              return v !== undefined ? (typeof v === 'object' ? JSON.stringify(v) : String(v)) : '';
+            });
+          }
+          return prevDoc[inputKey];
+        };
+
+        const resolveJsonField = (configVal: unknown, inputKey: string): unknown => {
+          const raw = resolveDocField(configVal, inputKey);
+          if (typeof raw === 'string') {
+            try {
+              return JSON.parse(raw);
+            } catch {
+              return raw;
+            }
+          }
+          return raw;
+        };
+
+        let docInput: Record<string, unknown>;
+
+        if (docAction === 'generate') {
+          docInput = {
+            format: resolveDocField(node.config.format, 'format') ?? 'pdf',
+            title: resolveDocField(node.config.title, 'title') ?? 'Document',
+            author: resolveDocField(node.config.author, 'author'),
+            sections: resolveJsonField(node.config.sections, 'sections'),
+            table: resolveJsonField(node.config.table, 'table'),
+            outputPath: resolveDocField(node.config.outputPath, 'outputPath'),
+          };
+        } else if (docAction === 'write') {
+          docInput = {
+            path: resolveDocField(node.config.path, 'path'),
+            content: resolveDocField(node.config.content, 'content'),
+            encoding: resolveDocField(node.config.encoding, 'encoding') ?? 'utf-8',
+          };
+        } else {
+          docInput = {
+            path: resolveDocField(node.config.path, 'path'),
+            encoding: resolveDocField(node.config.encoding, 'encoding') ?? 'utf-8',
+          };
+        }
+
+        const docRes = await this.toolClient.executeTool({
+          toolName: docTool,
+          input: { ...docInput, ...(typeof input === 'object' && input !== null ? input : {}) },
+          config: node.config,
+        });
+        if (!docRes.success) throw new Error(docRes.error || 'Document execution failed');
+        return docRes.output;
       }
 
       case NodeType.DOWNLOAD_FILE: {
@@ -1260,11 +1591,17 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           outputKey = '',
         } = node.config ?? {};
 
-        const resolveDotPath = (obj: any, dotPath: string): any => {
-          const cleaned = (dotPath as string).replace(/^\$\.?/, '');
-          if (!cleaned) return obj;
-          return cleaned.split('.').reduce((acc: any, k: string) => acc?.[k], obj);
-        };
+        const cleanedPath = (collectionPath as string).replace(/^\$\.?/, '');
+        if (!cleanedPath) {
+          throw new Error(
+            'FOR_EACH node is missing a collection path. ' +
+              'Please configure the "collection" field (e.g. "$.items" or "results") ' +
+              'to specify which array to iterate over.',
+          );
+        }
+
+        const resolveDotPath = (obj: any, dotPath: string): any =>
+          dotPath.split('.').reduce((acc: any, k: string) => acc?.[k], obj);
 
         const iterKey = `_forEachIndex_${node.id}`;
         const itemsKey = `_forEachItems_${node.id}`;
@@ -1275,22 +1612,53 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
 
         let items: any[];
         if (currentIndex === 0) {
-          const raw = resolveDotPath(input, collectionPath as string);
-          items = Array.isArray(raw) ? raw : raw !== undefined ? [raw] : [];
+          const raw = resolveDotPath(input, cleanedPath);
+          if (!Array.isArray(raw)) {
+            throw new Error(
+              `FOR_EACH collection path "${collectionPath}" did not resolve to an array ` +
+                `(got ${raw === undefined ? 'undefined' : typeof raw}). ` +
+                'Check that the path points to an array in the workflow output.',
+            );
+          }
+          // Deep-clone items to prevent circular references when input === context.variables
+          items = JSON.parse(JSON.stringify(raw)) as any[];
           if (context?.variables) {
             context.variables[itemsKey] = items;
             context.variables[resultsKey] = [];
+            // Register this FOR_EACH node as an active loop so body branches can auto-loop back
+            const stack = (context.variables._forEachNodeStack as string[] | undefined) ?? [];
+            stack.push(node.id);
+            context.variables._forEachNodeStack = stack;
           }
           if (logSink) {
             logSink.push(
-              `[LOG] FOR_EACH: starting — ${items.length} item(s) from "${collectionPath || 'root'}"`,
+              `[LOG] FOR_EACH: starting — ${items.length} item(s) from "${collectionPath}"`,
             );
           }
         } else {
           items = (context?.variables?.[itemsKey] as any[]) ?? [];
           const accumulated = (context?.variables?.[resultsKey] as any[]) ?? [];
-          const bodyOutput = outputKey ? (input as any)[outputKey as string] : input;
-          accumulated.push(bodyOutput);
+          // Use last body node's execution output to avoid pushing context.variables (circular ref)
+          const lastBodyNodeId = context?.variables?.[`_forEachLastBody_${node.id}`] as
+            | string
+            | undefined;
+          let bodyOutput: unknown;
+          if (lastBodyNodeId && execution) {
+            const lastExec = [...execution.nodeExecutions]
+              .reverse()
+              .find((n) => n.nodeId === lastBodyNodeId);
+            bodyOutput =
+              lastExec?.output ?? (outputKey ? (input as any)[outputKey as string] : undefined);
+          } else if (outputKey) {
+            bodyOutput = (input as any)[outputKey as string];
+          }
+          if (bodyOutput !== undefined) {
+            try {
+              accumulated.push(JSON.parse(JSON.stringify(bodyOutput)));
+            } catch {
+              accumulated.push(String(bodyOutput));
+            }
+          }
           if (context?.variables) context.variables[resultsKey] = accumulated;
         }
 
@@ -1302,8 +1670,11 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           if (logSink) {
             logSink.push(`[LOG] FOR_EACH: processing item[${currentIndex}]`);
           }
+          // Return only FOR_EACH control fields — context.variables already holds all prior data
+          // and will be merged with this output by the executor. Spreading ...input here would
+          // re-introduce the entire context (including the stored items array) into the serialized
+          // node output, causing circular-reference stack overflows in Prisma's JSON serializer.
           return {
-            ...input,
             _forEachItem: item,
             _forEachIndex: currentIndex,
             _forEachTotal: Math.min(items.length, cap),
@@ -1317,6 +1688,11 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           context.variables[iterKey] = 0;
           delete context.variables[itemsKey];
           delete context.variables[resultsKey];
+          // Remove this FOR_EACH from the active loop stack
+          const stack = (context.variables._forEachNodeStack as string[] | undefined) ?? [];
+          const idx = stack.lastIndexOf(node.id);
+          if (idx >= 0) stack.splice(idx, 1);
+          context.variables._forEachNodeStack = stack;
         }
         if (logSink) {
           logSink.push(`[LOG] FOR_EACH: completed — ${finalResults.length} result(s) collected`);
@@ -2006,6 +2382,40 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
       push(`Status: FAILED`);
       return { input, output: null, error: errMsg, logs };
     }
+  }
+
+  private computeNodeDisplayInput(
+    nodeId: string,
+    workflow: any,
+    execution: WorkflowExecution,
+  ): unknown {
+    const incomingEdges = (workflow.definition.edges as any[]).filter(
+      (e: any) => e.target === nodeId,
+    );
+
+    if (incomingEdges.length === 0) {
+      return execution.input ?? {};
+    }
+
+    const merged: Record<string, unknown> = {};
+    for (const edge of incomingEdges) {
+      const prevExec = [...execution.nodeExecutions]
+        .reverse()
+        .find((n) => n.nodeId === edge.source);
+      if (prevExec?.output !== undefined) {
+        if (
+          typeof prevExec.output === 'object' &&
+          prevExec.output !== null &&
+          !Array.isArray(prevExec.output)
+        ) {
+          Object.assign(merged, prevExec.output as Record<string, unknown>);
+        } else {
+          merged[edge.source] = prevExec.output;
+        }
+      }
+    }
+
+    return Object.keys(merged).length > 0 ? merged : (execution.input ?? {});
   }
 
   /**

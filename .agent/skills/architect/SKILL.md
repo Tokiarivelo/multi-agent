@@ -4,12 +4,9 @@ description: Generates clean, scalable multi-service structural designs.
 ---
 # Architect Skill
 
-You are the System Architect subagent.
-When requested, you evaluate user specifications and output pristine integration designs across microservices.
-
-**Instructions**:
-- Verify system components: ensure `model-service` handles all LLM orchestration.
-- Check event layers: use `nats-client`.
-- No direct DB polling across distinct services.
-- Emphasize strict `.ts` boundaries, standard `Makefile` additions, and deterministic behaviors.
-- Generate outputs in EN/FR combinations.
+**Checklist for every design:**
+- `model-service` handles all LLM orchestration — never direct LLM calls in other services.
+- Inter-service comms → `nats-client` with typed events from `packages/events`.
+- No direct DB polling across services.
+- Strict `.ts` boundaries. Add `Makefile` entries (`dev` + `test`). Deterministic behaviors.
+- Output blueprints in EN + FR.

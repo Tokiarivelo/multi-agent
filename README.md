@@ -99,6 +99,11 @@ For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
   - Conditional branching and parallel execution
   - Error handling and retry logic
 
+- ✅ **Automatic Triggers**
+  - **Gmail Push Notifications**: Trigger workflows instantly upon email arrival using Google Cloud Pub/Sub
+  - Multi-account support with per-workflow subscription management
+  - Visual trigger configuration in the Workflow Editor details panel
+
 - ✅ **AI Agent Management**
   - Custom system prompts
   - Tool binding and configuration

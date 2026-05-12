@@ -335,3 +335,286 @@ Once the service is running, API documentation is available at:
 ## License
 
 MIT
+
+---
+
+## Gmail Watch — Real-Time Email Push Trigger / Déclencheur Email en Temps Réel
+
+> **EN** — This feature enables workflows to be triggered automatically the moment a new email arrives in a Gmail inbox, using Gmail's push notification API via Google Cloud Pub/Sub.
+>
+> **FR** — Cette fonctionnalité permet de déclencher automatiquement un workflow dès qu'un nouvel email arrive dans une boîte Gmail, via l'API Gmail push notification et Google Cloud Pub/Sub.
+
+---
+
+### Architecture Overview / Vue d'ensemble
+
+```
+Gmail Inbox
+    │  (new email)
+    ▼
+Gmail API (users.watch)
+    │  push notification
+    ▼
+Google Cloud Pub/Sub Topic
+    │  HTTP POST push delivery
+    ▼
+orchestration-service  POST /api/webhooks/gmail/push
+    │  lookup GmailWatchSubscription
+    ▼
+ExecuteWorkflowUseCase → fires matched workflow(s)
+    │  with input: { trigger, gmailUser, historyId, labelIds }
+    ▼
+Workflow: [START] → [EMAIL: fetch] → [AGENT: analyze] → [EMAIL: send] → [END]
+```
+
+---
+
+### Step 1 — Google Cloud Setup / Configuration Google Cloud
+
+**EN:**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Library**
+2. Enable **Gmail API**
+3. Go to **APIs & Services** → **Credentials** → **Create credentials** → **OAuth 2.0 Client ID**
+   - Application type: `Web application`
+   - Add `http://localhost` as an authorized redirect URI (for local token generation)
+4. Download the JSON credentials and note `client_id` and `client_secret`
+5. Go to **Pub/Sub** → **Topics** → **Create topic**, name it (e.g. `gmail-push`)
+6. Go to **Pub/Sub** → **Subscriptions** → **Create subscription**:
+   - Delivery type: **Push**
+   - Endpoint URL: `https://your-orchestration-host/api/webhooks/gmail/push`
+   - Enable **authentication** (recommended — add token to URL as query param)
+7. Grant the Gmail service account publish rights on your topic:
+   - Add `gmail-api-push@system.gserviceaccount.com` as **Pub/Sub Publisher** on the topic
+
+**FR:**
+1. Allez sur [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Bibliothèque**
+2. Activez **l'API Gmail**
+3. Allez dans **APIs & Services** → **Identifiants** → **Créer des identifiants** → **ID client OAuth 2.0**
+   - Type : `Application Web`
+   - Ajoutez `http://localhost` comme URI de redirection autorisée
+4. Téléchargez le JSON et notez `client_id` et `client_secret`
+5. Allez dans **Pub/Sub** → **Sujets** → **Créer un sujet** (ex. `gmail-push`)
+6. Allez dans **Pub/Sub** → **Abonnements** → **Créer un abonnement** :
+   - Type : **Push**
+   - URL de point de terminaison : `https://votre-hôte-orchestration/api/webhooks/gmail/push`
+7. Accordez à `gmail-api-push@system.gserviceaccount.com` le rôle **Éditeur Pub/Sub** sur le sujet
+
+---
+
+### Step 2 — Generate a Refresh Token / Générer un Refresh Token
+
+**EN:** Use the OAuth2 Playground or the `googleapis` library to exchange an authorization code for a refresh token. Scopes needed: `https://www.googleapis.com/auth/gmail.modify`
+
+```bash
+# Quick token generation via Google OAuth2 Playground:
+# 1. Open https://developers.google.com/oauthplayground/
+# 2. Click Settings (gear icon) → Use your own OAuth credentials → enter client_id + client_secret
+# 3. Select scope: https://www.googleapis.com/auth/gmail.modify
+# 4. Click "Authorize APIs" → "Exchange authorization code for tokens"
+# 5. Copy the refresh_token value
+```
+
+**FR :** Utilisez le Playground OAuth2 ou la bibliothèque `googleapis` pour échanger un code d'autorisation contre un refresh token. Scope requis : `https://www.googleapis.com/auth/gmail.modify`
+
+---
+
+### Step 3 — Environment Variables / Variables d'environnement
+
+#### `services/email-mcp-service/.env`
+
+```env
+# Gmail Watch — OAuth2 credentials (required for gmail_watch / gmail_stop_watch tools)
+GMAIL_CLIENT_ID=<your-google-oauth2-client-id>
+GMAIL_CLIENT_SECRET=<your-google-oauth2-client-secret>
+```
+
+#### `services/orchestration-service/.env`
+
+```env
+# Gmail Webhook — optional secret for Pub/Sub push authentication
+# Set the same value as the token appended to your Pub/Sub push endpoint URL
+GMAIL_WEBHOOK_SECRET=<random-secret-string>
+```
+
+---
+
+### Step 4 — Register the Watch / Enregistrer le Watch
+
+**Step 4a — Call `gmail_watch` on email-mcp-service (port 3012):**
+
+```bash
+curl -X POST http://localhost:3012/api/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "gmail_watch",
+      "arguments": {
+        "refreshToken": "<your-refresh-token>",
+        "topicName": "projects/<gcp-project-id>/topics/gmail-push",
+        "labelIds": "INBOX"
+      }
+    }
+  }'
+```
+
+Response will contain `historyId` and `expiration` (Unix ms, max 7 days):
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "{ \"success\": true, \"historyId\": \"12345\", \"expiration\": \"1748000000000\", \"expiresAt\": \"2026-05-22T...\" }"
+  }]
+}
+```
+
+**Step 4b — Register the subscription in orchestration-service:**
+
+```bash
+curl -X POST http://localhost:3003/api/webhooks/gmail/subscriptions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "workflowId": "<your-workflow-id>",
+    "userId": "<your-user-id>",
+    "gmailUser": "you@gmail.com",
+    "topicName": "projects/<gcp-project-id>/topics/gmail-push",
+    "labelIds": ["INBOX"],
+    "historyId": "12345",
+    "expiration": "1748000000000"
+  }'
+```
+
+---
+
+### Step 5 — Build the Email Analysis Workflow / Construire le Workflow
+
+Build this topology in the UI (or via API):
+
+```
+[START] → [EMAIL: fetch] → [AGENT: analyze] → [EMAIL: send] → [END]
+```
+
+| Node | Type | Key Config |
+|---|---|---|
+| Start | `START` | — |
+| Fetch Email | `EMAIL` | `action=fetch`, `query=is:unread`, `limit=1` |
+| Analyze | `AGENT` | `outputFormat=json`, `outputKey=reply` |
+| Send Reply | `EMAIL` | `action=send`, `to={{reply.to}}`, `subject={{reply.subject}}`, `body={{reply.body}}` |
+| End | `END` | — |
+
+The workflow's `inputSchema` should declare:
+```json
+[
+  { "key": "gmailUser",         "type": "string" },
+  { "key": "historyId",         "type": "string" },
+  { "key": "previousHistoryId", "type": "string" },
+  { "key": "labelIds",          "type": "array"  }
+]
+```
+
+> **EN:** When the push arrives, the orchestration service injects `{ trigger: "gmail_watch", gmailUser, historyId, previousHistoryId, labelIds }` as the workflow input so the EMAIL fetch node can target the right account and messages.
+>
+> **FR :** Lorsque la notification push arrive, le service d'orchestration injecte `{ trigger: "gmail_watch", gmailUser, historyId, previousHistoryId, labelIds }` comme entrée du workflow afin que le nœud EMAIL puisse cibler le bon compte et les bons messages.
+
+---
+
+### Step 6 — Stop the Watch / Arrêter le Watch
+
+**Stop Gmail API watch:**
+```bash
+curl -X POST http://localhost:3012/api/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "gmail_stop_watch",
+      "arguments": { "refreshToken": "<your-refresh-token>" }
+    }
+  }'
+```
+
+**Unregister in orchestration-service:**
+```bash
+curl -X DELETE http://localhost:3003/api/webhooks/gmail/subscriptions \
+  -H 'Content-Type: application/json' \
+  -d '{ "workflowId": "<workflow-id>", "gmailUser": "you@gmail.com" }'
+```
+
+---
+
+### Watch Renewal / Renouvellement du Watch
+
+> **EN:** Google's watch subscriptions expire after **7 days maximum**. You must renew by calling `gmail_watch` again and then calling `POST /api/webhooks/gmail/subscriptions` with the new `historyId` and `expiration`. The upsert logic ensures no duplicate subscriptions are created.
+>
+> Set up a cron job or scheduled workflow to renew every ~6 days:
+>
+> **FR :** Les abonnements Google expirent après **7 jours maximum**. Renouvelez en rappelant `gmail_watch`, puis `POST /api/webhooks/gmail/subscriptions` avec le nouveau `historyId` et `expiration`. La logique upsert garantit qu'il n'y a pas de doublon.
+>
+> Configurez un cron ou un workflow planifié pour renouveler toutes les ~6 jours.
+
+```bash
+# Example cron (every 6 days at 02:00)
+0 2 */6 * * curl -X POST http://localhost:3003/api/webhooks/gmail/subscriptions \
+  -H 'Content-Type: application/json' \
+  -d '{ "workflowId": "...", "userId": "...", "gmailUser": "...", ... }'
+```
+
+---
+
+### Webhook API Reference / Référence API Webhook
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/webhooks/gmail/push` | Pub/Sub push receiver (called by Google) |
+| `POST` | `/api/webhooks/gmail/subscriptions` | Register/update a watch→workflow mapping |
+| `DELETE` | `/api/webhooks/gmail/subscriptions` | Deactivate a subscription |
+| `GET` | `/api/webhooks/gmail/subscriptions/:workflowId` | List subscriptions for a workflow |
+
+---
+
+### Makefile Targets / Commandes Make
+
+```bash
+make dev-email-mcp       # Start email-mcp-service (port 3012)
+make test-email-mcp      # Run email-mcp-service tests
+make test-gmail-webhook  # Smoke-test the Gmail push webhook endpoint
+make test-orchestration  # Run all orchestration-service tests (includes gmail tests)
+```
+
+---
+
+### Database / Base de données
+
+A new table `gmail_watch_subscriptions` is created by migration `20260508171616_add_gmail_watch_subscriptions`.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | UUID | Primary key |
+| `workflowId` | String | Workflow to trigger |
+| `userId` | String | User who owns the workflow |
+| `gmailUser` | String | Gmail address being watched |
+| `topicName` | String | Pub/Sub topic name |
+| `labelIds` | JSON | Label IDs filter (default `["INBOX"]`) |
+| `historyId` | String? | Last processed Gmail historyId |
+| `expiration` | String? | Unix ms expiry from Gmail API |
+| `isActive` | Boolean | Whether the subscription is active |
+
+---
+
+### Files Added / Fichiers ajoutés
+
+| Service | File | Purpose |
+|---|---|---|
+| `email-mcp-service` | `src/infrastructure/email/gmail-watch.service.ts` | Gmail API OAuth2 watch/stop |
+| `email-mcp-service` | `src/presentation/tools/gmail-watch.tool.ts` | MCP tool `gmail_watch` |
+| `email-mcp-service` | `src/presentation/tools/gmail-stop-watch.tool.ts` | MCP tool `gmail_stop_watch` |
+| `orchestration-service` | `src/domain/services/gmail-trigger.service.ts` | Subscription registry (DB) |
+| `orchestration-service` | `src/application/dto/gmail-webhook.dto.ts` | Request/response DTOs |
+| `orchestration-service` | `src/presentation/controllers/gmail-webhook.controller.ts` | Webhook + subscription API |
+| `orchestration-service` | `src/domain/services/gmail-trigger.service.spec.ts` | Unit tests (8 tests) |
+| `orchestration-service` | `src/presentation/controllers/gmail-webhook.controller.spec.ts` | Unit tests (6 tests) |
+| `packages/database` | `prisma/migrations/20260508171616_add_gmail_watch_subscriptions/` | DB migration |

@@ -54,6 +54,7 @@ import {
 import { useAgents } from '../../agents/hooks/useAgents';
 import { useTools } from '../../tools/hooks/useTools';
 import { getNodeTypeMeta, NodeTypeId } from './nodeTypes';
+import { toast } from 'sonner';
 import { useWorkflowExecutionStore } from '../store/workflowExecution.store';
 import { useWorkflowHistory } from '../hooks/useWorkflowHistory';
 
@@ -861,8 +862,12 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
               ),
             );
             pushHistory({ op: 'node_updated', nodeId: node.id, before, after: node });
+            toast.success(t('workflows.node_editor.updateSuccess'));
             // User requested not to close the sidebar when updating
             // setEditorOpen(false);
+          },
+          onError: (err) => {
+            toast.error(t('workflows.node_editor.updateError', { message: err instanceof Error ? err.message : String(err) }));
           },
         },
       );
@@ -923,6 +928,10 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
             }
             setSplittingEdgeId(null);
           }
+          toast.success(t('workflows.node_editor.addSuccess'));
+        },
+        onError: (err) => {
+          toast.error(t('workflows.node_editor.addError', { message: err instanceof Error ? err.message : String(err) }));
         },
       });
     }

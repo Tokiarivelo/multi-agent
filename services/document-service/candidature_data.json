@@ -1,0 +1,24 @@
+{
+  "candidate": {
+    "nom": "Philippe Garnier",
+    "email": "philippe.garnier@email.com",
+    "telephone": "+33 6 45 67 89 01",
+    "adresse": "7 Impasse des Tilleuls, 42000 Saint-Étienne",
+    "experience_totale": "4 ans",
+    "niveau": "Developer Junior (inadéquat pour Senior)"
+  },
+  "competences": {
+    "langages": ["PHP 5.x très basique", "HTML/CSS basique"],
+    "frameworks": ["WordPress"],
+    "outils": ["FTP", "Pas de Git"],
+    "cloud": "Aucune expérience",
+    "devops": "Aucune expérience",
+    "bases_donnees": "Pas maîtrisé"
+  },
+  "certifications": "Aucune",
+  "langues": {
+    "francais": "Natif",
+    "anglais": "Très faible"
+  },
+  "evaluation": "TRÈS FAIBLE - Candidat inadéquat pour le poste"
+}

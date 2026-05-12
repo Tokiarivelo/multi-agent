@@ -166,16 +166,47 @@ export class ExecuteAgentUseCase {
   }
 
   /**
+   * Strips base64-encoded binary payloads before they enter LLM context.
+   * A base64 blob adds thousands of tokens with zero value — the model cannot
+   * parse binary; only extracted text matters.
+   *
+   * Heuristic: string field > 200 chars consisting solely of base64 characters.
+   * Replaced with a sentinel instructing the LLM to call a parser tool instead.
+   */
+  private sanitizeBinaryData(obj: unknown): unknown {
+    if (typeof obj !== 'object' || obj === null) return obj;
+    const record = obj as Record<string, unknown>;
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(record)) {
+      if (
+        typeof value === 'string' &&
+        value.length > 200 &&
+        /^[A-Za-z0-9+/]+=*$/.test(value)
+      ) {
+        sanitized[key] =
+          '[binary content removed — call a document_parse or extract_text tool to read this file]';
+      } else if (typeof value === 'object' && value !== null) {
+        sanitized[key] = this.sanitizeBinaryData(value);
+      } else {
+        sanitized[key] = value;
+      }
+    }
+    return sanitized;
+  }
+
+  /**
    * Extract the actual payload from a ToolExecutionResult wrapper.
    * The tool-service wraps every response in { success, data|error, executionTime }.
    * The LLM must receive only the meaningful content.
    */
   private unwrapToolResult(raw: unknown): string {
-    if (typeof raw === 'string') return raw;
-    if (raw === null || raw === undefined) return 'null';
+    const clean = this.sanitizeBinaryData(raw);
 
-    if (typeof raw === 'object') {
-      const r = raw as Record<string, unknown>;
+    if (typeof clean === 'string') return clean;
+    if (clean === null || clean === undefined) return 'null';
+
+    if (typeof clean === 'object') {
+      const r = clean as Record<string, unknown>;
 
       if (r['success'] === false) {
         return `Tool error: ${r['error'] ?? 'Unknown error'}`;
@@ -188,7 +219,7 @@ export class ExecuteAgentUseCase {
       }
     }
 
-    return JSON.stringify(raw, null, 2);
+    return JSON.stringify(clean, null, 2);
   }
 
   async execute(agentId: string, dto: ExecuteAgentDto): Promise<AgentExecution> {
@@ -209,7 +240,7 @@ export class ExecuteAgentUseCase {
       const ragUserId: string = (nodeMetadata.userId as string) ?? '';
 
       const modelConfig = await this.modelClient.getModelConfig(agent.modelId, ragUserId);
-      
+
       // Accept both keys: workspacePath (set by AGENT node) and cwd (legacy / direct runs)
       const workspacePath =
         (nodeMetadata.workspacePath as string | undefined) ||
@@ -260,23 +291,31 @@ export class ExecuteAgentUseCase {
         ? '\n\n[WORKSPACE CONTEXT]\n' + loadPrompt('workspace-context.md', { workspacePath })
         : '';
 
-      // ── Global: mandatory interactive-question protocol ─────────────────
-      // Loaded from prompts/ask-user-protocol.md — appended unconditionally
-      // so any agent/model knows how to signal that it needs user input.
-      const askUserRulesBlock =
-        '\n\n[INTERACTIVE QUESTION PROTOCOL — MANDATORY]\n' + loadPrompt('ask-user-protocol.md');
+      // ── Interactive-question protocol — only when allowAskUser is enabled ─
+      const allowAskUser = Boolean(nodeMetadata.allowAskUser);
+      const askUserRulesBlock = allowAskUser
+        ? '\n\n[INTERACTIVE QUESTION PROTOCOL — MANDATORY]\n' + loadPrompt('ask-user-protocol.md')
+        : '';
 
       const fileDownloadRulesBlock =
         '\n\n[FILE DOWNLOAD PROTOCOL — MANDATORY]\n' + loadPrompt('file-download-protocol.md');
 
-      const context = this.agentExecutionService.buildContext(
-        messages,
-        (agent.systemPrompt ?? '') + workspaceContextBlock + askUserRulesBlock + fileDownloadRulesBlock,
-      );
-      this.agentExecutionService.validateTokenLimit(
-        context.conversationHistory,
-        effectiveMaxTokens,
-      );
+      const nodePromptBlock =
+        typeof nodeMetadata.nodePrompt === 'string' && nodeMetadata.nodePrompt.trim()
+          ? '\n\n[NODE-SPECIFIC INSTRUCTIONS]\n' + nodeMetadata.nodePrompt.trim()
+          : '';
+
+      const outputFormat = nodeMetadata.outputFormat as string | undefined;
+      const outputTemplate = (nodeMetadata.outputTemplate as string | undefined)?.trim();
+      const templateConstraint = outputTemplate
+        ? `\n\n[SCHEMA ENFORCEMENT — ABSOLUTE]\nUse EXACTLY these top-level keys and nested keys — no additions, no substitutions, no wrappers:\n${outputTemplate}\nSTRICTLY FORBIDDEN: any key not shown above (e.g. "mails_count", "items", "total", "debug_meta", "metadata", or any other wrapper). Populate the structure with actual data values following the key names shown.`
+        : '';
+      const outputFormatBlock =
+        outputFormat === 'json_array'
+          ? `\n\n[OUTPUT FORMAT — CRITICAL — THIS OVERRIDES EVERYTHING]\nYour final message MUST be a raw JSON array and nothing else.\nDO NOT start with "Let me", "I have", "Excellent", "Here is", or any prose.\nDO NOT add explanations before or after the JSON.\nSTART your response with [ and END with ].\nNo markdown, no code fences, no commentary.${templateConstraint}`
+          : outputFormat === 'json'
+            ? `\n\n[OUTPUT FORMAT — CRITICAL — THIS OVERRIDES EVERYTHING]\nYour final message MUST be a raw JSON object and nothing else.\nDO NOT start with "Let me", "I have", "Excellent", "Here is", or any prose.\nDO NOT add explanations before or after the JSON.\nSTART your response with { and END with }.\nNo markdown, no code fences, no commentary.${templateConstraint}`
+            : '';
 
       // ── Merge tools: agent's own + node-level extras ────────────────────
       const agentToolIds: string[] = Array.isArray(agent.tools) ? (agent.tools as string[]) : [];
@@ -290,12 +329,46 @@ export class ExecuteAgentUseCase {
         tools = await this.toolClient.getTools(allToolIds);
       }
 
+      // ── Tool usage instructions ────────────────────────────────────────
+      let toolInstructionsBlock = '';
+      if (tools.length > 0) {
+        const toolNames = tools.map((t) => t.name || t.function?.name || 'unknown').join(', ');
+        toolInstructionsBlock =
+          `\n\n[TOOL USAGE — CRITICAL]\n` +
+          `You have access to the following tools: ${toolNames}\n\n` +
+          `IMPORTANT: You MUST use these tools when they can help answer the user's question or perform the requested action.\n` +
+          `- Analyze the user's request carefully\n` +
+          `- If a tool can provide the information or perform the action, USE IT — do not fabricate answers\n` +
+          `- Call tools proactively; do not ask for permission unless absolutely necessary\n` +
+          `- You may call multiple tools if needed to complete the task\n` +
+          `- Always use the tool when it's the most accurate way to get information or perform an action\n\n` +
+          `DO NOT respond with generic answers if a tool can provide specific, real data.`;
+      }
+
       this.logger.log(
         `[tools] agentToolIds=${JSON.stringify(agentToolIds)} extraToolIds=${JSON.stringify(extraToolIds)} resolved=${tools.length}`,
       );
       if (tools.length > 0) {
         this.logger.log(`[tools] schemas sent to LLM: ${JSON.stringify(tools)}`);
       }
+
+      const context = this.agentExecutionService.buildContext(
+        messages,
+        // toolInstructionsBlock is placed before outputFormatBlock so tools are emphasized
+        // outputFormatBlock is intentionally placed LAST so it is the closest instruction
+        // to the model's response — earlier instructions tend to be overridden by later ones.
+        (agent.systemPrompt ?? '') +
+          nodePromptBlock +
+          workspaceContextBlock +
+          askUserRulesBlock +
+          fileDownloadRulesBlock +
+          toolInstructionsBlock +
+          outputFormatBlock,
+      );
+      this.agentExecutionService.validateTokenLimit(
+        context.conversationHistory,
+        effectiveMaxTokens,
+      );
 
       // ── Execute primary agent ───────────────────────────────────────────
       const execId = nodeMetadata.executionId as string | undefined;
@@ -386,14 +459,18 @@ export class ExecuteAgentUseCase {
         this.reportThinkingStep(execId!, execNodeId!, {
           step: `iteration_${iterations}`,
           thought: response.content || 'Executing tools based on reasoning...',
-          toolCalls: response.toolCalls.map(tc => ({ name: tc.name, args: tc.args })),
+          toolCalls: response.toolCalls.map((tc) => ({ name: tc.name, args: tc.args })),
         });
 
         for (const toolCall of response.toolCalls) {
           let toolContent: string;
           let isError = false;
           try {
-            const raw = await this.toolClient.executeTool(toolCall.name, toolCall.args, ragUserId || undefined);
+            const raw = await this.toolClient.executeTool(
+              toolCall.name,
+              toolCall.args,
+              ragUserId || undefined,
+            );
             toolContent = this.unwrapToolResult(raw);
             if (toolContent === '__GITHUB_AUTH_REQUIRED__') {
               needsGithubAuth = true;
@@ -450,7 +527,7 @@ export class ExecuteAgentUseCase {
       }
 
       const githubAuthContent =
-        'Pour effectuer cette action, j\'accès à votre compte GitHub est requis.\n' +
+        "Pour effectuer cette action, j'accès à votre compte GitHub est requis.\n" +
         '__ASK_USER__:{"question":"Autoriser l\'accès à votre compte GitHub ?","type":"oauth_required","choices":[]}';
       const finalContent = needsGithubAuth
         ? githubAuthContent
@@ -479,7 +556,10 @@ export class ExecuteAgentUseCase {
             continue;
           }
 
-          const subModelConfig = await this.modelClient.getModelConfig(subAgentEntity.modelId, ragUserId);
+          const subModelConfig = await this.modelClient.getModelConfig(
+            subAgentEntity.modelId,
+            ragUserId,
+          );
           await this.langchainProvider.initialize({
             provider: subModelConfig.provider as any,
             model: subModelConfig.modelName,

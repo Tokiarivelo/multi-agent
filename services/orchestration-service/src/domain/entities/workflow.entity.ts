@@ -32,6 +32,7 @@ export enum NodeType {
   WHILE = 'WHILE',
   SWITCH = 'SWITCH',
   FOR_EACH = 'FOR_EACH',
+  DOCUMENT = 'DOCUMENT',
 }
 
 export interface WorkflowNode {

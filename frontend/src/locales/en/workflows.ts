@@ -52,6 +52,21 @@ export const workflows = {
   'workflows.node_editor.agent': 'Agent',
   'workflows.node_editor.selectAgent': 'Select an agent...',
   'workflows.node_editor.agentId': 'Agent ID',
+  'workflows.node_editor.outputFormat': 'Output Format',
+  'workflows.node_editor.outputFormatText': 'Text (default)',
+  'workflows.node_editor.outputFormatJson': 'JSON object',
+  'workflows.node_editor.outputFormatJsonArray': 'JSON array (iterable)',
+  'workflows.node_editor.outputFormatDesc':
+    'Choose JSON array to iterate results with a For Each node.',
+  'workflows.node_editor.outputKey': 'Output Variable Name',
+  'workflows.node_editor.outputKeyPlaceholder': 'e.g. emails',
+  'workflows.node_editor.outputKeyDesc':
+    'The context variable name that will hold the parsed result.',
+  'workflows.node_editor.outputTemplate': 'Output Template',
+  'workflows.node_editor.outputTemplatePlaceholder':
+    '{"mails": [{"uid": 0, "from": "", "subject": "", "date": ""}]}',
+  'workflows.node_editor.outputTemplateDesc':
+    'JSON structure the agent must return. Injected into the system prompt — the agent will match your keys and nesting exactly.',
   'workflows.node_editor.tool': 'Tool',
   'workflows.node_editor.selectTool': 'Select a tool...',
   'workflows.node_editor.toolId': 'Tool ID',
@@ -64,6 +79,10 @@ export const workflows = {
   'workflows.node_editor.saving': 'Saving...',
   'workflows.node_editor.updateNode': 'Update Node',
   'workflows.node_editor.addNode': 'Add Node',
+  'workflows.node_editor.updateSuccess': 'Node updated successfully',
+  'workflows.node_editor.updateError': 'Failed to update node: {{message}}',
+  'workflows.node_editor.addSuccess': 'Node added successfully',
+  'workflows.node_editor.addError': 'Failed to add node: {{message}}',
   'workflows.logs.title': 'Execution Logs',
   'workflows.logs.live': 'Live',
   'workflows.logs.offline': 'Offline',
@@ -75,7 +94,8 @@ export const workflows = {
   'workflows.logs.thinking_for': 'Thinking for',
   'workflows.logs.thinking_all': 'Global Thinking Stream',
   'workflows.logs.steps': 'steps',
-  'workflows.logs.no_thinking': 'No thinking steps recorded yet. Agent nodes will stream their reasoning here.',
+  'workflows.logs.no_thinking':
+    'No thinking steps recorded yet. Agent nodes will stream their reasoning here.',
   'workflows.logs.execution_plan': 'Execution Plan',
   'workflows.logs.planned_tool_calls': 'Planned Tool Calls',
   'workflows.node.configure': 'Configure Node',
@@ -167,7 +187,8 @@ export const workflows = {
   'workflows.ai.hideJson': 'Hide JSON',
   'workflows.nodeAi.title': 'AI Edit Node',
   'workflows.nodeAi.selectModel': 'Choose a model…',
-  'workflows.nodeAi.hint': 'Describe the changes you want. E.g. "Enable strict mode with output field validation"',
+  'workflows.nodeAi.hint':
+    'Describe the changes you want. E.g. "Enable strict mode with output field validation"',
   'workflows.nodeAi.placeholder': 'Describe what to change… (Enter to send)',
   'workflows.nodeAi.selectModelFirst': 'Select a model first…',
   'workflows.nodeAi.thinking': 'Thinking…',
@@ -184,7 +205,8 @@ export const workflows = {
   'workflows.waitingInput.cancelExecution': 'Cancel execution',
   'workflows.waitingInput.cancelling': 'Cancelling…',
   'workflows.agentReply.githubAuthTitle': 'GitHub access required',
-  'workflows.agentReply.githubAuthDesc': 'This action requires access to your GitHub account. Connect once and the workflow will continue automatically.',
+  'workflows.agentReply.githubAuthDesc':
+    'This action requires access to your GitHub account. Connect once and the workflow will continue automatically.',
   'workflows.agentReply.githubConnectButton': 'Connect GitHub',
   'workflows.agentReply.githubConnecting': 'Connecting…',
   'workflows.agentReply.githubConnected': 'GitHub connected — workflow resuming…',
@@ -201,7 +223,8 @@ export const workflows = {
 
   'workflows.forEach.collectionLabel': 'Collection Path',
   'workflows.forEach.collectionHint': '(dot-path to the array)',
-  'workflows.forEach.collectionDesc': 'Leave empty to iterate the input directly if it is already an array.',
+  'workflows.forEach.collectionDesc':
+    'Leave empty to iterate the input directly if it is already an array.',
   'workflows.forEach.outputKeyLabel': 'Output Key',
   'workflows.forEach.outputKeyHint': '(optional)',
   'workflows.forEach.maxIterLabel': 'Max Iterations',
@@ -210,4 +233,27 @@ export const workflows = {
   'workflows.forEach.contextItem': 'current item',
   'workflows.forEach.contextIndex': '0-based index',
   'workflows.forEach.contextTotal': 'total item count',
+  'workflows.node_editor.forwardContextLabel': 'Forward context variables',
+  'workflows.node_editor.forwardContextDesc':
+    'When ON, all workflow context variables are passed to the agent as its input.',
+  'workflows.node_editor.forwardContextOn': 'FORWARD ALL',
+  'workflows.node_editor.forwardContextOff': 'CUSTOM INPUT',
+  'workflows.node_editor.inputMappingDesc':
+    'Map field names to context paths (e.g. $variables.myKey, $variables._forEachItem, $output.nodeId).',
+  'workflows.node_editor.inputMappingAdd': 'Add field',
+
+  // ─── Triggers ────────────────────────────
+  'workflows.triggers.title': 'Automatic Triggers',
+  'workflows.triggers.empty': 'No automatic triggers configured.',
+  'workflows.triggers.pullNotifications': 'Pull notifications',
+  'workflows.triggers.info':
+    'Google watch expires every 7 days. You will need to renew this trigger manually or via a scheduled workflow. Notifications are pulled automatically every 30 seconds.',
+  'workflows.triggers.gmail.add': 'Add Gmail Push Trigger',
+  'workflows.triggers.gmail.user': 'Gmail Address',
+  'workflows.triggers.gmail.refreshToken': 'Refresh Token',
+  'workflows.triggers.gmail.topic': 'Pub/Sub Topic',
+  'workflows.triggers.gmail.labels': 'Label IDs (optional)',
+  'workflows.triggers.gmail.register': 'Register Trigger',
+  'workflows.triggers.gmail.renewHint':
+    'Google watch expires every 7 days. You will need to renew this trigger manually or via a scheduled workflow.',
 };
