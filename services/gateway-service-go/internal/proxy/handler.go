@@ -103,8 +103,6 @@ func buildReverseProxy(target *url.URL) *httputil.ReverseProxy {
 			req.URL.Path = strings.Replace(req.URL.Path, "/api/calendar/", "/api/", 1)
 		} else if strings.HasPrefix(req.URL.Path, "/api/trello/") {
 			req.URL.Path = strings.Replace(req.URL.Path, "/api/trello/", "/api/", 1)
-		} else if strings.HasPrefix(req.URL.Path, "/api/github/") {
-			req.URL.Path = strings.Replace(req.URL.Path, "/api/github/", "/api/", 1)
 		}
 	}
 
