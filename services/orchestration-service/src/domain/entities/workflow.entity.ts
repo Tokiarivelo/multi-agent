@@ -79,17 +79,43 @@ export interface WorkflowDefinition {
   outputSchema?: WorkflowIOField[];
 }
 
+export enum WorkflowVisibility {
+  PRIVATE = 'PRIVATE',
+  SHARED = 'SHARED',
+  PUBLIC = 'PUBLIC',
+}
+
+export interface WorkflowOwner {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+export interface WorkflowCollaboratorSummary {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+}
+
 export class Workflow {
   id!: string;
   name!: string;
   description!: string;
   definition!: WorkflowDefinition;
   status!: WorkflowStatus;
+  visibility!: WorkflowVisibility;
   userId!: string;
+  forkedFromId?: string;
   createdAt!: Date;
   updatedAt!: Date;
+  owner?: WorkflowOwner;
+  collaborators?: WorkflowCollaboratorSummary[];
 
   constructor(partial: Partial<Workflow>) {
+    this.visibility = WorkflowVisibility.PRIVATE;
     Object.assign(this, partial);
   }
 

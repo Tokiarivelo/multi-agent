@@ -7,9 +7,12 @@ import {
   Body,
   Param,
   Query,
+  Headers,
   HttpCode,
   HttpStatus,
+  UnauthorizedException,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { CreateWorkflowUseCase } from '../../application/use-cases/create-workflow.use-case';
@@ -23,10 +26,13 @@ import { UpdateWorkflowDto } from '../../application/dto/update-workflow.dto';
 import { ExecuteWorkflowDto } from '../../application/dto/execute-workflow.dto';
 import { AddNodeDto, UpdateNodeDto, AddEdgeDto } from '../../application/dto/node-operation.dto';
 import { WorkflowHealingService } from '../../infrastructure/external/workflow-healing.service';
+import { WorkflowRoleGuard } from '../guards/workflow-role.guard';
+import { RequireWorkflowRole } from '../decorators/workflow-role.decorator';
 import { spawn } from 'child_process';
 
 @ApiTags('Workflows')
 @Controller('workflows')
+@UseGuards(WorkflowRoleGuard)
 export class WorkflowController {
   private readonly logger = new Logger(WorkflowController.name);
 
@@ -74,6 +80,7 @@ export class WorkflowController {
   }
 
   @Get(':id')
+  @RequireWorkflowRole('VIEWER')
   @ApiOperation({ summary: 'Get workflow by ID' })
   @ApiParam({ name: 'id', type: String })
   @ApiResponse({ status: 200, description: 'Workflow found' })
@@ -83,16 +90,22 @@ export class WorkflowController {
   }
 
   @Put(':id')
+  @RequireWorkflowRole('EDITOR')
   @ApiOperation({ summary: 'Update a workflow' })
   @ApiParam({ name: 'id', type: String })
   @ApiResponse({ status: 200, description: 'Workflow updated' })
   @ApiResponse({ status: 404, description: 'Workflow not found' })
-  async update(@Param('id') id: string, @Body() dto: UpdateWorkflowDto) {
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateWorkflowDto,
+    @Query('userId') userId?: string,
+  ) {
     this.logger.log(`Updating workflow ${id}`);
-    return this.updateWorkflowUseCase.execute(id, dto);
+    return this.updateWorkflowUseCase.execute(id, dto, userId);
   }
 
   @Delete(':id')
+  @RequireWorkflowRole('OWNER')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a workflow' })
   @ApiParam({ name: 'id', type: String })
@@ -104,6 +117,7 @@ export class WorkflowController {
   }
 
   @Get(':id/executions')
+  @RequireWorkflowRole('VIEWER')
   @ApiOperation({ summary: 'Get paginated execution history for a workflow with token metrics' })
   @ApiParam({ name: 'id', type: String })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -141,15 +155,21 @@ export class WorkflowController {
   // ─── Node operations ──────────────────────────────────────────────────────
 
   @Post(':id/nodes')
+  @RequireWorkflowRole('EDITOR')
   @ApiOperation({ summary: 'Add a node to a workflow' })
   @ApiParam({ name: 'id', type: String })
   @ApiResponse({ status: 201, description: 'Node added' })
-  async addNode(@Param('id') id: string, @Body() dto: AddNodeDto) {
+  async addNode(
+    @Param('id') id: string,
+    @Body() dto: AddNodeDto,
+    @Query('userId') userId?: string,
+  ) {
     this.logger.log(`Adding node ${dto.id} to workflow ${id}`);
-    return this.updateWorkflowUseCase.addNode(id, dto);
+    return this.updateWorkflowUseCase.addNode(id, dto, userId);
   }
 
   @Put(':id/nodes/:nodeId')
+  @RequireWorkflowRole('EDITOR')
   @ApiOperation({ summary: 'Update a node in a workflow' })
   @ApiParam({ name: 'id', type: String })
   @ApiParam({ name: 'nodeId', type: String })
@@ -158,45 +178,62 @@ export class WorkflowController {
     @Param('id') id: string,
     @Param('nodeId') nodeId: string,
     @Body() dto: UpdateNodeDto,
+    @Query('userId') userId?: string,
   ) {
     this.logger.log(`Updating node ${nodeId} in workflow ${id}`);
-    return this.updateWorkflowUseCase.updateNode(id, nodeId, dto);
+    return this.updateWorkflowUseCase.updateNode(id, nodeId, dto, userId);
   }
 
   @Delete(':id/nodes/:nodeId')
+  @RequireWorkflowRole('EDITOR')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove a node from a workflow' })
   @ApiParam({ name: 'id', type: String })
   @ApiParam({ name: 'nodeId', type: String })
   @ApiResponse({ status: 204, description: 'Node removed' })
-  async removeNode(@Param('id') id: string, @Param('nodeId') nodeId: string) {
+  async removeNode(
+    @Param('id') id: string,
+    @Param('nodeId') nodeId: string,
+    @Query('userId') userId?: string,
+  ) {
     this.logger.log(`Removing node ${nodeId} from workflow ${id}`);
-    await this.updateWorkflowUseCase.removeNode(id, nodeId);
+    await this.updateWorkflowUseCase.removeNode(id, nodeId, userId);
   }
 
   // ─── Edge operations ──────────────────────────────────────────────────────
 
   @Post(':id/edges')
+  @RequireWorkflowRole('EDITOR')
   @ApiOperation({ summary: 'Add an edge to a workflow' })
   @ApiParam({ name: 'id', type: String })
   @ApiResponse({ status: 201, description: 'Edge added' })
-  async addEdge(@Param('id') id: string, @Body() dto: AddEdgeDto) {
-    return this.updateWorkflowUseCase.addEdge(id, dto);
+  async addEdge(
+    @Param('id') id: string,
+    @Body() dto: AddEdgeDto,
+    @Query('userId') userId?: string,
+  ) {
+    return this.updateWorkflowUseCase.addEdge(id, dto, userId);
   }
 
   @Delete(':id/edges/:edgeId')
+  @RequireWorkflowRole('EDITOR')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove an edge from a workflow' })
   @ApiParam({ name: 'id', type: String })
   @ApiParam({ name: 'edgeId', type: String })
   @ApiResponse({ status: 204, description: 'Edge removed' })
-  async removeEdge(@Param('id') id: string, @Param('edgeId') edgeId: string) {
-    await this.updateWorkflowUseCase.removeEdge(id, edgeId);
+  async removeEdge(
+    @Param('id') id: string,
+    @Param('edgeId') edgeId: string,
+    @Query('userId') userId?: string,
+  ) {
+    await this.updateWorkflowUseCase.removeEdge(id, edgeId, userId);
   }
 
   // ─── Execution ────────────────────────────────────────────────────────────
 
   @Post(':id/execute')
+  @RequireWorkflowRole('EXECUTOR')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Execute a workflow by ID (path param variant)' })
   @ApiParam({ name: 'id', type: String })
@@ -257,7 +294,43 @@ export class WorkflowController {
     return { success: true };
   }
 
+  /**
+   * Webhook endpoint — resumes a PROMPT/WAITING node from an external system
+   * without requiring a JWT. Protected by an optional shared secret configured
+   * via the WEBHOOK_SECRET environment variable.
+   *
+   * POST /workflows/webhook/:executionId/:nodeId
+   * Headers: x-webhook-secret: <WEBHOOK_SECRET>   (required when env var is set)
+   * Body: { input: string, data?: object }
+   *
+   * Returns: { success: true, executionId, nodeId }
+   */
+  @Post('webhook/:executionId/:nodeId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resume a waiting workflow node via webhook (no JWT required)' })
+  @ApiParam({ name: 'executionId', type: String })
+  @ApiParam({ name: 'nodeId', type: String })
+  async webhookResume(
+    @Param('executionId') executionId: string,
+    @Param('nodeId') nodeId: string,
+    @Headers('x-webhook-secret') secret: string | undefined,
+    @Body() body: { input: string; data?: Record<string, unknown> },
+  ) {
+    const expectedSecret = process.env.WEBHOOK_SECRET;
+    if (expectedSecret && secret !== expectedSecret) {
+      throw new UnauthorizedException('Invalid or missing x-webhook-secret header');
+    }
+
+    const input =
+      typeof body.input === 'string' ? body.input : body.data ? JSON.stringify(body.data) : '';
+
+    this.logger.log(`Webhook resume: executionId=${executionId} nodeId=${nodeId}`);
+    this.executeWorkflowUseCase.resumeNode(executionId, nodeId, input);
+    return { success: true, executionId, nodeId };
+  }
+
   @Post(':id/nodes/:nodeId/test')
+  @RequireWorkflowRole('EXECUTOR')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Test a single node in isolation with manual input' })
   @ApiParam({ name: 'id', description: 'Workflow ID', type: String })
@@ -288,6 +361,7 @@ export class WorkflowController {
   }
 
   @Post(':id/nodes/:nodeId/analyze-test-outcome')
+  @RequireWorkflowRole('EXECUTOR')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Analyze the functional outcome of a test node run with optional custom prompt',

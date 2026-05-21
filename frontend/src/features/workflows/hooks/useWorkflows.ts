@@ -5,6 +5,7 @@ import { Workflow } from '@/types';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { AxiosError } from 'axios';
+import { useAuthStore } from '@/store/auth.store';
 
 function extractErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof AxiosError) {
@@ -19,9 +20,10 @@ function extractErrorMessage(error: unknown, fallback: string): string {
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
 export function useWorkflows(page = 1, pageSize = 20) {
+  const { user } = useAuthStore();
   return useQuery({
-    queryKey: ['workflows', page, pageSize],
-    queryFn: () => workflowsApi.getAll(page, pageSize),
+    queryKey: ['workflows', page, pageSize, user?.id],
+    queryFn: () => workflowsApi.getAll(page, pageSize, user?.id),
   });
 }
 

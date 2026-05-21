@@ -625,6 +625,75 @@ const tools = [
     ],
     code: null,
   },
+  // ── Vector ────────────────────────────────────────────────────────────────
+  {
+    name: 'vector_upsert',
+    description:
+      'Insert or update a document in a Qdrant vector collection. Embeds the content and stores it for later semantic search. Use this to index new incidents before running vector_search for duplicate detection.',
+    category: ToolCategory.DATABASE,
+    isBuiltIn: true,
+    parameters: [
+      {
+        name: 'collectionId',
+        type: 'string',
+        description: 'ID of the Qdrant collection to write to (must already exist in vector-service)',
+        required: true,
+      },
+      {
+        name: 'id',
+        type: 'string',
+        description: 'Unique document identifier (e.g. incident UUID, GPS+date composite)',
+        required: true,
+      },
+      {
+        name: 'content',
+        type: 'string',
+        description: 'Text to embed and store',
+        required: true,
+      },
+      {
+        name: 'metadata',
+        type: 'object',
+        description: 'Arbitrary key-value metadata stored alongside the vector (e.g. { severity, type, gps })',
+        required: false,
+      },
+    ],
+    code: null,
+  },
+  {
+    name: 'vector_search',
+    description:
+      'Semantic similarity search in a Qdrant vector collection. Returns the top-K most similar documents to the query text. Use threshold ≥ 0.85 for duplicate detection on citizen incident reports.',
+    category: ToolCategory.DATABASE,
+    isBuiltIn: true,
+    parameters: [
+      {
+        name: 'collectionId',
+        type: 'string',
+        description: 'ID of the Qdrant collection to search',
+        required: true,
+      },
+      {
+        name: 'query',
+        type: 'string',
+        description: 'Text to search for — will be embedded and compared against stored vectors',
+        required: true,
+      },
+      {
+        name: 'topK',
+        type: 'number',
+        description: 'Maximum number of results to return (default: 5)',
+        required: false,
+      },
+      {
+        name: 'threshold',
+        type: 'number',
+        description: 'Minimum similarity score 0–1 to include a result (default: 0.85). Use 0.85–0.92 for duplicate detection.',
+        required: false,
+      },
+    ],
+    code: null,
+  },
 ];
 
 async function main() {

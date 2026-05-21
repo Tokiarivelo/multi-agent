@@ -14,9 +14,13 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) {
-      return true;
-    }
+    if (isPublic) return true;
+
+    // Paths that must be reachable by unauthenticated users (invitation pre-flight)
+    const req = context.switchToHttp().getRequest<{ path: string }>();
+    const PUBLIC_PATHS = ['/api/workflows/invitations/by-token', '/api/auth/invitation-preview'];
+    if (PUBLIC_PATHS.includes(req.path)) return true;
+
     return super.canActivate(context);
   }
 }

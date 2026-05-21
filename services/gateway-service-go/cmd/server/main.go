@@ -71,7 +71,7 @@ func main() {
 	// ── 4. Repositories & handlers ────────────────────────────────────────────
 	userRepo := users.NewRepository(database.Pool)
 
-	authHandler := auth.NewHandler(userRepo, cfg.JWTSecret)
+	authHandler := auth.NewHandler(userRepo, cfg.JWTSecret, cfg)
 	userHandler := users.NewHandler(userRepo)
 	wsRelay := ws.NewRelay(natsClient)
 

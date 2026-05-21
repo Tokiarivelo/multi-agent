@@ -5,7 +5,20 @@ import { EmbeddingService } from '../../domain/services/embedding.service';
 import { ModelClientService } from '../../infrastructure/external/model-client.service';
 import { UpsertDocumentDto, UpsertDocumentsDto } from '../dto/upsert-document.dto';
 import { Document } from '../../domain/entities/document.entity';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4, v5 as uuidv5, validate as uuidValidate } from 'uuid';
+
+const POINT_ID_NAMESPACE = '1b671a64-40d5-491e-99b0-da01ff1f3341';
+
+/**
+ * Qdrant only accepts UUIDs or unsigned integers as point IDs.
+ * If the caller passes an unresolved template string or any other non-UUID,
+ * derive a deterministic UUID v5 so the ID is still stable across calls.
+ */
+function toQdrantPointId(raw: string): string {
+  if (uuidValidate(raw)) return raw;
+  if (/^\d+$/.test(raw)) return raw;
+  return uuidv5(raw, POINT_ID_NAMESPACE);
+}
 
 @Injectable()
 export class UpsertDocumentUseCase {
@@ -23,7 +36,10 @@ export class UpsertDocumentUseCase {
   async execute(dto: UpsertDocumentDto): Promise<{ documentId: string }> {
     this.logger.log(`Upserting document to collection: ${dto.collectionId}`);
 
-    const collection = await this.vectorRepository.findCollectionById(dto.collectionId);
+    let collection = await this.vectorRepository.findCollectionById(dto.collectionId);
+    if (!collection && dto.userId) {
+      collection = await this.vectorRepository.findCollectionByNameAndUserId(dto.collectionId, dto.userId);
+    }
     if (!collection) {
       throw new NotFoundException(`Collection '${dto.collectionId}' not found`);
     }
@@ -57,7 +73,8 @@ export class UpsertDocumentUseCase {
       dto.metadata || {},
     );
 
-    const documentId = dto.documentId || uuidv4();
+    const rawId = dto.documentId || dto.id;
+    const documentId = rawId ? toQdrantPointId(rawId) : uuidv4();
     const point = document.toQdrantPoint(documentId);
 
     const qdrantCollectionName = collection.getQdrantCollectionName();
@@ -89,7 +106,10 @@ export class UpsertDocumentUseCase {
       `Batch upserting ${dto.documents.length} documents to collection: ${dto.collectionId}`,
     );
 
-    const collection = await this.vectorRepository.findCollectionById(dto.collectionId);
+    let collection = await this.vectorRepository.findCollectionById(dto.collectionId);
+    if (!collection && dto.userId) {
+      collection = await this.vectorRepository.findCollectionByNameAndUserId(dto.collectionId, dto.userId);
+    }
     if (!collection) {
       throw new NotFoundException(`Collection '${dto.collectionId}' not found`);
     }
@@ -137,7 +157,8 @@ export class UpsertDocumentUseCase {
         doc.metadata || {},
       );
 
-      const documentId = doc.documentId || uuidv4();
+      const rawDocId = doc.documentId || (doc as any).id;
+      const documentId = rawDocId ? toQdrantPointId(rawDocId) : uuidv4();
       documentIds.push(documentId);
       points.push(document.toQdrantPoint(documentId));
     }

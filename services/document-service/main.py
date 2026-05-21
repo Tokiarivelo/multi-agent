@@ -55,8 +55,7 @@ app.add_middleware(
 
 SUPPORTED_FORMATS = ["pdf", "docx", "xlsx", "md", "csv", "html", "txt", "json"]
 
-# Workspace root – all server-side path operations are restricted to this directory.
-WORKSPACE_ROOT: str = os.environ.get("WORKSPACE_ROOT", os.getcwd())
+# File Service configuration
 FILE_SERVICE_URL: str = os.environ.get("FILE_SERVICE_URL", "http://localhost:3008")
 
 MIME_TYPES = {
@@ -1011,10 +1010,15 @@ def generate_document(req: GenerateRequest):
 class ParsePathRequest(BaseModel):
     path: str
     encoding: Optional[str] = "utf-8"
-
+    userId: Optional[str] = None
+    workspaceId: Optional[str] = None
+    workspaceRoot: Optional[str] = None
 
 class ParseImagePathRequest(BaseModel):
     path: str
+    userId: Optional[str] = None
+    workspaceId: Optional[str] = None
+    workspaceRoot: Optional[str] = None
 
 
 class WriteFileRequest(BaseModel):
@@ -1027,36 +1031,41 @@ class WriteFileRequest(BaseModel):
 
 class DeleteFileRequest(BaseModel):
     path: str
+    userId: Optional[str] = None
+    workspaceId: Optional[str] = None
 
 
 # ─── Parse helpers ────────────────────────────────────────────────────────────
 
-def _safe_workspace_path(file_path: str, check_exists: bool = True) -> str:
-    """Resolve *file_path* inside WORKSPACE_ROOT and reject escapes via symlinks / '..'."""
-    path, is_safe = _resolve_path(file_path)
-    if not is_safe:
-        raise HTTPException(
-            status_code=403,
-            detail="Access denied: path is outside the allowed workspace root",
-        )
-    if check_exists and not os.path.exists(path):
-        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
-    return path
-
-
-def _resolve_path(file_path: str, workspace_root: Optional[str] = None) -> tuple[str, bool]:
-    """Resolve *file_path* against *workspace_root* (or WORKSPACE_ROOT) and check containment."""
-    root = workspace_root or WORKSPACE_ROOT
-    if os.path.isabs(file_path):
-        candidate = file_path
-    else:
-        candidate = os.path.join(root, file_path)
-
-    real_root = os.path.realpath(root)
-    real_candidate = os.path.realpath(candidate)
-
-    is_safe = real_candidate.startswith(real_root + os.sep) or real_candidate == real_root
-    return real_candidate, is_safe
+async def _fetch_from_file_service(path: str, user_id: str, workspace_id: str = None, workspace_root: str = None) -> tuple[bytes, str]:
+    """Fetch file content and original filename from file-service."""
+    w_id = workspace_id or user_id
+    if not w_id:
+        raise HTTPException(status_code=400, detail="workspaceId/userId is required for file-service access")
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{FILE_SERVICE_URL}/api/files/read",
+                json={
+                    "workspaceId": w_id, 
+                    "userId": user_id, 
+                    "path": path, 
+                    "encoding": "base64",
+                    "workspaceRoot": workspace_root
+                },
+                timeout=30.0
+            )
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"File service unreachable: {str(e)}")
+            
+        if resp.status_code != 200:
+            detail = resp.json().get("detail", resp.text) if resp.headers.get("content-type") == "application/json" else resp.text
+            raise HTTPException(status_code=resp.status_code, detail=f"File service error: {detail}")
+        
+        data = resp.json()
+        import base64
+        return base64.b64decode(data["content"]), data.get("originalName", os.path.basename(path))
 
 
 async def _upload_to_cloud(
@@ -1228,15 +1237,13 @@ async def parse_document_upload(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@app.post("/api/documents/parse-path", tags=["documents"], summary="Parse a document from a server path")
-def parse_document_path(req: ParsePathRequest):
-    """Parse a file from an absolute server-side path."""
-    path = _safe_workspace_path(req.path)
-    with open(path, "rb") as f:
-        content = f.read()
+@app.post("/api/documents/parse-path")
+async def parse_document_path(req: ParsePathRequest):
+    """Parse a file retrieved from file-service."""
+    content, filename = await _fetch_from_file_service(req.path, req.userId, req.workspaceId, req.workspaceRoot)
     try:
-        result = _parse_file_bytes(os.path.basename(path), content, req.encoding or "utf-8")
-        return {"success": True, "path": path, **result}
+        result = _parse_file_bytes(filename, content, req.encoding or "utf-8")
+        return {"success": True, "path": req.path, "data": result, **result}
     except HTTPException:
         raise
     except Exception as e:
@@ -1256,36 +1263,37 @@ async def parse_image_upload(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@app.post("/api/documents/parse-image-path", tags=["documents"], summary="OCR an image from a server path")
-def parse_image_path_endpoint(req: ParseImagePathRequest):
-    """Parse an image from an absolute server-side path (OCR + metadata)."""
-    path = _safe_workspace_path(req.path)
-    with open(path, "rb") as f:
-        content = f.read()
+@app.post("/api/documents/parse-image-path")
+async def parse_image_path_endpoint(req: ParseImagePathRequest):
+    """Parse an image retrieved from file-service."""
+    content, filename = await _fetch_from_file_service(req.path, req.userId, req.workspaceId, req.workspaceRoot)
     try:
-        result = _parse_image_bytes(content, os.path.basename(path))
-        return {"success": True, "path": path, **result}
+        result = _parse_image_bytes(content, filename)
+        return {"success": True, "path": req.path, "data": result, **result}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@app.get("/api/documents/read", tags=["files"], summary="Read a text file from the workspace")
-def read_text_file(
-    path: str = Query(..., description="Absolute server path to a text file"),
+@app.get("/api/documents/read")
+async def read_text_file(
+    path: str = Query(..., description="Workspace path to a text file"),
+    userId: str = Query(..., description="User ID for file-service access"),
+    workspaceId: str = Query(None, description="Workspace ID for file-service access"),
     encoding: str = Query("utf-8"),
 ):
-    """Read a plain-text file and return its content."""
-    safe_path = _safe_workspace_path(path)
+    """Read a text file retrieved from file-service."""
+    content_bytes, filename = await _fetch_from_file_service(path, userId, workspaceId)
     try:
-        with open(safe_path, "r", encoding=encoding, errors="replace") as f:
-            content = f.read()
+        content = content_bytes.decode(encoding, errors="replace")
         return {
             "success": True,
-            "path": safe_path,
+            "path": path,
+            "filename": filename,
             "content": content,
-            "size": os.path.getsize(safe_path),
+            "data": {"content": content, "type": "text"},
+            "size": len(content_bytes),
         }
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -1293,55 +1301,55 @@ def read_text_file(
 
 @app.post("/api/documents/write", tags=["files"], summary="Write a text file to the workspace")
 async def write_text_file(req: WriteFileRequest):
-    """Write a plain-text file to the workspace or cloud if outside."""
-    path, is_safe = _resolve_path(req.path, req.workspaceRoot)
+    """Write a text file to file-service."""
+    if not req.userId:
+        raise HTTPException(status_code=400, detail="userId is required for writing")
 
-    if not is_safe:
-        if not req.userId:
-            raise HTTPException(
-                status_code=403,
-                detail="Access denied: path is outside workspace and no userId provided for cloud upload",
-            )
-        enc = req.encoding or "utf-8"
-        content_bytes = req.content.encode(enc)
-        upload = await _upload_to_cloud(os.path.basename(path), content_bytes, req.userId)
-        return {
-            "success": True,
-            "path": path,
-            "url": upload["url"],
-            "fileId": upload["fileId"],
-            "storedAs": upload["storedAs"],
-            "type": "cloud",
-            "size": len(content_bytes),
-        }
-
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding=req.encoding or "utf-8") as f:
-            f.write(req.content)
-        return {
-            "success": True,
-            "path": path,
-            "type": "local",
-            "size": len(req.content),
-        }
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+    enc = req.encoding or "utf-8"
+    content_bytes = req.content.encode(enc)
+    upload = await _upload_to_cloud(os.path.basename(req.path), content_bytes, req.userId)
+    
+    return {
+        "success": True,
+        "path": req.path,
+        "url": upload["url"],
+        "fileId": upload["fileId"],
+        "storedAs": upload["storedAs"],
+        "type": "cloud",
+        "size": len(content_bytes),
+    }
 
 
-@app.post("/api/documents/delete", tags=["files"], summary="Delete a file from the workspace")
-def delete_workspace_file(req: DeleteFileRequest):
-    """Delete a file from the workspace."""
-    safe_path = _safe_workspace_path(req.path, check_exists=True)
-    try:
-        if os.path.isdir(safe_path):
-            import shutil
-            shutil.rmtree(safe_path)
-        else:
-            os.remove(safe_path)
-        return {"success": True, "path": safe_path}
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+
+@app.post("/api/documents/delete")
+async def delete_workspace_file(req: DeleteFileRequest):
+    """Delete a file via file-service."""
+    if not req.userId:
+        raise HTTPException(status_code=400, detail="userId is required for deletion")
+
+    # 1. Find file record to get ID
+    async with httpx.AsyncClient() as http:
+        resp = await http.get(
+            f"{FILE_SERVICE_URL}/api/files/by-path",
+            params={"userId": req.userId, "path": req.path}
+        )
+        if not resp.is_success:
+            return {"success": False, "error": f"File not found: {req.path}"}
+
+        file_data = resp.json()
+        file_id = file_data.get("id")
+        if not file_id:
+             return {"success": False, "error": f"File not found: {req.path}"}
+
+        # 2. Delete via file-service
+        del_resp = await http.delete(
+            f"{FILE_SERVICE_URL}/api/files/{file_id}",
+            params={"userId": req.userId}
+        )
+        if not del_resp.is_success:
+            raise HTTPException(status_code=del_resp.status_code, detail=f"Delete failed: {del_resp.text}")
+
+    return {"success": True, "path": req.path}
 
 
 from logger import get_nest_log_config, get_logger

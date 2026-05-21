@@ -114,6 +114,8 @@ func isPublicRoute(method, path string) bool {
 		"/api/auth/login",
 		"/api/auth/register",
 		"/api/auth/social-login",
+		"/api/auth/invitation-preview",
+		"/api/workflows/invitations/by-token",
 		"/api/github/",
 		"/api/mcp",
 		"/api/webhooks/gmail/push",

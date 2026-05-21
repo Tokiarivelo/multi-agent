@@ -7,6 +7,7 @@ import {
 import {
   Workflow,
   WorkflowStatus as DomainWorkflowStatus,
+  WorkflowVisibility,
 } from '../../domain/entities/workflow.entity';
 import { WorkflowStatus as PrismaWorkflowStatus } from '@prisma/client';
 
@@ -33,13 +34,24 @@ export class WorkflowRepository implements IWorkflowRepository {
     const limit = limitParam || 20;
     const skip = (page - 1) * limit;
 
+    const where = {
+      OR: [{ userId }, { collaborators: { some: { userId, status: 'ACCEPTED' as any } } }],
+    };
+
     const [total, workflows] = await Promise.all([
-      this.prisma.workflow.count({ where: { userId } }),
+      this.prisma.workflow.count({ where }),
       this.prisma.workflow.findMany({
-        where: { userId },
+        where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        include: {
+          user: true,
+          collaborators: {
+            where: { status: 'ACCEPTED' as any },
+            include: { user: true },
+          },
+        },
       }),
     ]);
 
@@ -78,12 +90,50 @@ export class WorkflowRepository implements IWorkflowRepository {
     };
   }
 
+  async findPublic(page = 1, limit = 20): Promise<PaginatedWorkflows> {
+    const skip = (page - 1) * limit;
+    const [total, workflows] = await Promise.all([
+      this.prisma.workflow.count({ where: { visibility: 'PUBLIC' as any } }),
+      this.prisma.workflow.findMany({
+        where: { visibility: 'PUBLIC' as any },
+        skip,
+        take: limit,
+        orderBy: { updatedAt: 'desc' },
+      }),
+    ]);
+    return { data: workflows.map((w) => this.toDomain(w)), total, page, limit };
+  }
+
+  async findSharedWithUser(userId: string, page = 1, limit = 20): Promise<PaginatedWorkflows> {
+    const skip = (page - 1) * limit;
+    const [total, collaborators] = await Promise.all([
+      this.prisma.workflowCollaborator.count({
+        where: { userId, status: 'ACCEPTED' as any },
+      }),
+      this.prisma.workflowCollaborator.findMany({
+        where: { userId, status: 'ACCEPTED' as any },
+        include: { workflow: true },
+        skip,
+        take: limit,
+        orderBy: { acceptedAt: 'desc' },
+      }),
+    ]);
+    return {
+      data: collaborators.map((c: any) => this.toDomain(c.workflow)),
+      total,
+      page,
+      limit,
+    };
+  }
+
   async create(data: {
     name: string;
     description: string;
     definition: any;
     status: DomainWorkflowStatus;
     userId: string;
+    visibility?: WorkflowVisibility;
+    forkedFromId?: string;
   }): Promise<Workflow> {
     const workflow = await this.prisma.workflow.create({
       data: {
@@ -94,6 +144,8 @@ export class WorkflowRepository implements IWorkflowRepository {
         definition: data.definition,
         status: data.status as unknown as PrismaWorkflowStatus,
         userId: data.userId,
+        visibility: (data.visibility ?? WorkflowVisibility.PRIVATE) as any,
+        ...(data.forkedFromId && { forkedFromId: data.forkedFromId }),
       },
     });
 
@@ -106,6 +158,7 @@ export class WorkflowRepository implements IWorkflowRepository {
       ...(data.name && { name: data.name }),
       ...(data.description && { description: data.description }),
       ...(data.status && { status: data.status as unknown as PrismaWorkflowStatus }),
+      ...(data.visibility && { visibility: data.visibility as any }),
     };
 
     if (data.definition) {
@@ -191,9 +244,29 @@ export class WorkflowRepository implements IWorkflowRepository {
       description: workflow.description ?? '',
       definition,
       status: workflow.status as unknown as DomainWorkflowStatus,
+      visibility:
+        (workflow.visibility as unknown as WorkflowVisibility) ?? WorkflowVisibility.PRIVATE,
       userId: workflow.userId,
+      forkedFromId: workflow.forkedFromId ?? undefined,
       createdAt: workflow.createdAt,
       updatedAt: workflow.updatedAt,
+      owner: workflow.user
+        ? {
+            id: workflow.user.id,
+            firstName: workflow.user.firstName,
+            lastName: workflow.user.lastName,
+            email: workflow.user.email,
+          }
+        : undefined,
+      collaborators: workflow.collaborators
+        ? workflow.collaborators.map((c: any) => ({
+            userId: c.userId,
+            firstName: c.user?.firstName ?? '',
+            lastName: c.user?.lastName ?? '',
+            email: c.user?.email ?? '',
+            role: c.role,
+          }))
+        : undefined,
     });
   }
 }

@@ -1,5 +1,18 @@
-import { Controller, Post, Get, Body, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  Req,
+  Query,
+  NotFoundException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
+import { Public } from '../decorators/public.decorator';
 import { LoginUseCase } from '../../application/use-cases/login.use-case';
 import { RegisterUseCase } from '../../application/use-cases/register.use-case';
 import { LoginDto } from '../../application/dto/login.dto';
@@ -17,6 +30,7 @@ export class AuthController {
     private readonly registerUseCase: RegisterUseCase,
     private readonly socialLoginUseCase: SocialLoginUseCase,
     private readonly getMeUseCase: GetMeUseCase,
+    private readonly configService: ConfigService,
   ) {}
 
   @Post('register')
@@ -86,6 +100,23 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Account inactive' })
   async socialLogin(@Body() socialLoginDto: SocialLoginDto) {
     return this.socialLoginUseCase.execute(socialLoginDto);
+  }
+
+  @Public()
+  @Get('invitation-preview')
+  @ApiOperation({ summary: 'Get invitation details by token — public, no auth required' })
+  @ApiResponse({ status: 200, description: 'Invitation details' })
+  @ApiResponse({ status: 404, description: 'Invitation not found or expired' })
+  async invitationPreview(@Query('token') token: string) {
+    const base = this.configService.get<string>(
+      'ORCHESTRATION_SERVICE_URL',
+      'http://localhost:3003',
+    );
+    const res = await fetch(
+      `${base}/workflows/invitations/by-token?token=${encodeURIComponent(token)}`,
+    );
+    if (!res.ok) throw new NotFoundException('Invitation not found or expired');
+    return res.json();
   }
 
   @Get('me')

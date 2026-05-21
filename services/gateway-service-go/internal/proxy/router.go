@@ -10,7 +10,7 @@ import (
 // base URL. Returns an empty string when the segment is unknown (404 case).
 func resolveTarget(segment string, cfg *config.Config) string {
 	switch segment {
-	case "workflows", "orchestration", "workspace", "webhooks":
+	case "workflows", "orchestration", "workspace", "webhooks", "notifications":
 		return cfg.OrchestrationServiceURL
 	case "agents", "chat":
 		return cfg.AgentServiceURL
