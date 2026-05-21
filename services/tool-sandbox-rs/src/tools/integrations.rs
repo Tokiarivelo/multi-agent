@@ -2,7 +2,7 @@ use base64::Engine;
 use reqwest::Client;
 use serde_json::{json, Value};
 
-use crate::{config::Config, tools::file::{resolve_workspace_path, upload_to_cloud}};
+use crate::{config::Config, tools::file::upload_to_cloud};
 
 // ─── GitHub ──────────────────────────────────────────────────────────────────
 
@@ -319,23 +319,35 @@ pub async fn document_read(
     client: &Client,
     config: &Config,
     params: &Value,
+    user_id: Option<String>,
 ) -> anyhow::Result<Value> {
     if !config.enable_file_operations {
         anyhow::bail!("File operations are disabled");
     }
-    let path = require_str(params, "path")?;
-    let safe = resolve_workspace_path(config, path)?;
+    let path = require_str(params, "path")?.trim_start_matches('/');
     let encoding = params
         .get("encoding")
         .and_then(|v| v.as_str())
         .unwrap_or("utf-8");
+
+    // Extract workspaceId/userId from params (injected by orchestrator)
+    let workspace_id = params.get("workspaceId").and_then(|v| v.as_str()).or(user_id.as_deref());
+    let user_id_val = params.get("userId").and_then(|v| v.as_str()).or(user_id.as_deref());
+
+    let workspace_root = params.get("workspaceRoot").and_then(|v| v.as_str());
 
     let resp = client
         .post(format!(
             "{}/api/documents/parse-path",
             config.document_service_url
         ))
-        .json(&json!({ "path": safe.to_string_lossy(), "encoding": encoding }))
+        .json(&json!({ 
+            "path": path, 
+            "encoding": encoding, 
+            "workspaceId": workspace_id,
+            "userId": user_id_val,
+            "workspaceRoot": workspace_root
+        }))
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("document_read failed for \"{}\": {}", path, e))?;
@@ -361,19 +373,25 @@ pub async fn document_parse_image(
     client: &Client,
     config: &Config,
     params: &Value,
+    user_id: Option<String>,
 ) -> anyhow::Result<Value> {
     if !config.enable_file_operations {
         anyhow::bail!("File operations are disabled");
     }
     let path = require_str(params, "path")?;
-    let safe = resolve_workspace_path(config, path)?;
+    let workspace_id = params.get("workspaceId").and_then(|v| v.as_str()).or(user_id.as_deref());
+    let user_id_val = params.get("userId").and_then(|v| v.as_str()).or(user_id.as_deref());
 
     let resp = client
         .post(format!(
             "{}/api/documents/parse-image-path",
             config.document_service_url
         ))
-        .json(&json!({ "path": safe.to_string_lossy() }))
+        .json(&json!({ 
+            "path": path, 
+            "workspaceId": workspace_id,
+            "userId": user_id_val
+        }))
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("document_parse_image failed for \"{}\": {}", path, e))?;
@@ -405,7 +423,7 @@ pub async fn document_generate(
         anyhow::bail!("File operations are disabled");
     }
     let format = require_str(params, "format")?;
-    let output_path = params.get("outputPath").and_then(|v| v.as_str());
+    let _output_path = params.get("outputPath").and_then(|v| v.as_str());
 
     let body = json!({
         "format":        format,
@@ -455,25 +473,8 @@ pub async fn document_generate(
         .await
         .map_err(|e| anyhow::anyhow!("document_generate failed: {}", e))?;
 
-    // Write to local workspace if outputPath is inside workspace
-    let local_path: Option<String> = if let Some(out_path) = output_path {
-        match resolve_workspace_path(config, out_path) {
-            Ok(safe) => {
-                if let Some(parent) = safe.parent() {
-                    tokio::fs::create_dir_all(parent)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("document_generate failed: {}", e))?;
-                }
-                tokio::fs::write(&safe, &bytes)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("document_generate failed: {}", e))?;
-                Some(safe.to_string_lossy().to_string())
-            }
-            Err(_) => None,
-        }
-    } else {
-        None
-    };
+    // document_generate now only returns cloud URL if userId is available.
+    // Local writing is disabled as per the unified file-service architecture.
 
     // Always upload to cloud when userId is available so the user gets a download URL
     if let Some(uid) = &user_id {
@@ -489,21 +490,11 @@ pub async fn document_generate(
             "fileId":    file_id,
             "storedAs":  stored_as,
             "size":      bytes.len(),
-            "type":      "cloud",
-            "localPath": local_path,
+            "type":      "cloud"
         }));
     }
 
-    // No userId: return local path if it was written, otherwise base64
-    if let Some(path) = local_path {
-        return Ok(json!({
-            "success":  true,
-            "path":     path,
-            "filename": filename,
-            "size":     bytes.len(),
-            "type":     "local"
-        }));
-    }
+    // No userId: return base64
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     Ok(json!({
@@ -519,16 +510,22 @@ pub async fn document_delete(
     client: &Client,
     config: &Config,
     params: &Value,
+    user_id: Option<String>,
 ) -> anyhow::Result<Value> {
     if !config.enable_file_operations {
         anyhow::bail!("File operations are disabled");
     }
     let path = require_str(params, "path")?;
-    let safe = resolve_workspace_path(config, path)?;
+    let workspace_id = params.get("workspaceId").and_then(|v| v.as_str()).or(user_id.as_deref());
+    let user_id_val = params.get("userId").and_then(|v| v.as_str()).or(user_id.as_deref());
 
     let resp = client
         .post(format!("{}/api/documents/delete", config.document_service_url))
-        .json(&json!({ "path": safe.to_string_lossy() }))
+        .json(&json!({ 
+            "path": path, 
+            "workspaceId": workspace_id,
+            "userId": user_id_val
+        }))
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("document_delete failed: {}", e))?;
@@ -577,6 +574,90 @@ pub async fn document_write(
     if !resp.status().is_success() {
         let text = resp.text().await.unwrap_or_default();
         anyhow::bail!("document_write failed: {}", text);
+    }
+
+    Ok(resp.json().await?)
+}
+
+// ─── Vector ──────────────────────────────────────────────────────────────────
+
+/// Upsert a document into a Qdrant collection via the vector-service.
+///
+/// Required params: `collectionId`, `id`, `content`
+/// Optional params: `metadata` (object)
+///
+/// Returns: `{ success, id, collectionId }`
+pub async fn vector_upsert(client: &Client, config: &Config, params: &Value) -> anyhow::Result<Value> {
+    let collection_id = require_str(params, "collectionId")?;
+    let id = require_str(params, "id")?;
+    let content = require_str(params, "content")?;
+
+    let mut body = json!({
+        "collectionId": collection_id,
+        "id": id,
+        "content": content,
+        "metadata": params.get("metadata").cloned().unwrap_or(json!({})),
+    });
+    if let Some(user_id) = params.get("userId").and_then(|v| v.as_str()) {
+        body["userId"] = json!(user_id);
+    }
+
+    let resp = client
+        .post(format!("{}/api/vectors/documents", config.vector_service_url))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("vector_upsert request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        anyhow::bail!("vector_upsert failed ({}): {}", status, text);
+    }
+
+    let result: Value = resp.json().await.unwrap_or(json!({}));
+    Ok(json!({
+        "success": true,
+        "id": id,
+        "collectionId": collection_id,
+        "detail": result,
+    }))
+}
+
+/// Search for semantically similar documents in a Qdrant collection.
+///
+/// Required params: `collectionId`, `query`
+/// Optional params: `topK` (default 5), `threshold` (default 0.85)
+///
+/// Returns: `{ results: [{ id, score, content, metadata }] }`
+pub async fn vector_search(client: &Client, config: &Config, params: &Value) -> anyhow::Result<Value> {
+    let collection_id = require_str(params, "collectionId")?;
+    let query = require_str(params, "query")?;
+
+    let top_k = params.get("topK").and_then(|v| v.as_u64()).unwrap_or(5);
+    let threshold = params.get("threshold").and_then(|v| v.as_f64()).unwrap_or(0.85);
+
+    let mut body = json!({
+        "collectionId": collection_id,
+        "query": query,
+        "topK": top_k,
+        "threshold": threshold,
+    });
+    if let Some(user_id) = params.get("userId").and_then(|v| v.as_str()) {
+        body["userId"] = json!(user_id);
+    }
+
+    let resp = client
+        .post(format!("{}/api/vectors/search", config.vector_service_url))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("vector_search request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        anyhow::bail!("vector_search failed ({}): {}", status, text);
     }
 
     Ok(resp.json().await?)

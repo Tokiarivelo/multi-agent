@@ -111,6 +111,11 @@ export const WorkflowFlowNode = memo(
       : [];
     const isConditional = nodeType === 'CONDITIONAL';
 
+    interface ConditionalRoute { id: string; label: string; condition?: string }
+    const conditionalRoutes: ConditionalRoute[] = isCondition && Array.isArray(config?.routes)
+      ? (config.routes as ConditionalRoute[])
+      : [];
+
     // Config summary line (for non-agent nodes)
     let configSummary = '';
     if (!isAgent && !isOrchestrator && typeof config?.agentId === 'string' && config.agentId)
@@ -491,10 +496,24 @@ export const WorkflowFlowNode = memo(
           )}
 
           {/* ── Branch label rows (visual only, no handles inside) ── */}
-          {isConditional && (
+          {isConditional && conditionalRoutes.length === 0 && (
             <div className="mt-3 border-t border-foreground/10 pt-1.5 pb-2 flex justify-around text-[9px] font-semibold">
               <span className="text-emerald-500">✓ true</span>
               <span className="text-muted-foreground/60">✗ false</span>
+            </div>
+          )}
+
+          {/* CONDITIONAL: route labels strip */}
+          {isCondition && conditionalRoutes.length > 0 && (
+            <div className="mt-2 border-t border-foreground/10 pt-1.5 flex gap-0.5">
+              {conditionalRoutes.map((route) => (
+                <span
+                  key={route.id}
+                  className="flex-1 text-[9px] font-medium text-foreground/60 truncate text-center"
+                >
+                  {route.label}
+                </span>
+              ))}
             </div>
           )}
 
@@ -563,6 +582,20 @@ export const WorkflowFlowNode = memo(
                 className="bg-primary/80! border-background! w-3! h-3!"
               />
             </>
+          )}
+
+          {/* CONDITIONAL with dynamic routes: one handle per route */}
+          {isConditional && conditionalRoutes.length > 0 && (
+            conditionalRoutes.map((route, i) => (
+              <Handle
+                key={route.id}
+                id={route.id}
+                type="source"
+                position={Position.Bottom}
+                style={{ left: `${((i + 1) / (conditionalRoutes.length + 1)) * 100}%` }}
+                className="bg-primary/80! border-background! w-3! h-3! transition-transform group-hover:scale-125"
+              />
+            ))
           )}
 
           {/* Output handle (bottom) — not for END, WHILE, FOR_EACH, SWITCH, or CONDITIONAL */}

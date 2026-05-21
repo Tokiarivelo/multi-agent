@@ -294,4 +294,50 @@ export class FileController {
     );
     return { results };
   }
+
+  @Post('read')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Read file content by workspace path' })
+  async readByPath(
+    @Body()
+    body: {
+      workspaceId: string;
+      userId?: string;
+      path: string;
+      encoding?: string;
+      workspaceRoot?: string;
+    },
+  ) {
+    if (!body.workspaceId) {
+      throw new BadRequestException('workspaceId is required');
+    }
+    if (!body.path) {
+      throw new BadRequestException('path is required');
+    }
+
+    const { buffer, mimeType, originalName } = await this.fileService.getFileContent(
+      body.workspaceId,
+      body.path,
+      body.workspaceRoot,
+    );
+
+    const encoding = body.encoding || 'utf-8';
+    let content: string;
+
+    if (encoding === 'base64') {
+      content = buffer.toString('base64');
+    } else {
+      content = buffer.toString(encoding as any);
+    }
+
+    return {
+      success: true,
+      path: body.path,
+      originalName,
+      mimeType,
+      content,
+      size: buffer.length,
+      encoding,
+    };
+  }
 }

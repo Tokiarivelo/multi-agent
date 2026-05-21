@@ -14,22 +14,33 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Play, Edit, Trash2 } from 'lucide-react';
+import { Plus, Play, Edit, Trash2, Share2, Crown, Users } from 'lucide-react';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor } from '@/lib/utils';
 import { useState } from 'react';
 import { CreateWorkflowModal } from './CreateWorkflowModal';
 import { DeleteGuardDialog } from '@/components/shared/DeleteGuardDialog';
 import { useDeleteGuard } from '@/hooks/useDeleteGuard';
-import { Workflow } from '@/types';
+import { WorkflowSharingModal } from './WorkflowSharingModal';
+import { AvatarGroup } from './AvatarGroup';
+import { Workflow, WorkflowVisibility } from '@/types';
+import { useAuthStore } from '@/store/auth.store';
+
+interface ShareTarget {
+  workflowId: string;
+  workflowName: string;
+  visibility: WorkflowVisibility;
+}
 
 export function WorkflowList() {
   const { t } = useTranslation();
+  const { user } = useAuthStore();
   const { data, isLoading, error } = useWorkflows();
   const deleteWorkflow = useDeleteWorkflow();
   const deleteGuard = useDeleteGuard('workflow');
   const [modalOpen, setModalOpen] = useState(false);
   const [pendingDeleteWorkflow, setPendingDeleteWorkflow] = useState<Workflow | null>(null);
+  const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-destructive">Error loading workflows</div>;
@@ -70,71 +81,38 @@ export function WorkflowList() {
                   <TableHead>{t('workflows.table.description')}</TableHead>
                   <TableHead>{t('workflows.table.status')}</TableHead>
                   <TableHead>{t('workflows.table.nodes')}</TableHead>
+                  <TableHead>{t('workflows.table.collaborators')}</TableHead>
                   <TableHead>{t('workflows.table.updated')}</TableHead>
                   <TableHead>{t('workflows.table.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {workflows.map((workflow) => (
-                  <TableRow key={workflow.id}>
-                    <TableCell className="font-medium">
-                      <Link href={`/workflows/${workflow.id}`} className="hover:underline">
-                        {workflow.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {workflow.description || '—'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          getStatusColor(workflow.status) as
-                            | 'default'
-                            | 'success'
-                            | 'warning'
-                            | 'destructive'
-                        }
-                      >
-                        {workflow.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{workflow.definition?.nodes?.length || 0}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatRelativeTime(workflow.updatedAt)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Link href={`/workflows/${workflow.id}`}>
-                          <Button variant="ghost" size="sm" className="gap-1">
-                            <Edit className="h-3 w-3" />
-                            {t('workflows.actions.edit')}
-                          </Button>
-                        </Link>
-                        <Button variant="ghost" size="sm" className="gap-1">
-                          <Play className="h-3 w-3" />
-                          {t('workflows.actions.run')}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          disabled={deleteWorkflow.isPending}
-                          onClick={() => {
-                            setPendingDeleteWorkflow(workflow);
-                            deleteGuard.openGuard(workflow.id);
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <WorkflowRow
+                    key={workflow.id}
+                    workflow={workflow}
+                    currentUserId={user?.id}
+                    onShare={(w) =>
+                      setShareTarget({
+                        workflowId: w.id,
+                        workflowName: w.name,
+                        visibility: w.visibility ?? 'PRIVATE',
+                      })
+                    }
+                    onDelete={(w) => {
+                      setPendingDeleteWorkflow(w);
+                      deleteGuard.openGuard(w.id);
+                    }}
+                    deleteDisabled={deleteWorkflow.isPending}
+                    t={t}
+                  />
                 ))}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
+
       <DeleteGuardDialog
         open={deleteGuard.open}
         onOpenChange={(open) => {
@@ -158,6 +136,117 @@ export function WorkflowList() {
           });
         }}
       />
+
+      {shareTarget && (
+        <WorkflowSharingModal
+          workflowId={shareTarget.workflowId}
+          workflowName={shareTarget.workflowName}
+          currentVisibility={shareTarget.visibility}
+          open={!!shareTarget}
+          onClose={() => setShareTarget(null)}
+        />
+      )}
     </div>
+  );
+}
+
+interface WorkflowRowProps {
+  workflow: Workflow;
+  currentUserId?: string;
+  onShare: (w: Workflow) => void;
+  onDelete: (w: Workflow) => void;
+  deleteDisabled: boolean;
+  t: (key: string) => string;
+}
+
+function WorkflowRow({ workflow, currentUserId, onShare, onDelete, deleteDisabled, t }: WorkflowRowProps) {
+  const isShared = !!currentUserId && workflow.userId !== currentUserId;
+  const collaboratorPeople = (workflow.collaborators ?? []).map((c) => ({
+    name: `${c.firstName} ${c.lastName}`.trim() || c.email,
+    email: c.email,
+  }));
+
+  const ownerLabel = workflow.owner
+    ? `${workflow.owner.firstName} ${workflow.owner.lastName}`.trim() || workflow.owner.email
+    : undefined;
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+          <Link href={`/workflows/${workflow.id}`} className="hover:underline">
+            {workflow.name}
+          </Link>
+          {isShared && (
+            <Badge variant="secondary" className="gap-1 text-xs font-normal">
+              <Users className="h-3 w-3" />
+              {t('sharing.sharedBadge')}
+            </Badge>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {workflow.description || '—'}
+      </TableCell>
+      <TableCell>
+        <Badge
+          variant={
+            getStatusColor(workflow.status) as 'default' | 'success' | 'warning' | 'destructive'
+          }
+        >
+          {workflow.status}
+        </Badge>
+      </TableCell>
+      <TableCell>{workflow.definition?.nodes?.length || 0}</TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          {ownerLabel && (
+            <span
+              title={ownerLabel}
+              className="flex items-center gap-1 text-xs text-muted-foreground"
+            >
+              <Crown className="h-3 w-3 text-amber-500" />
+              <span className="max-w-[80px] truncate">{ownerLabel}</span>
+            </span>
+          )}
+          <AvatarGroup people={collaboratorPeople} max={3} />
+        </div>
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {formatRelativeTime(workflow.updatedAt)}
+      </TableCell>
+      <TableCell>
+        <div className="flex gap-1">
+          <Link href={`/workflows/${workflow.id}`}>
+            <Button variant="ghost" size="sm" className="gap-1">
+              <Edit className="h-3 w-3" />
+              {t('workflows.actions.edit')}
+            </Button>
+          </Link>
+          <Button variant="ghost" size="sm" className="gap-1">
+            <Play className="h-3 w-3" />
+            {t('workflows.actions.run')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1"
+            onClick={() => onShare(workflow)}
+          >
+            <Share2 className="h-3 w-3" />
+            {t('workflows.actions.share')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            disabled={deleteDisabled}
+            onClick={() => onDelete(workflow)}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }

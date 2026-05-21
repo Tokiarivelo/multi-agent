@@ -11,9 +11,14 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/gin-gonic/gin"
+	"github.com/multi-agent/gateway-service-go/internal/config"
 	"github.com/multi-agent/gateway-service-go/internal/users"
 )
 
@@ -29,13 +34,18 @@ type userRepository interface {
 
 // Handler holds the dependencies for auth HTTP handlers.
 type Handler struct {
-	repo      userRepository
-	jwtSecret string
+	repo                   userRepository
+	jwtSecret              string
+	orchestrationServiceURL string
 }
 
 // NewHandler constructs an auth Handler.
-func NewHandler(repo *users.Repository, jwtSecret string) *Handler {
-	return &Handler{repo: repo, jwtSecret: jwtSecret}
+func NewHandler(repo *users.Repository, jwtSecret string, cfg *config.Config) *Handler {
+	return &Handler{
+		repo:                   repo,
+		jwtSecret:              jwtSecret,
+		orchestrationServiceURL: cfg.OrchestrationServiceURL,
+	}
 }
 
 // RegisterRoutes attaches the auth routes to the given router group.
@@ -45,6 +55,7 @@ func RegisterRoutes(r *gin.Engine, h *Handler) {
 	g.POST("/login", h.Login)
 	g.POST("/social-login", h.SocialLogin)
 	g.GET("/me", h.Me)
+	g.GET("/invitation-preview", h.InvitationPreview)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -307,9 +318,43 @@ func (h *Handler) Me(c *gin.Context) {
 	c.JSON(http.StatusOK, userView(user))
 }
 
+// InvitationPreview godoc
+//
+// @Summary     Get invitation details by token (public)
+// @Description Returns invitation metadata without requiring authentication.
+// @Tags        auth
+// @Produce     json
+// @Param       token query string true "Invitation token"
+// @Success     200  {object} map[string]interface{}
+// @Failure     404  {object} map[string]string
+// @Router      /api/auth/invitation-preview [get]
+func (h *Handler) InvitationPreview(c *gin.Context) {
+	token := c.Query("token")
+	upstreamURL := fmt.Sprintf("%s/api/workflows/invitations/by-token?token=%s", h.orchestrationServiceURL, url.QueryEscape(token))
+
+	resp, err := http.Get(upstreamURL) //nolint:noctx
+	if err != nil || resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Invitation not found or expired"})
+		return
+	}
+	defer resp.Body.Close()
+
+	var body interface{}
+	if err := bindJSON(resp.Body, &body); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, body)
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
+
+func bindJSON(r io.Reader, v interface{}) error {
+	return json.NewDecoder(r).Decode(v)
+}
 
 // userView converts a User into the JSON-serialisable map that is returned to
 // clients. The password field is intentionally omitted.

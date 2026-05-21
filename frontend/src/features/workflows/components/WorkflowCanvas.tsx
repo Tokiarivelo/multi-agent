@@ -436,6 +436,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
               source: ed.source,
               target: ed.target,
               condition: ed.label as string | undefined,
+              sourceHandle: ed.sourceHandle ?? undefined,
             }));
 
           deleteNodeMutation.mutate(nodeId, {
@@ -614,11 +615,23 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
       else if (sh === 'default') displayLabel = 'default';
       else if (sh?.startsWith('case_')) displayLabel = sh.replace('case_', 'case ');
 
+
+      // Auto-populate condition from CONDITIONAL node route config when connecting from a route handle
+      let routeCondition: string | undefined;
+      if (connection.sourceHandle) {
+        const sourceNode = getNodes().find((n) => n.id === connection.source);
+        const routes = (sourceNode?.data as WorkflowNodeData | undefined)?.config?.routes as
+          | Array<{ id: string; condition?: string }>
+          | undefined;
+        routeCondition = routes?.find((r) => r.id === connection.sourceHandle)?.condition || undefined;
+      }
+
       const newEdge: AddEdgePayload = {
         id: uuidv4(),
         source: connection.source!,
         target: connection.target!,
         sourceHandle: sh,
+        ...(routeCondition ? { condition: routeCondition } : {}),
       };
 
       addEdgeMutation.mutate(newEdge);
@@ -639,16 +652,16 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
           {
             ...newEdge,
             sourceHandle: sh,
-            label: displayLabel,
+            label: newEdge.condition ?? displayLabel,
             type: 'workflowEdge',
-            style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
             labelStyle: { fill: 'hsl(var(--muted-foreground))', fontSize: 11 },
+            style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
           },
           eds,
         );
       });
     },
-    [edges, setEdges, addEdgeMutation],
+    [edges, setEdges, addEdgeMutation, getNodes],
   );
 
   /* ─── Undo / Redo ────────────────────────────────────────────────── */
@@ -996,6 +1009,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
             source: e.source,
             target: e.target,
             condition: e.label as string | undefined,
+            sourceHandle: e.sourceHandle ?? undefined,
           }));
         deleteNodeMutation.mutate(node.id, {
           onSuccess: () => {
@@ -1010,6 +1024,7 @@ function WorkflowCanvasInner({ workflow }: WorkflowCanvasProps) {
         source: selectedEdge.source,
         target: selectedEdge.target,
         condition: selectedEdge.label as string | undefined,
+        sourceHandle: selectedEdge.sourceHandle ?? undefined,
       };
       deleteEdgeMutation.mutate(selectedEdge.id, {
         onSuccess: () => {

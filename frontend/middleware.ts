@@ -6,7 +6,9 @@ export default withAuth({
       if (
         req.nextUrl.pathname.startsWith('/dashboard') ||
         req.nextUrl.pathname.startsWith('/workflows') ||
-        req.nextUrl.pathname.startsWith('/agents')
+        req.nextUrl.pathname.startsWith('/agents') ||
+        req.nextUrl.pathname.startsWith('/fork-requests') ||
+        req.nextUrl.pathname.startsWith('/invitations')
       ) {
         return token !== null;
       }
@@ -19,5 +21,5 @@ export default withAuth({
 });
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/workflows/:path*', '/agents/:path*', '/monitor/:path*'],
+  matcher: ['/dashboard/:path*', '/workflows/:path*', '/agents/:path*', '/monitor/:path*', '/fork-requests/:path*', '/invitations/:path*'],
 };

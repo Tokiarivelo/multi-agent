@@ -69,6 +69,7 @@ export class QdrantClientService implements IQdrantClient, OnModuleInit {
     vector: number[],
     limit: number,
     filter?: Record<string, any>,
+    scoreThreshold?: number,
   ): Promise<Array<{ id: string; score: number; payload: Record<string, any> }>> {
     this.logger.log(`Searching in collection: ${collectionName} with limit: ${limit}`);
     
@@ -76,6 +77,7 @@ export class QdrantClientService implements IQdrantClient, OnModuleInit {
       vector,
       limit,
       filter: filter ? this.buildQdrantFilter(filter) : undefined,
+      score_threshold: scoreThreshold,
       with_payload: true,
     });
 

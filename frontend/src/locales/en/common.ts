@@ -1,6 +1,8 @@
 export const common = {
   Dashboard: 'Dashboard',
   Workflows: 'Workflows',
+  'Public Workflows': 'Public Workflows',
+  Invitations: 'Invitations',
   Agents: 'Agents',
   Tools: 'Tools',
   Nodes: 'Nodes',
@@ -123,5 +125,12 @@ export const common = {
     passwordLabel: 'Password',
     firstNameLabel: 'First Name',
     lastNameLabel: 'Last Name',
+    invitedYouTo: 'invited you to collaborate on',
+    inviteRole: 'Role',
+    invitationNotFound: 'Invitation not found or expired.',
+    acceptInvitation: 'Accept Invitation',
+    acceptingInvitation: 'Accepting invitation...',
+    invitationAccepted: 'Invitation accepted! Redirecting...',
+    loginToAccept: 'Please sign in to accept this invitation.',
   },
 };

@@ -7,7 +7,7 @@ import { LogIn, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import OAuthButtons from './OAuthButtons';
 
-export default function LoginForm() {
+export default function LoginForm({ redirectTo }: { redirectTo?: string }) {
   const { t } = useTranslation();
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -30,7 +30,7 @@ export default function LoginForm() {
       if (result?.error) {
         setError(t('auth.invalidCredentials'));
       } else {
-        router.push('/dashboard');
+        router.push(redirectTo || '/dashboard');
         router.refresh();
       }
     } catch {

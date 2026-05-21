@@ -8,10 +8,10 @@ pub struct Config {
     pub enable_file_operations: bool,
     pub allowed_domains: Vec<String>,
     pub document_service_url: String,
-    pub workspace_root: String,
     pub file_service_url: String,
     pub email_mcp_url: String,
     pub calendar_mcp_url: String,
+    pub vector_service_url: String,
 }
 
 impl Config {
@@ -28,11 +28,6 @@ impl Config {
                 .collect()
         };
 
-        let workspace_root = env::var("WORKSPACE_ROOT").unwrap_or_else(|_| {
-            env::current_dir()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| ".".to_string())
-        });
 
         Ok(Config {
             port: env::var("PORT")
@@ -58,7 +53,8 @@ impl Config {
                 .unwrap_or_else(|_| "http://localhost:3012".to_string()),
             calendar_mcp_url: env::var("CALENDAR_MCP_URL")
                 .unwrap_or_else(|_| "http://localhost:3013".to_string()),
-            workspace_root,
+            vector_service_url: env::var("VECTOR_SERVICE_URL")
+                .unwrap_or_else(|_| "http://localhost:3007".to_string()),
         })
     }
 

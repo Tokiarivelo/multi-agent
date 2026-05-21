@@ -19,38 +19,130 @@ model User {
   image              String?
   provider           String?             @default("credentials")
   settings           Json?               @default("{}")
-  agents             Agent[]
-  apiKeys            ApiKey[]
-  executions         Execution[]
-  collections        VectorCollection[]
-  workflowExecutions WorkflowExecution[]
-  workflows          Workflow[]
-  files              File[]
-  chatSessions       ChatSession[]
+  agents                    Agent[]
+  apiKeys                   ApiKey[]
+  executions                Execution[]
+  collections               VectorCollection[]
+  workflowExecutions        WorkflowExecution[]
+  workflows                 Workflow[]
+  files                     File[]
+  chatSessions              ChatSession[]
+  collaboratorEntries       WorkflowCollaborator[]    @relation("CollaboratorUser")
+  collaboratorInvites       WorkflowCollaborator[]    @relation("CollaboratorInviter")
+  workflowInvitations       WorkflowInvitation[]
+  accessRequests            WorkflowAccessRequest[]   @relation("AccessRequester")
+  workflowChangeLogs        WorkflowChangeLog[]
+  notifications             Notification[]
+  forkRequests              WorkflowForkRequest[]     @relation("ForkRequester")
 
   @@index([email])
   @@map("users")
 }
 
 model Workflow {
-  id                 String              @id @default(uuid())
+  id                 String               @id @default(uuid())
   userId             String
   name               String
   description        String?
   nodes              Json
   edges              Json
-  status             WorkflowStatus      @default(DRAFT)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  status             WorkflowStatus       @default(DRAFT)
+  visibility         WorkflowVisibility   @default(PRIVATE)
+  forkedFromId       String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
   definition         Json?
   executions         Execution[]
   workflowExecutions WorkflowExecution[]
-  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   gmailSubscriptions GmailWatchSubscription[]
+  forkedFrom         Workflow?            @relation("WorkflowForks", fields: [forkedFromId], references: [id])
+  forks              Workflow[]           @relation("WorkflowForks")
+  collaborators      WorkflowCollaborator[]
+  invitations        WorkflowInvitation[]
+  accessRequests     WorkflowAccessRequest[]
+  changeLogs         WorkflowChangeLog[]
+  forkRequests       WorkflowForkRequest[]
 
   @@index([userId])
   @@index([status])
+  @@index([visibility])
   @@map("workflows")
+}
+
+model WorkflowCollaborator {
+  id         String          @id @default(uuid())
+  workflowId String
+  userId     String
+  role       CollaboratorRole
+  invitedBy  String
+  invitedAt  DateTime        @default(now())
+  acceptedAt DateTime?
+  status     InvitationStatus @default(PENDING)
+  workflow   Workflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  user       User             @relation("CollaboratorUser", fields: [userId], references: [id], onDelete: Cascade)
+  inviter    User             @relation("CollaboratorInviter", fields: [invitedBy], references: [id])
+
+  @@unique([workflowId, userId])
+  @@index([workflowId])
+  @@index([userId])
+  @@index([status])
+  @@map("workflow_collaborators")
+}
+
+model WorkflowInvitation {
+  id         String           @id @default(uuid())
+  workflowId String
+  email      String
+  invitedBy  String
+  role       CollaboratorRole
+  token      String           @unique @default(uuid())
+  status     InvitationStatus @default(PENDING)
+  expiresAt  DateTime
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  workflow   Workflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  inviter    User             @relation(fields: [invitedBy], references: [id])
+
+  @@index([workflowId])
+  @@index([email])
+  @@index([token])
+  @@index([status])
+  @@map("workflow_invitations")
+}
+
+model WorkflowAccessRequest {
+  id          String              @id @default(uuid())
+  workflowId  String
+  requesterId String
+  status      AccessRequestStatus @default(PENDING)
+  message     String?
+  requestedAt DateTime            @default(now())
+  respondedAt DateTime?
+  workflow    Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  requester   User                @relation("AccessRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, requesterId])
+  @@index([workflowId])
+  @@index([requesterId])
+  @@index([status])
+  @@map("workflow_access_requests")
+}
+
+model WorkflowChangeLog {
+  id         String       @id @default(uuid())
+  workflowId String
+  userId     String
+  action     ChangeAction
+  details    Json
+  createdAt  DateTime     @default(now())
+  workflow   Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id])
+
+  @@index([workflowId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("workflow_change_logs")
 }
 
 model Agent {
@@ -298,6 +390,44 @@ model TokenUsage {
   @@map("token_usage")
 }
 
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  payload   Json
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+  @@map("notifications")
+}
+
+model WorkflowForkRequest {
+  id          String            @id @default(uuid())
+  workflowId  String
+  requesterId String
+  status      ForkRequestStatus @default(PENDING)
+  message     String?
+  createdAt   DateTime          @default(now())
+  respondedAt DateTime?
+  workflow    Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  requester   User              @relation("ForkRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, requesterId])
+  @@index([workflowId])
+  @@index([requesterId])
+  @@index([status])
+  @@map("workflow_fork_requests")
+}
+
+enum ForkRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum UserRole {
   ADMIN
   USER
@@ -335,6 +465,44 @@ enum ExecutionStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+enum WorkflowVisibility {
+  PRIVATE
+  SHARED
+  PUBLIC
+}
+
+enum CollaboratorRole {
+  VIEWER
+  EXECUTOR
+  EDITOR
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+enum ChangeAction {
+  CREATED
+  NODE_ADDED
+  NODE_UPDATED
+  NODE_REMOVED
+  EDGE_ADDED
+  EDGE_REMOVED
+  STATUS_CHANGED
+  VISIBILITY_CHANGED
+  SETTINGS_UPDATED
+  FORKED
 }
 
 model ChatSession {

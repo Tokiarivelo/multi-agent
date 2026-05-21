@@ -45,6 +45,7 @@ import { Resizable } from 're-resizable';
 import { FileConfigEditor } from './FileConfigEditor';
 import { useWorkspaceStore, type FileNode } from '@/features/workspace/store/workspaceStore';
 import { SubWorkflowConfig } from './SubWorkflowConfig';
+import { ToolParamsPanel } from './ToolParamsPanel';
 import { useWorkflowExecutionStore } from '../store/workflowExecution.store';
 import { useNodePreferencesStore } from '../store/nodePreferences.store';
 import { DocPanel } from '@/components/shared/DocPanel';
@@ -376,36 +377,43 @@ function PipelineStepEditor({
           {expanded[step.id] && (
             <div className="px-3 pb-3 pt-1 space-y-2 border-t border-border/30">
               {step.type === 'TOOL' ? (
-                <div className="space-y-1">
-                  <Label className="text-[10px]">Tool</Label>
-                  {tools.length > 0 ? (
-                    <Select
-                      value={(step.config.toolId as string) ?? ''}
-                      onValueChange={(v) => updateStepConfig(step.id, 'toolId', v)}
-                    >
-                      <SelectTrigger className="h-7 text-xs">
-                        <SelectValue placeholder="Select tool…">
-                          {tools.find((tl) => tl.id === (step.config.toolId as string))?.name ||
-                            (step.config.toolId as string)}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {tools.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      className="h-7 text-xs font-mono"
-                      placeholder="tool-id"
-                      value={(step.config.toolId as string) ?? ''}
-                      onChange={(e) => updateStepConfig(step.id, 'toolId', e.target.value)}
-                    />
-                  )}
-                  <p className="text-[10px] text-muted-foreground">Input: previous step output</p>
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <Label className="text-[10px]">Tool</Label>
+                    {tools.length > 0 ? (
+                      <Select
+                        value={(step.config.toolId as string) ?? ''}
+                        onValueChange={(v) => updateStepConfig(step.id, 'toolId', v)}
+                      >
+                        <SelectTrigger className="h-7 text-xs">
+                          <SelectValue placeholder="Select tool…">
+                            {tools.find((tl) => tl.id === (step.config.toolId as string))?.name ||
+                              (step.config.toolId as string)}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tools.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        className="h-7 text-xs font-mono"
+                        placeholder="tool-id"
+                        value={(step.config.toolId as string) ?? ''}
+                        onChange={(e) => updateStepConfig(step.id, 'toolId', e.target.value)}
+                      />
+                    )}
+                    <p className="text-[10px] text-muted-foreground">Input: previous step output</p>
+                  </div>
+                  <ToolParamsPanel
+                    toolId={(step.config.toolId as string) ?? ''}
+                    config={step.config}
+                    onConfigChange={(k, v) => updateStepConfig(step.id, k, v)}
+                  />
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -2149,33 +2157,40 @@ function NodeEditorForm({
 
             {/* TOOL config */}
             {type === 'TOOL' && (
-              <div className="space-y-2">
-                <Label>{t('workflows.node_editor.tool')}</Label>
-                {tools.length > 0 ? (
-                  <Select
-                    value={(config.toolId as string) ?? ''}
-                    onValueChange={(v) => handleConfigChange('toolId', v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('workflows.node_editor.selectTool')}>
-                        {tools.find((tl) => tl.id === (config.toolId as string))?.name}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tools.map((tl) => (
-                        <SelectItem key={tl.id} value={tl.id}>
-                          {tl.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    placeholder={t('workflows.node_editor.toolId')}
-                    value={(config.toolId as string) ?? ''}
-                    onChange={(e) => handleConfigChange('toolId', e.target.value)}
-                  />
-                )}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>{t('workflows.node_editor.tool')}</Label>
+                  {tools.length > 0 ? (
+                    <Select
+                      value={(config.toolId as string) ?? ''}
+                      onValueChange={(v) => handleConfigChange('toolId', v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('workflows.node_editor.selectTool')}>
+                          {tools.find((tl) => tl.id === (config.toolId as string))?.name}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tools.map((tl) => (
+                          <SelectItem key={tl.id} value={tl.id}>
+                            {tl.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      placeholder={t('workflows.node_editor.toolId')}
+                      value={(config.toolId as string) ?? ''}
+                      onChange={(e) => handleConfigChange('toolId', e.target.value)}
+                    />
+                  )}
+                </div>
+                <ToolParamsPanel
+                  toolId={(config.toolId as string) ?? ''}
+                  config={config}
+                  onConfigChange={handleConfigChange}
+                />
               </div>
             )}
 
@@ -2184,41 +2199,48 @@ function NodeEditorForm({
               (() => {
                 const mcpTools = tools.filter((tl) => tl.category === 'MCP');
                 return (
-                  <div className="space-y-2">
-                    <Label>{t('workflows.node_editor.mcpTool') || 'MCP Tool'}</Label>
-                    {mcpTools.length > 0 ? (
-                      <Select
-                        value={(config.toolId as string) ?? ''}
-                        onValueChange={(v) => handleConfigChange('toolId', v)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue
-                            placeholder={
-                              t('workflows.node_editor.selectMcpTool') || 'Select MCP tool…'
-                            }
-                          >
-                            {tools.find((tl) => tl.id === (config.toolId as string))?.name}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {mcpTools.map((tl) => (
-                            <SelectItem key={tl.id} value={tl.id}>
-                              {tl.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <div className="rounded-lg border border-dashed border-border/60 py-6 text-center">
-                        <p className="text-sm text-muted-foreground">
-                          {t('workflows.node_editor.noMcpTools') || 'No MCP tools registered yet.'}
-                        </p>
-                        <p className="text-xs text-muted-foreground/60 mt-1">
-                          {t('workflows.node_editor.noMcpToolsHint') ||
-                            'Add one from the Integrations → GitHub page.'}
-                        </p>
-                      </div>
-                    )}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>{t('workflows.node_editor.mcpTool') || 'MCP Tool'}</Label>
+                      {mcpTools.length > 0 ? (
+                        <Select
+                          value={(config.toolId as string) ?? ''}
+                          onValueChange={(v) => handleConfigChange('toolId', v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                t('workflows.node_editor.selectMcpTool') || 'Select MCP tool…'
+                              }
+                            >
+                              {tools.find((tl) => tl.id === (config.toolId as string))?.name}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {mcpTools.map((tl) => (
+                              <SelectItem key={tl.id} value={tl.id}>
+                                {tl.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="rounded-lg border border-dashed border-border/60 py-6 text-center">
+                          <p className="text-sm text-muted-foreground">
+                            {t('workflows.node_editor.noMcpTools') || 'No MCP tools registered yet.'}
+                          </p>
+                          <p className="text-xs text-muted-foreground/60 mt-1">
+                            {t('workflows.node_editor.noMcpToolsHint') ||
+                              'Add one from the Integrations → GitHub page.'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <ToolParamsPanel
+                      toolId={(config.toolId as string) ?? ''}
+                      config={config}
+                      onConfigChange={handleConfigChange}
+                    />
                   </div>
                 );
               })()}
@@ -2646,6 +2668,84 @@ function NodeEditorForm({
                     value={(config.body as string) ?? ''}
                     onChange={(e) => handleConfigChange('body', e.target.value)}
                   />
+                </div>
+              </div>
+            )}
+
+            {/* FOREACH config */}
+            {type === 'FOR_EACH' && (
+              <div className="space-y-4">
+                {/* Description banner */}
+                <div className="rounded-md bg-teal-500/10 border border-teal-500/20 px-3 py-2 text-[11px] text-teal-400">
+                  Executes all downstream nodes once per item in the array. Unlike Loop, downstream nodes are real workflow nodes — agents, tools, transforms.
+                </div>
+
+                {/* Collection path */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    Collection Path
+                    <span className="ml-1 text-muted-foreground font-normal">(dot-path to the array)</span>
+                  </Label>
+                  <Input
+                    placeholder="e.g. incidents  or  data.rows  or  $.results"
+                    value={(config.collection as string) ?? ''}
+                    onChange={(e) => handleConfigChange('collection', e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
+                  <p className="text-[11px] text-muted-foreground/70">
+                    Leave empty to iterate the input directly if it is already an array.
+                  </p>
+                </div>
+
+                {/* Max concurrency */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    Max Concurrency
+                    <span className="ml-1 text-muted-foreground font-normal">(parallel items)</span>
+                  </Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={(config.maxConcurrency as number) ?? 5}
+                    onChange={(e) =>
+                      handleConfigChange('maxConcurrency', parseInt(e.target.value) || 5)
+                    }
+                    className="h-8 text-xs w-24"
+                  />
+                  <p className="text-[11px] text-muted-foreground/70">
+                    How many items to process simultaneously (1–20). Use 1 for sequential.
+                  </p>
+                </div>
+
+                {/* Max iterations */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    Max Iterations
+                    <span className="ml-1 text-muted-foreground font-normal">(safety cap)</span>
+                  </Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    value={(config.maxIterations as number) ?? 100}
+                    onChange={(e) =>
+                      handleConfigChange('maxIterations', parseInt(e.target.value) || 100)
+                    }
+                    className="h-8 text-xs w-32"
+                  />
+                </div>
+
+                {/* Output shape */}
+                <div className="rounded-md bg-muted/30 border border-border/40 p-3 text-[11px] text-muted-foreground font-mono space-y-0.5">
+                  <p className="font-semibold text-foreground/70 mb-1">Output shape:</p>
+                  <p>{'{'}</p>
+                  <p className="pl-4">results: {'[{ item, outputs[] }]'}</p>
+                  <p className="pl-4">count: number</p>
+                  <p>{'}'}</p>
+                  <p className="mt-1 font-sans text-[10px] text-muted-foreground/60">
+                    Each downstream node receives the current <code className="bg-muted px-0.5 rounded">item</code> and <code className="bg-muted px-0.5 rounded">currentItem</code> in its context variables.
+                  </p>
                 </div>
               </div>
             )}
