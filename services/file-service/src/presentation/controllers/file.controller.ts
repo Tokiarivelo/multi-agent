@@ -327,7 +327,7 @@ export class FileController {
     if (encoding === 'base64') {
       content = buffer.toString('base64');
     } else {
-      content = buffer.toString(encoding as any);
+      content = buffer.toString(encoding as BufferEncoding);
     }
 
     return {
