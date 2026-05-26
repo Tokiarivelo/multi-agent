@@ -354,4 +354,47 @@ export const workflows = {
   'notifications.forkApproved': 'Votre demande de duplication pour « {{workflow}} » a été approuvée.',
   'notifications.forkRejected': 'Votre demande de duplication pour « {{workflow}} » a été refusée.',
   'notifications.generic': 'Vous avez une nouvelle notification.',
+  'notifications.invitationReceived': 'Vous avez été invité à « {{workflow}} » en tant que {{role}}.',
+  'notifications.acceptInvite': 'Accepter',
+  'notifications.declineInvite': 'Refuser',
+  'notifications.forkRequestReceived': '{{requester}} souhaite dupliquer votre workflow « {{workflow}} ».',
+  'notifications.viewRequestReceived': '{{requester}} souhaite consulter votre workflow « {{workflow}} ».',
+  'notifications.approve': 'Approuver',
+  'notifications.reject': 'Refuser',
+
+  'sharing.publicLink.label': 'Lien public',
+  'sharing.publicLink.copy': 'Copier le lien',
+  'sharing.publicLink.copied': 'Copié !',
+  'sharing.publicPage.title': 'Workflow partagé',
+  'sharing.publicPage.workflow': 'Workflow',
+  'sharing.publicPage.description': 'Connectez-vous pour collaborer sur ce workflow.',
+  'sharing.publicPage.signIn': 'Se connecter',
+  'sharing.publicPage.notFound': 'Ce workflow n\'est pas disponible.',
+  'sharing.publicPage.openWorkflow': 'Ouvrir dans l\'éditeur',
+  'sharing.publicPage.hasAccess': 'Vous avez accès à ce workflow.',
+  'sharing.publicPage.noAccess': 'Vous n\'avez pas accès à ce workflow.',
+  'sharing.publicPage.noAccessDescription': 'Demandez l\'accès au propriétaire pour le consulter ou le dupliquer.',
+
+  'sharing.collaborators.pending': 'En attente',
+
+  // ─── Erreur 403 de rôle ────────────────────────────────────────
+  'roleError.title': 'Accès restreint',
+  'roleError.description': 'Vous n\'avez pas la permission d\'effectuer cette action.',
+  'roleError.requiredRole': 'Rôle requis : {{role}}',
+  'roleError.dismiss': 'Compris',
+
+  // ─── Demande de consultation ───────────────────────────────────
+  'sharing.public.requestView': 'Demander à consulter',
+  'sharing.public.viewRequestModal.title': 'Demander l\'accès en lecture à « {{name}} »',
+  'sharing.public.viewRequestModal.description': 'Envoyez une demande de consultation au propriétaire. Vous serez ajouté comme Lecteur si approuvé.',
+  'sharing.public.viewRequestModal.messagePlaceholder': 'Message optionnel au propriétaire…',
+  'sharing.public.viewRequestModal.send': 'Envoyer la demande',
+  'forkRequests.viewRequest': 'souhaite consulter',
+  'forkRequests.forkRequest': 'souhaite dupliquer',
+
+  // ─── Étiquette « dupliqué depuis » ────────────────────────────
+  'workflows.forkedFrom': 'Dupliqué depuis {{name}} par {{owner}}',
+  'workflows.forkedFromNoOwner': 'Dupliqué depuis {{name}}',
+  'workflows.forkedFromDeleted': 'Dupliqué depuis un workflow supprimé',
+  'workflows.sharingForkedFrom': 'Origine',
 };

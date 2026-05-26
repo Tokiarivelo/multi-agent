@@ -3,12 +3,13 @@ import { withAuth } from 'next-auth/middleware';
 export default withAuth({
   callbacks: {
     authorized({ req, token }) {
+      const { pathname } = req.nextUrl;
       if (
-        req.nextUrl.pathname.startsWith('/dashboard') ||
-        req.nextUrl.pathname.startsWith('/workflows') ||
-        req.nextUrl.pathname.startsWith('/agents') ||
-        req.nextUrl.pathname.startsWith('/fork-requests') ||
-        req.nextUrl.pathname.startsWith('/invitations')
+        pathname.startsWith('/dashboard') ||
+        pathname.startsWith('/workflows') ||
+        pathname.startsWith('/agents') ||
+        pathname.startsWith('/fork-requests') ||
+        pathname.startsWith('/invitations')
       ) {
         return token !== null;
       }

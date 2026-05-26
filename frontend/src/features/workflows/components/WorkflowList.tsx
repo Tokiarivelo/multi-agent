@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Play, Edit, Trash2, Share2, Crown, Users } from 'lucide-react';
+import { Plus, Play, Edit, Trash2, Share2, Crown, Users, GitFork } from 'lucide-react';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor } from '@/lib/utils';
 import { useState } from 'react';
@@ -23,13 +23,14 @@ import { DeleteGuardDialog } from '@/components/shared/DeleteGuardDialog';
 import { useDeleteGuard } from '@/hooks/useDeleteGuard';
 import { WorkflowSharingModal } from './WorkflowSharingModal';
 import { AvatarGroup } from './AvatarGroup';
-import { Workflow, WorkflowVisibility } from '@/types';
+import { Workflow, WorkflowForkedFrom, WorkflowVisibility } from '@/types';
 import { useAuthStore } from '@/store/auth.store';
 
 interface ShareTarget {
   workflowId: string;
   workflowName: string;
   visibility: WorkflowVisibility;
+  forkedFrom?: WorkflowForkedFrom;
 }
 
 export function WorkflowList() {
@@ -97,6 +98,7 @@ export function WorkflowList() {
                         workflowId: w.id,
                         workflowName: w.name,
                         visibility: w.visibility ?? 'PRIVATE',
+                        forkedFrom: w.forkedFrom,
                       })
                     }
                     onDelete={(w) => {
@@ -142,6 +144,7 @@ export function WorkflowList() {
           workflowId={shareTarget.workflowId}
           workflowName={shareTarget.workflowName}
           currentVisibility={shareTarget.visibility}
+          forkedFrom={shareTarget.forkedFrom}
           open={!!shareTarget}
           onClose={() => setShareTarget(null)}
         />
@@ -156,7 +159,7 @@ interface WorkflowRowProps {
   onShare: (w: Workflow) => void;
   onDelete: (w: Workflow) => void;
   deleteDisabled: boolean;
-  t: (key: string) => string;
+  t: (key: string, opts?: Record<string, unknown>) => string;
 }
 
 function WorkflowRow({ workflow, currentUserId, onShare, onDelete, deleteDisabled, t }: WorkflowRowProps) {
@@ -173,15 +176,32 @@ function WorkflowRow({ workflow, currentUserId, onShare, onDelete, deleteDisable
   return (
     <TableRow>
       <TableCell className="font-medium">
-        <div className="flex items-center gap-2">
-          <Link href={`/workflows/${workflow.id}`} className="hover:underline">
-            {workflow.name}
-          </Link>
-          {isShared && (
-            <Badge variant="secondary" className="gap-1 text-xs font-normal">
-              <Users className="h-3 w-3" />
-              {t('sharing.sharedBadge')}
-            </Badge>
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <Link href={`/workflows/${workflow.id}`} className="hover:underline">
+              {workflow.name}
+            </Link>
+            {isShared && (
+              <Badge variant="secondary" className="gap-1 text-xs font-normal">
+                <Users className="h-3 w-3" />
+                {t('sharing.sharedBadge')}
+              </Badge>
+            )}
+          </div>
+          {workflow.forkedFromId && (
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <GitFork className="h-3 w-3 shrink-0" />
+              {workflow.forkedFrom
+                ? workflow.forkedFrom.owner
+                  ? t('workflows.forkedFrom', {
+                      name: workflow.forkedFrom.name,
+                      owner:
+                        `${workflow.forkedFrom.owner.firstName} ${workflow.forkedFrom.owner.lastName}`.trim() ||
+                        workflow.forkedFrom.owner.email,
+                    })
+                  : t('workflows.forkedFromNoOwner', { name: workflow.forkedFrom.name })
+                : t('workflows.forkedFromDeleted')}
+            </p>
           )}
         </div>
       </TableCell>

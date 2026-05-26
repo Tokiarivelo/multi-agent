@@ -166,7 +166,15 @@ export const listIncomingForkRequests = async (userId: string): Promise<Workflow
 export const requestFork = async (workflowId: string, userId: string, message?: string): Promise<WorkflowForkRequest> => {
   const { data } = await apiClient.post<WorkflowForkRequest>(
     `/api/workflows/${workflowId}/fork-requests?userId=${userId}`,
-    { message },
+    { message, type: 'fork' },
+  );
+  return data;
+};
+
+export const requestView = async (workflowId: string, userId: string, message?: string): Promise<WorkflowForkRequest> => {
+  const { data } = await apiClient.post<WorkflowForkRequest>(
+    `/api/workflows/${workflowId}/fork-requests?userId=${userId}`,
+    { message, type: 'view' },
   );
   return data;
 };

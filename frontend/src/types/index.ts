@@ -83,6 +83,12 @@ export interface WorkflowCollaboratorSummary {
   role: string;
 }
 
+export interface WorkflowForkedFrom {
+  id: string;
+  name: string;
+  owner?: { firstName: string; lastName: string; email: string };
+}
+
 export interface Workflow {
   id: string;
   name: string;
@@ -98,6 +104,7 @@ export interface Workflow {
   visibility?: WorkflowVisibility;
   userId?: string;
   forkedFromId?: string;
+  forkedFrom?: WorkflowForkedFrom;
   createdAt: string;
   updatedAt: string;
   owner?: WorkflowOwner;
@@ -153,11 +160,14 @@ export interface WorkflowChangeLog {
 
 export type ForkRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
+export type ForkRequestType = 'fork' | 'view';
+
 export interface WorkflowForkRequest {
   id: string;
   workflowId: string;
   requesterId: string;
   status: ForkRequestStatus;
+  type?: ForkRequestType;
   message?: string;
   createdAt: string;
   respondedAt?: string;
@@ -168,7 +178,7 @@ export interface WorkflowForkRequest {
 export interface AppNotification {
   id: string;
   userId: string;
-  type: 'collaborator_added' | 'fork_request_approved' | 'fork_request_rejected';
+  type: 'collaborator_added' | 'fork_request_approved' | 'fork_request_rejected' | 'invitation_received' | 'workflow_request_received';
   payload: Record<string, unknown>;
   read: boolean;
   createdAt: string;

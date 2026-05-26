@@ -409,13 +409,14 @@ model WorkflowForkRequest {
   workflowId  String
   requesterId String
   status      ForkRequestStatus @default(PENDING)
+  type        String            @default("fork")
   message     String?
   createdAt   DateTime          @default(now())
   respondedAt DateTime?
   workflow    Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   requester   User              @relation("ForkRequester", fields: [requesterId], references: [id], onDelete: Cascade)
 
-  @@unique([workflowId, requesterId])
+  @@unique([workflowId, requesterId, type])
   @@index([workflowId])
   @@index([requesterId])
   @@index([status])

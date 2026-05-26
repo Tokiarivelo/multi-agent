@@ -2,7 +2,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { GitFork, Check, X } from 'lucide-react';
+import { GitFork, Check, X, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,9 +78,22 @@ function ForkRequestRow({ request, onRespond, isPending, t }: RowProps) {
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <CardTitle className="text-sm font-medium">
-              {t('forkRequests.workflowLabel', { name: request.workflow?.name ?? request.workflowId })}
-            </CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              <CardTitle className="text-sm font-medium">
+                {t('forkRequests.workflowLabel', { name: request.workflow?.name ?? request.workflowId })}
+              </CardTitle>
+              {request.type === 'view' ? (
+                <Badge variant="secondary" className="gap-1 text-xs font-normal">
+                  <Eye className="h-3 w-3" />
+                  {t('forkRequests.viewRequest')}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1 text-xs font-normal">
+                  <GitFork className="h-3 w-3" />
+                  {t('forkRequests.forkRequest')}
+                </Badge>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground mt-0.5">{requesterName}</p>
             {requesterEmail && requesterEmail !== requesterName && (
               <p className="text-xs text-muted-foreground">{requesterEmail}</p>

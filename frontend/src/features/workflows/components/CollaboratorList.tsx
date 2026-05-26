@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -32,20 +33,29 @@ export function CollaboratorList({ collaborators, onUpdateRole, onRemove, t }: P
       {collaborators.map((c) => {
         const displayName =
           [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email || c.userId;
-        const subtext = c.email && displayName !== c.email ? c.email : c.status;
+        const isPending = c.status === 'PENDING';
 
         return (
           <div key={c.id} className="flex items-center justify-between px-4 py-2.5">
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{displayName}</p>
-              <p className="text-xs text-muted-foreground truncate">{subtext}</p>
+            <div className="min-w-0 flex items-center gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{displayName}</p>
+                {c.email && displayName !== c.email && (
+                  <p className="text-xs text-muted-foreground truncate">{c.email}</p>
+                )}
+              </div>
+              {isPending && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] shrink-0">
+                  {t('sharing.collaborators.pending')}
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
               <Select
                 value={c.role}
                 onValueChange={(v) => onUpdateRole(c.id, v as CollaboratorRole)}
               >
-                <SelectTrigger className="h-7 w-28 text-xs">
+                <SelectTrigger className="h-7 w-28 text-xs" disabled={isPending}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

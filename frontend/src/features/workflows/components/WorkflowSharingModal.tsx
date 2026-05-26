@@ -14,9 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Globe, Lock, Users, UserPlus, Check } from 'lucide-react';
+import { Globe, Lock, Users, UserPlus, Check, Copy, GitFork } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
-import type { CollaboratorRole, WorkflowAccessRequest, WorkflowCollaborator, WorkflowVisibility } from '@/types';
+import type { CollaboratorRole, WorkflowAccessRequest, WorkflowCollaborator, WorkflowForkedFrom, WorkflowVisibility } from '@/types';
 import {
   listCollaborators,
   inviteCollaborator,
@@ -32,6 +32,7 @@ interface Props {
   workflowId: string;
   workflowName: string;
   currentVisibility: WorkflowVisibility;
+  forkedFrom?: WorkflowForkedFrom;
   open: boolean;
   onClose: () => void;
 }
@@ -51,6 +52,7 @@ export function WorkflowSharingModal({
   workflowId,
   workflowName,
   currentVisibility,
+  forkedFrom,
   open,
   onClose,
 }: Props) {
@@ -62,6 +64,12 @@ export function WorkflowSharingModal({
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<CollaboratorRole>('EDITOR');
   const [inviteError, setInviteError] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const publicUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/workflows/${workflowId}/public`
+      : `/workflows/${workflowId}/public`;
 
   const { data: collaborators = [] } = useQuery({
     queryKey: ['workflow-collaborators', workflowId],
@@ -85,25 +93,66 @@ export function WorkflowSharingModal({
 
   const inviteMutation = useMutation({
     mutationFn: () => inviteCollaborator(workflowId, user!.id, inviteEmail, inviteRole),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['workflow-collaborators', workflowId] });
+      const prev = queryClient.getQueryData<WorkflowCollaborator[]>(['workflow-collaborators', workflowId]);
+      queryClient.setQueryData<WorkflowCollaborator[]>(['workflow-collaborators', workflowId], (old = []) => [
+        ...old,
+        {
+          id: `pending-${Date.now()}`,
+          workflowId,
+          userId: '',
+          role: inviteRole,
+          invitedBy: user!.id,
+          invitedAt: new Date().toISOString(),
+          status: 'PENDING' as const,
+          email: inviteEmail,
+        },
+      ]);
+      return { prev };
+    },
     onSuccess: () => {
       setInviteEmail('');
       setInviteError('');
-      queryClient.invalidateQueries({ queryKey: ['workflow-collaborators', workflowId] });
     },
-    onError: (err: unknown) => setInviteError((err as Error)?.message ?? t('sharing.error.inviteFailed')),
+    onError: (err: unknown, _, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['workflow-collaborators', workflowId], ctx.prev);
+      setInviteError((err as Error)?.message ?? t('sharing.error.inviteFailed'));
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['workflow-collaborators', workflowId] }),
   });
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ id, role }: { id: string; role: CollaboratorRole }) =>
       updateCollaboratorRole(workflowId, id, user!.id, role),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['workflow-collaborators', workflowId] }),
+    onMutate: async ({ id, role }) => {
+      await queryClient.cancelQueries({ queryKey: ['workflow-collaborators', workflowId] });
+      const prev = queryClient.getQueryData<WorkflowCollaborator[]>(['workflow-collaborators', workflowId]);
+      queryClient.setQueryData<WorkflowCollaborator[]>(['workflow-collaborators', workflowId], (old = []) =>
+        old.map((c) => (c.id === id ? { ...c, role } : c)),
+      );
+      return { prev };
+    },
+    onError: (_, __, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['workflow-collaborators', workflowId], ctx.prev);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['workflow-collaborators', workflowId] }),
   });
 
   const removeMutation = useMutation({
     mutationFn: (id: string) => removeCollaborator(workflowId, id, user!.id),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['workflow-collaborators', workflowId] }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['workflow-collaborators', workflowId] });
+      const prev = queryClient.getQueryData<WorkflowCollaborator[]>(['workflow-collaborators', workflowId]);
+      queryClient.setQueryData<WorkflowCollaborator[]>(['workflow-collaborators', workflowId], (old = []) =>
+        old.filter((c) => c.id !== id),
+      );
+      return { prev };
+    },
+    onError: (_, __, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['workflow-collaborators', workflowId], ctx.prev);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['workflow-collaborators', workflowId] }),
   });
 
   const respondMutation = useMutation({
@@ -115,6 +164,13 @@ export function WorkflowSharingModal({
 
   const pendingRequests = (accessRequests as WorkflowAccessRequest[]).filter((r) => r.status === 'PENDING');
 
+  function handleCopyLink() {
+    navigator.clipboard.writeText(publicUrl).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
+  }
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
@@ -123,6 +179,24 @@ export function WorkflowSharingModal({
         </DialogHeader>
 
         <div className="space-y-6 pt-2">
+          {/* ─── Forked-from origin ────────────────────────────────────────── */}
+          {forkedFrom && (
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2.5 text-xs text-muted-foreground">
+              <GitFork className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                <span className="font-medium text-foreground/70">{t('workflows.sharingForkedFrom')}:</span>{' '}
+                {forkedFrom.owner
+                  ? t('workflows.forkedFrom', {
+                      name: forkedFrom.name,
+                      owner:
+                        `${forkedFrom.owner.firstName} ${forkedFrom.owner.lastName}`.trim() ||
+                        forkedFrom.owner.email,
+                    })
+                  : t('workflows.forkedFromNoOwner', { name: forkedFrom.name })}
+              </span>
+            </div>
+          )}
+
           {/* ─── Visibility zone ───────────────────────────────────────────── */}
           <section className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -153,6 +227,35 @@ export function WorkflowSharingModal({
               })}
             </div>
           </section>
+
+          {/* ─── Public link (PUBLIC only) ─────────────────────────────────── */}
+          {visibility === 'PUBLIC' && (
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {t('sharing.publicLink.label')}
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={publicUrl}
+                  readOnly
+                  className="flex-1 text-xs font-mono"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCopyLink}
+                  className="gap-1 shrink-0"
+                >
+                  {linkCopied ? (
+                    <Check className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                  {linkCopied ? t('sharing.publicLink.copied') : t('sharing.publicLink.copy')}
+                </Button>
+              </div>
+            </section>
+          )}
 
           {/* ─── Collaborators section ─────────────────────────────────────── */}
           <section className="space-y-3">
@@ -250,4 +353,3 @@ export function WorkflowSharingModal({
     </Dialog>
   );
 }
-

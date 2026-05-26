@@ -6,6 +6,7 @@ import { Session } from 'next-auth';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@/components/shared/ThemeProvider';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import { RoleErrorModal } from '@/components/shared/RoleErrorModal';
 import { Toaster } from '@/components/ui/sonner';
 import { setApiToken } from '@/lib/api-client';
 import '@/lib/i18n';
@@ -56,7 +57,10 @@ export default function Providers({ children, session }: ProvidersProps) {
       <TokenSync />
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
         <ErrorBoundary>
-          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+          <QueryClientProvider client={queryClient}>
+            {children}
+            <RoleErrorModal />
+          </QueryClientProvider>
         </ErrorBoundary>
         <Toaster position="top-right" richColors />
       </ThemeProvider>

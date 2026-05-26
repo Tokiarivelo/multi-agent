@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
-import { Globe, GitFork, Clock } from 'lucide-react';
+import { Globe, GitFork, Clock, Eye } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import {
   Dialog,
@@ -21,6 +21,7 @@ import {
   listPublicWorkflows,
   forkWorkflow,
   requestFork,
+  requestView,
 } from '../api/workflow-sharing.api';
 import type { Workflow } from '@/types';
 
@@ -31,8 +32,10 @@ export function PublicWorkflowBrowser() {
 
   const [page, setPage] = useState(1);
   const [forkRequestModal, setForkRequestModal] = useState<Workflow | null>(null);
+  const [viewRequestModal, setViewRequestModal] = useState<Workflow | null>(null);
   const [forkDirectModal, setForkDirectModal] = useState<Workflow | null>(null);
   const [forkMessage, setForkMessage] = useState('');
+  const [viewMessage, setViewMessage] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['public-workflows', page],
@@ -45,6 +48,15 @@ export function PublicWorkflowBrowser() {
     onSuccess: () => {
       setForkRequestModal(null);
       setForkMessage('');
+      queryClient.invalidateQueries({ queryKey: ['public-workflows'] });
+    },
+  });
+
+  const requestViewMutation = useMutation({
+    mutationFn: () => requestView(viewRequestModal!.id, user!.id, viewMessage || undefined),
+    onSuccess: () => {
+      setViewRequestModal(null);
+      setViewMessage('');
       queryClient.invalidateQueries({ queryKey: ['public-workflows'] });
     },
   });
@@ -80,6 +92,7 @@ export function PublicWorkflowBrowser() {
               workflow={wf}
               currentUserId={user?.id}
               onRequestFork={() => setForkRequestModal(wf)}
+              onRequestView={() => setViewRequestModal(wf)}
               onForkDirect={() => setForkDirectModal(wf)}
               t={t}
             />
@@ -130,6 +143,35 @@ export function PublicWorkflowBrowser() {
         </DialogContent>
       </Dialog>
 
+      {/* ─── Request to View dialog ───────────────────────────────── */}
+      <Dialog open={!!viewRequestModal} onOpenChange={(v) => !v && setViewRequestModal(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t('sharing.public.viewRequestModal.title', { name: viewRequestModal?.name })}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t('sharing.public.viewRequestModal.description')}
+          </p>
+          <Textarea
+            placeholder={t('sharing.public.viewRequestModal.messagePlaceholder')}
+            value={viewMessage}
+            onChange={(e) => setViewMessage(e.target.value)}
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewRequestModal(null)}>
+              {t('sharing.public.forkModal.cancel')}
+            </Button>
+            <Button onClick={() => requestViewMutation.mutate()} disabled={requestViewMutation.isPending}>
+              <Eye className="mr-1.5 h-4 w-4" />
+              {t('sharing.public.viewRequestModal.send')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ─── Direct fork confirmation dialog (collaborators) ─────── */}
       <Dialog open={!!forkDirectModal} onOpenChange={(v) => !v && setForkDirectModal(null)}>
         <DialogContent>
@@ -160,11 +202,12 @@ interface CardProps {
   workflow: Workflow;
   currentUserId?: string;
   onRequestFork: () => void;
+  onRequestView: () => void;
   onForkDirect: () => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }
 
-function PublicWorkflowCard({ workflow, currentUserId, onRequestFork, onForkDirect, t }: CardProps) {
+function PublicWorkflowCard({ workflow, currentUserId, onRequestFork, onRequestView, onForkDirect, t }: CardProps) {
   const isOwner = workflow.userId === currentUserId;
   const isCollaborator = !isOwner && (workflow.collaborators ?? []).some(
     (c) => c.userId === currentUserId,
@@ -192,10 +235,16 @@ function PublicWorkflowCard({ workflow, currentUserId, onRequestFork, onForkDire
               {t('sharing.public.fork')}
             </Button>
           ) : (
-            <Button size="sm" variant="outline" className="flex-1" onClick={onRequestFork}>
-              <Clock className="mr-1.5 h-3.5 w-3.5" />
-              {t('sharing.public.requestFork')}
-            </Button>
+            <>
+              <Button size="sm" variant="outline" className="flex-1" onClick={onRequestView}>
+                <Eye className="mr-1.5 h-3.5 w-3.5" />
+                {t('sharing.public.requestView')}
+              </Button>
+              <Button size="sm" variant="outline" className="flex-1" onClick={onRequestFork}>
+                <Clock className="mr-1.5 h-3.5 w-3.5" />
+                {t('sharing.public.requestFork')}
+              </Button>
+            </>
           )
         )}
       </CardContent>

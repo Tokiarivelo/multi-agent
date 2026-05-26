@@ -38,6 +38,14 @@ export class RequestAccessDto {
   @IsString()
   @MaxLength(500)
   message?: string;
+
+  @ApiPropertyOptional({
+    enum: ['fork', 'view'],
+    description: 'Request type: fork (default) or view',
+  })
+  @IsOptional()
+  @IsEnum(['fork', 'view'])
+  type?: 'fork' | 'view';
 }
 
 export class RespondToAccessRequestDto {

@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { getSession, signOut } from 'next-auth/react';
+import { useRoleErrorStore } from '@/store/role-error.store';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -71,6 +72,21 @@ class ApiClient {
           // No valid session — sign out to clear cookies and redirect to login
           if (typeof window !== 'undefined') {
             await signOut({ callbackUrl: '/login', redirect: true });
+          }
+        }
+
+        if (error.response?.status === 403 && typeof window !== 'undefined') {
+          const raw = (error.response.data as { message?: string | string[] } | undefined)?.message;
+          const msg = Array.isArray(raw) ? raw.join('. ') : (raw ?? '');
+          const lower = msg.toLowerCase();
+          if (
+            lower.includes('role') ||
+            lower.includes('requires') ||
+            lower.includes('editor') ||
+            lower.includes('executor') ||
+            lower.includes('viewer')
+          ) {
+            useRoleErrorStore.getState().setError(msg);
           }
         }
 

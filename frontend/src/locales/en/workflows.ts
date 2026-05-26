@@ -350,4 +350,47 @@ export const workflows = {
   'notifications.forkApproved': 'Your fork request for "{{workflow}}" was approved.',
   'notifications.forkRejected': 'Your fork request for "{{workflow}}" was rejected.',
   'notifications.generic': 'You have a new notification.',
+  'notifications.invitationReceived': 'You were invited to "{{workflow}}" as {{role}}.',
+  'notifications.acceptInvite': 'Accept',
+  'notifications.declineInvite': 'Decline',
+  'notifications.forkRequestReceived': '{{requester}} wants to fork your workflow "{{workflow}}".',
+  'notifications.viewRequestReceived': '{{requester}} wants to view your workflow "{{workflow}}".',
+  'notifications.approve': 'Approve',
+  'notifications.reject': 'Reject',
+
+  'sharing.publicLink.label': 'Public link',
+  'sharing.publicLink.copy': 'Copy link',
+  'sharing.publicLink.copied': 'Copied!',
+  'sharing.publicPage.title': 'Shared Workflow',
+  'sharing.publicPage.workflow': 'Workflow',
+  'sharing.publicPage.description': 'Sign in to collaborate on this workflow.',
+  'sharing.publicPage.signIn': 'Sign in',
+  'sharing.publicPage.notFound': 'This workflow is not available.',
+  'sharing.publicPage.openWorkflow': 'Open in editor',
+  'sharing.publicPage.hasAccess': 'You have access to this workflow.',
+  'sharing.publicPage.noAccess': 'You don\'t have access to this workflow.',
+  'sharing.publicPage.noAccessDescription': 'Request access from the owner to view or fork it.',
+
+  'sharing.collaborators.pending': 'Pending',
+
+  // ─── Role forbidden error modal ───────────────────────────────
+  'roleError.title': 'Access Restricted',
+  'roleError.description': 'You don\'t have permission to perform this action.',
+  'roleError.requiredRole': 'Required role: {{role}}',
+  'roleError.dismiss': 'Got it',
+
+  // ─── View request ──────────────────────────────────────────────
+  'sharing.public.requestView': 'Request to view',
+  'sharing.public.viewRequestModal.title': 'Request view access to "{{name}}"',
+  'sharing.public.viewRequestModal.description': 'Send a view request to the owner. You will be added as a Viewer if approved.',
+  'sharing.public.viewRequestModal.messagePlaceholder': 'Optional message to the owner…',
+  'sharing.public.viewRequestModal.send': 'Send Request',
+  'forkRequests.viewRequest': 'wants to view',
+  'forkRequests.forkRequest': 'wants to fork',
+
+  // ─── Forked-from label ──────────────────────────────────────────
+  'workflows.forkedFrom': 'Forked from {{name}} by {{owner}}',
+  'workflows.forkedFromNoOwner': 'Forked from {{name}}',
+  'workflows.forkedFromDeleted': 'Forked from a deleted workflow',
+  'workflows.sharingForkedFrom': 'Origin',
 };

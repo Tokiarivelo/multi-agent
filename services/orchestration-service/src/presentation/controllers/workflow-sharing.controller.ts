@@ -228,8 +228,8 @@ export class WorkflowSharingController {
     @Query('userId') userId: string,
     @Body() dto: RequestAccessDto,
   ) {
-    this.logger.log(`User ${userId} requesting to fork workflow ${id}`);
-    return this.forkRequestUseCase.requestFork(id, userId, dto.message);
+    this.logger.log(`User ${userId} requesting to ${dto.type ?? 'fork'} workflow ${id}`);
+    return this.forkRequestUseCase.requestFork(id, userId, dto.message, dto.type);
   }
 
   @Get(':id/fork-requests')

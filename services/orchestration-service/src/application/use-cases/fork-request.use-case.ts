@@ -16,21 +16,26 @@ export class ForkRequestUseCase {
     private readonly forkWorkflowUseCase: ForkWorkflowUseCase,
   ) {}
 
-  async requestFork(workflowId: string, requesterId: string, message?: string) {
+  async requestFork(
+    workflowId: string,
+    requesterId: string,
+    message?: string,
+    type: 'fork' | 'view' = 'fork',
+  ) {
     const workflow = await this.prisma.workflow.findUnique({ where: { id: workflowId } });
     if (!workflow) throw new NotFoundException('Workflow not found');
     if (workflow.visibility !== 'PUBLIC') {
       throw new ForbiddenException('Fork requests are only available for public workflows');
     }
     if (workflow.userId === requesterId) {
-      throw new ConflictException('You cannot request to fork your own workflow');
+      throw new ConflictException('You cannot request to access your own workflow');
     }
 
     const existing = await this.prisma.workflowForkRequest.findUnique({
-      where: { workflowId_requesterId: { workflowId, requesterId } },
+      where: { workflowId_requesterId_type: { workflowId, requesterId, type } },
     });
     if (existing && existing.status === 'PENDING') {
-      throw new ConflictException('A pending fork request already exists');
+      throw new ConflictException('A pending request of this type already exists');
     }
 
     if (existing) {
@@ -40,9 +45,30 @@ export class ForkRequestUseCase {
       });
     }
 
-    return this.prisma.workflowForkRequest.create({
-      data: { workflowId, requesterId, message: message ?? null },
+    const created = await this.prisma.workflowForkRequest.create({
+      data: { workflowId, requesterId, type, message: message ?? null },
+      include: { requester: { select: { firstName: true, lastName: true, email: true } } },
     });
+
+    // Notify the workflow owner
+    await this.prisma.notification.create({
+      data: {
+        userId: workflow.userId,
+        type: 'workflow_request_received',
+        payload: {
+          requestId: created.id,
+          workflowId,
+          workflowName: workflow.name,
+          requesterId,
+          requesterName:
+            `${created.requester.firstName} ${created.requester.lastName}`.trim() ||
+            created.requester.email,
+          requestType: type,
+        },
+      },
+    });
+
+    return created;
   }
 
   async listAllIncoming(ownerId: string) {
@@ -104,6 +130,23 @@ export class ForkRequestUseCase {
     });
 
     if (decision === 'APPROVED') {
+      if (request.type === 'view') {
+        // Add the requester as a VIEWER collaborator
+        await this.prisma.workflowCollaborator.upsert({
+          where: { workflowId_userId: { workflowId, userId: request.requesterId } },
+          create: {
+            workflowId,
+            userId: request.requesterId,
+            role: 'VIEWER',
+            invitedBy: ownerId,
+            status: 'ACCEPTED',
+            acceptedAt: new Date(),
+          },
+          update: { role: 'VIEWER', status: 'ACCEPTED', acceptedAt: new Date() },
+        });
+        return { status };
+      }
+
       const fork = await this.forkWorkflowUseCase.executeApproved(workflowId, request.requesterId);
       return { status, fork };
     }
