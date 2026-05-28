@@ -114,7 +114,7 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     color: 'text-sky-500',
     bgColor: 'bg-sky-500/10',
     borderColor: 'border-sky-500/40',
-    defaultConfig: { condition: '' },
+    defaultConfig: { condition: '', routes: [] },
   },
   {
     id: 'TRANSFORM',
@@ -385,7 +385,7 @@ export const NODE_TYPE_REGISTRY: NodeTypeMeta[] = [
     label: 'For Each',
     labelFr: 'Pour Chaque',
     description: 'Run downstream nodes for every item in an array and collect results',
-    descriptionFr: 'Exécuter les nœuds suivants pour chaque élément d\'un tableau et collecter les résultats',
+    descriptionFr: "Exécuter les nœuds suivants pour chaque élément d'un tableau et collecter les résultats",
     icon: ListOrdered,
     color: 'text-cyan-500',
     bgColor: 'bg-cyan-500/10',

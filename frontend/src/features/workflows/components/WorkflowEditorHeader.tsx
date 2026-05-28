@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Save,
@@ -11,6 +12,8 @@ import {
   PanelRightClose,
   PanelRightOpen,
   ArrowDownToLine,
+  Share2,
+  History,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +29,8 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Workflow } from '@/types';
+import { WorkflowSharingModal } from './WorkflowSharingModal';
+import Link from 'next/link';
 
 const STATUS_VARIANT: Record<string, 'default' | 'success' | 'destructive' | 'warning' | 'secondary'> = {
   DRAFT: 'secondary',
@@ -76,6 +81,7 @@ export function WorkflowEditorHeader({
   onOutputLogsChange,
 }: WorkflowEditorHeaderProps) {
   const { t } = useTranslation();
+  const [sharingOpen, setSharingOpen] = useState(false);
 
   return (
     <div className="flex items-center justify-between gap-3 flex-wrap p-2 px-4 rounded-xl bg-white/30 dark:bg-black/40 backdrop-blur-md border border-border/50 shadow-sm pointer-events-auto shrink-0 mb-4">
@@ -147,6 +153,22 @@ export function WorkflowEditorHeader({
           </div>
         )}
 
+        {workflow?.id && (
+          <Button variant="outline" size="icon" onClick={() => setSharingOpen(true)} title={t('sharing.openButton')}>
+            <Share2 className="h-4 w-4" />
+          </Button>
+        )}
+
+        {workflow?.id && (
+          <Link
+            href={`/workflows/${workflow.id}/history`}
+            title={t('sharing.history.title')}
+            className="inline-flex items-center justify-center h-9 w-9 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <History className="h-4 w-4" />
+          </Link>
+        )}
+
         <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2">
           <ArrowDownToLine className="h-4 w-4" />
           {t('workflows.editor.import', 'Import JSON')}
@@ -194,6 +216,16 @@ export function WorkflowEditorHeader({
           {panelOpen ? <PanelRightClose className="h-5 w-5" /> : <PanelRightOpen className="h-5 w-5" />}
         </Button>
       </div>
+
+      {workflow && (
+        <WorkflowSharingModal
+          workflowId={workflow.id}
+          workflowName={workflow.name}
+          currentVisibility={workflow.visibility ?? 'PRIVATE'}
+          open={sharingOpen}
+          onClose={() => setSharingOpen(false)}
+        />
+      )}
     </div>
   );
 }

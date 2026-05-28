@@ -24,10 +24,10 @@ pub async fn dispatch_builtin(
         "json_parser" => http::json_parser(&params),
 
         // File system
-        "file_read" => file::file_read(config, &params).await,
-        "pdf_read" => file::pdf_read(client, config, &params).await,
+        "file_read" => file::file_read(client, config, &params, user_id).await,
+        "pdf_read" => file::pdf_read(client, config, &params, user_id).await,
         "file_write" => file::file_write(client, config, &params, user_id).await,
-        "workspace_read" => file::workspace_read(config, &params).await,
+        "workspace_read" => file::workspace_read(client, config, &params, user_id).await,
         "workspace_write" => file::workspace_write(client, config, &params, user_id).await,
         "download_file" => file::download_file(client, config, &params, user_id).await,
 
@@ -42,6 +42,10 @@ pub async fn dispatch_builtin(
         "git_pull" => git::git_pull(config, &params).await,
         "git_branch_create" => git::git_branch_create(config, &params).await,
 
+        // Vector
+        "vector_search" => integrations::vector_search(client, config, &params).await,
+        "vector_upsert" => integrations::vector_upsert(client, config, &params).await,
+
         // Integrations
         "github_api" => integrations::github_api(client, &params).await,
         "slack_post_message" => integrations::slack_post_message(client, &params).await,
@@ -51,10 +55,10 @@ pub async fn dispatch_builtin(
         "trello_move_card" => integrations::trello_move_card(client, &params).await,
 
         // Document (proxy to document-service)
-        "document_read" => integrations::document_read(client, config, &params).await,
-        "document_parse_image" => integrations::document_parse_image(client, config, &params).await,
+        "document_read" => integrations::document_read(client, config, &params, user_id).await,
+        "document_parse_image" => integrations::document_parse_image(client, config, &params, user_id).await,
         "document_generate" => integrations::document_generate(client, config, &params, user_id).await,
-        "document_delete" => integrations::document_delete(client, config, &params).await,
+        "document_delete" => integrations::document_delete(client, config, &params, user_id).await,
         "document_write" => integrations::document_write(client, config, &params, user_id).await,
 
         _ => anyhow::bail!("Unknown built-in tool: {}", tool_name),

@@ -6,6 +6,10 @@ export class SearchDto {
 
   @IsString()
   @IsOptional()
+  userId?: string;
+
+  @IsString()
+  @IsOptional()
   query?: string;
 
   @IsArray()
@@ -18,6 +22,24 @@ export class SearchDto {
   @Max(100)
   @IsOptional()
   limit?: number;
+
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  @IsOptional()
+  topK?: number;
+
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  @IsOptional()
+  threshold?: number;
+
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  @IsOptional()
+  scoreThreshold?: number;
 
   @IsObject()
   @IsOptional()

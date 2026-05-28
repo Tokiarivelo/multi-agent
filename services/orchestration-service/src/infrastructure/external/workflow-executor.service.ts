@@ -104,6 +104,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
         executionId: execution.id,
         workflowId: workflow.id,
         userId: execution.userId,
+        workflowDefinition: workflow.definition,
       };
 
       await this.executeNode(startNodeId, workflow, execution, context);
@@ -1870,6 +1871,7 @@ export class WorkflowExecutorService implements IWorkflowExecutor {
           executionId: childExecution.id,
           workflowId: subWorkflowId,
           userId: context.userId,
+          workflowDefinition: subWorkflow.definition,
         };
 
         // Run the child workflow inline (awaited, so the parent blocks until it completes)

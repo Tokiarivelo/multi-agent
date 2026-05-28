@@ -136,9 +136,10 @@ export interface AddEdgePayload {
 export const workflowsApi = {
   // ─── Workflow CRUD ────────────────────────────────────────────────
 
-  getAll: async (page = 1, pageSize = 20): Promise<PaginatedResponse<Workflow>> => {
+  getAll: async (page = 1, pageSize = 20, userId?: string): Promise<PaginatedResponse<Workflow>> => {
+    const userParam = userId ? `&userId=${userId}` : '';
     const { data } = await apiClient.get<PaginatedResponse<Workflow>>(
-      `/api/workflows?page=${page}&pageSize=${pageSize}`,
+      `/api/workflows?page=${page}&pageSize=${pageSize}${userParam}`,
     );
     return data;
   },

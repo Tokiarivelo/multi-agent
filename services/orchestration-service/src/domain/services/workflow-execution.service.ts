@@ -34,15 +34,24 @@ export class WorkflowExecutionService {
       .reverse()
       .find((n) => n.nodeId === currentNodeId)?.output as Record<string, unknown> | undefined;
 
+    // For CONDITIONAL nodes with routes, build a handle→condition lookup as fallback
+    const routeConditionByHandle = new Map<string, string>();
+    if (
+      currentNode?.type === NodeType.CONDITIONAL &&
+      Array.isArray((currentNode.config as any)?.routes)
+    ) {
+      for (const route of (currentNode.config as any).routes as Array<{
+        id: string;
+        condition?: string;
+      }>) {
+        if (route.id && route.condition) {
+          routeConditionByHandle.set(route.id, route.condition);
+        }
+      }
+    }
+
     const nextNodes: string[] = [];
     for (const edge of outgoingEdges) {
-      // CONDITIONAL routing — match _conditionalMatched to sourceHandle
-      if (currentNode?.type === NodeType.CONDITIONAL && edge.sourceHandle) {
-        const matched = String(nodeOutput?._conditionalMatched ?? 'default');
-        if (edge.sourceHandle === matched) nextNodes.push(edge.target);
-        continue;
-      }
-
       // WHILE routing — use sourceHandle to decide loop vs exit
       if (currentNode?.type === NodeType.WHILE && edge.sourceHandle) {
         const whileContinue = Boolean(nodeOutput?._whileContinue);
@@ -71,6 +80,25 @@ export class WorkflowExecutionService {
           if (!isNaN(idx) && String(cases[idx]?.value ?? '') === switchValue) {
             nextNodes.push(edge.target);
           }
+        }
+        continue;
+      }
+
+      // CONDITIONAL routing — handle _conditionalMatched fallback for legacy true/false handles
+      if (currentNode?.type === NodeType.CONDITIONAL && edge.sourceHandle) {
+        const routeCondition = routeConditionByHandle.get(edge.sourceHandle);
+        if (routeCondition) {
+          if (this.evaluateCondition(routeCondition, execution, currentNodeId)) {
+            nextNodes.push(edge.target);
+          }
+        } else if (edge.condition) {
+          if (this.evaluateCondition(edge.condition, execution, currentNodeId)) {
+            nextNodes.push(edge.target);
+          }
+        } else {
+          // Legacy true/false handle matching via _conditionalMatched
+          const matched = String(nodeOutput?._conditionalMatched ?? 'default');
+          if (edge.sourceHandle === matched) nextNodes.push(edge.target);
         }
         continue;
       }
@@ -109,8 +137,8 @@ export class WorkflowExecutionService {
         : execution.nodeExecutions[execution.nodeExecutions.length - 1];
       const output = nodeExecution?.output;
 
-      const conditionFunction = new Function('output', `return ${condition}`);
-      return conditionFunction(output);
+      const conditionFunction = new Function('output', 'input', `return ${condition}`);
+      return conditionFunction(output, output);
     } catch (error) {
       this.logger.error(`Failed to evaluate condition: ${condition}`, error);
       return false;
@@ -151,9 +179,9 @@ export class WorkflowExecutionService {
     ) {
       try {
         const scriptContent = transformConfig.script || transformConfig.template;
-        // inject `data`, `$` alias, and `console`
-        const transformFunction = new Function('data', '$', 'console', scriptContent);
-        return transformFunction(data, data, sandboxConsole);
+        // inject `data`, `input` (alias), `$` alias, and `console`
+        const transformFunction = new Function('data', 'input', '$', 'console', scriptContent);
+        return transformFunction(data, data, data, sandboxConsole);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         this.logger.error(`Transform script execution failed: ${msg}`);
@@ -274,12 +302,37 @@ if res is not None:
   }
 
   buildNodeInput(node: any, execution: WorkflowExecution, context: ExecutionContext): any {
+    let baseInput = {};
     if (node.config?.inputMapping) {
-      return this.applyInputMapping(node.config.inputMapping, execution, context);
+      baseInput = this.applyInputMapping(node.config.inputMapping, execution, context);
+    } else {
+      baseInput = this.deepClone(context.variables);
     }
 
-    // Use full context variables for the branch instead of race-prone previous execution
-    return context.variables;
+    const result = node.config?.parameters
+      ? { ...baseInput, ...node.config.parameters }
+      : baseInput;
+
+    return {
+      ...result,
+      userId: context.userId,
+      workspaceId: context.userId,
+      workspaceRoot: context.variables.cwd, // Use dynamically set cwd as workspaceRoot
+      executionId: context.executionId,
+      workflowId: context.workflowId,
+    };
+  }
+
+  private deepClone(obj: any): any {
+    if (obj === undefined) return undefined;
+    try {
+      return JSON.parse(JSON.stringify(obj));
+    } catch (err: any) {
+      this.logger.warn(
+        `Failed to deep clone object: ${err?.message || String(err)}. Returning shallow copy.`,
+      );
+      return { ...obj };
+    }
   }
 
   private applyInputMapping(
@@ -298,7 +351,7 @@ if res is not None:
       }
     }
 
-    return result;
+    return this.deepClone(result);
   }
 
   private getValueByPath(

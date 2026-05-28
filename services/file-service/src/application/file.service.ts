@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException, ForbiddenException, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
 import * as mime from 'mime-types';
+import * as fs from 'fs';
+import * as path from 'path';
 import { MinioService } from '../infrastructure/minio/minio.service';
 import { FILE_REPOSITORY, FileRecord, IFileRepository } from '../domain/file.entity';
 
@@ -8,6 +11,7 @@ import { FILE_REPOSITORY, FileRecord, IFileRepository } from '../domain/file.ent
 export class FileService {
   constructor(
     private readonly minio: MinioService,
+    private readonly configService: ConfigService,
     @Inject(FILE_REPOSITORY) private readonly repo: IFileRepository,
   ) {}
 
@@ -29,11 +33,16 @@ export class FileService {
     await this.minio.upload(key, buffer, resolvedMime);
 
     const presignedUrl = await this.minio.getPresignedUrl(key, 7 * 24 * 60 * 60); // 7 days max
+    const normalizedPath = workspacePath
+      ? workspacePath.startsWith('/')
+        ? workspacePath.substring(1)
+        : workspacePath
+      : undefined;
     const record: FileRecord = {
       id,
       userId,
       originalName,
-      workspacePath,
+      workspacePath: normalizedPath,
       storedName,
       mimeType: resolvedMime,
       size: buffer.length,
@@ -66,11 +75,16 @@ export class FileService {
     // Also generate a pre-signed Get URL for immediate viewing access
     const presignedGetUrl = await this.minio.getPresignedUrl(key, 7 * 24 * 60 * 60);
 
+    const normalizedPath = workspacePath
+      ? workspacePath.startsWith('/')
+        ? workspacePath.substring(1)
+        : workspacePath
+      : undefined;
     const record: FileRecord = {
       id,
       userId,
       originalName,
-      workspacePath,
+      workspacePath: normalizedPath,
       storedName,
       mimeType: resolvedMime,
       size,
@@ -113,5 +127,52 @@ export class FileService {
     if (file.userId !== userId) throw new ForbiddenException('Access denied');
     await this.minio.delete(file.key);
     await this.repo.delete(id);
+  }
+
+  async getFileContent(
+    userId: string,
+    workspacePath: string,
+    workspaceRoot?: string,
+  ): Promise<{ buffer: Buffer; mimeType: string; originalName: string }> {
+    const normalizedPath = workspacePath.replace(/^\/+/, '');
+
+    // 1. Try DB/MinIO first
+    const file = await this.repo.findByPath(userId, normalizedPath);
+    if (file) {
+      const buffer = await this.minio.getObject(file.key);
+      return {
+        buffer,
+        mimeType: file.mimeType,
+        originalName: file.originalName,
+      };
+    }
+
+    // 2. Fallback to Local Host Workspace (passed Root or ENV fallback)
+    const hostRoot = workspaceRoot || this.configService.get<string>('WORKSPACE_ROOT');
+    if (hostRoot) {
+      const resolvedRoot = path.resolve(hostRoot);
+      const checkRoot = resolvedRoot.endsWith(path.sep) ? resolvedRoot : resolvedRoot + path.sep;
+      const fullPath = path.resolve(resolvedRoot, normalizedPath);
+
+      // Security check: ensure path is within hostRoot
+      if (!fullPath.startsWith(checkRoot) && fullPath !== resolvedRoot) {
+        throw new ForbiddenException(
+          `Access denied: path "${fullPath}" is outside the allowed workspace root "${checkRoot}"`,
+        );
+      }
+
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        const buffer = fs.readFileSync(fullPath);
+        const originalName = path.basename(fullPath);
+        const mimeType = (mime.lookup(originalName) as string) || 'application/octet-stream';
+        return {
+          buffer,
+          mimeType,
+          originalName,
+        };
+      }
+    }
+
+    throw new NotFoundException(`File not found at path: ${workspacePath}`);
   }
 }

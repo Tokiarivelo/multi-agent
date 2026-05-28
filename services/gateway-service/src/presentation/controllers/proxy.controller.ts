@@ -129,7 +129,7 @@ export class ProxyController {
 
     if (service === 'auth') {
       // List of native AuthController routes that stay in the gateway
-      const nativeAuthRoutes = ['login', 'register', 'social-login', 'me'];
+      const nativeAuthRoutes = ['login', 'register', 'social-login', 'me', 'invitation-preview'];
       if (nativeAuthRoutes.includes(segments[2])) {
         return next();
       }
@@ -171,6 +171,20 @@ export class ProxyController {
 
   @All('calendar/*')
   proxyCalendar(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    return this.proxyMiddleware(req as any, res as any, next);
+  }
+
+  // Public: unauthenticated users can preview invitation details before registering
+  @Public()
+  @All('workflows/invitations/by-token')
+  proxyInvitationByToken(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    return this.proxyMiddleware(req as any, res as any, next);
+  }
+
+  // Webhook resume: bypasses JWT so external systems can unblock PROMPT nodes
+  @Public()
+  @All('workflows/webhook/*')
+  proxyWorkflowWebhook(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     return this.proxyMiddleware(req as any, res as any, next);
   }
 

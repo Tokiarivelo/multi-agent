@@ -5,6 +5,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { LogOut, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { WorkspaceHeaderMenu } from '@/features/workspace/components/WorkspaceHeaderMenu';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
 export function Header() {
   const { data: session } = useSession();
@@ -22,6 +23,7 @@ export function Header() {
       <div className="flex items-center gap-3">
         {/* Workspace picker — always visible */}
         <WorkspaceHeaderMenu />
+        <NotificationBell />
 
         {user && (
           <>

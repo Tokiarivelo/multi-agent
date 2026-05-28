@@ -1,6 +1,8 @@
 export const common = {
   Dashboard: 'Tableau de bord',
   Workflows: 'Flux de travail',
+  'Public Workflows': 'Workflows publics',
+  Invitations: 'Invitations',
   Agents: 'Agents',
   Tools: 'Outils',
   Nodes: 'Nœuds',
@@ -123,5 +125,12 @@ export const common = {
     passwordLabel: 'Mot de passe',
     firstNameLabel: 'Prénom',
     lastNameLabel: 'Nom',
+    invitedYouTo: 'vous a invité à collaborer sur',
+    inviteRole: 'Rôle',
+    invitationNotFound: 'Invitation introuvable ou expirée.',
+    acceptInvitation: "Accepter l'invitation",
+    acceptingInvitation: "Acceptation de l'invitation...",
+    invitationAccepted: 'Invitation acceptée ! Redirection...',
+    loginToAccept: 'Veuillez vous connecter pour accepter cette invitation.',
   },
 };

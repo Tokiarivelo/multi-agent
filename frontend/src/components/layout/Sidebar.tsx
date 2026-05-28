@@ -24,16 +24,23 @@ import {
   FileDown,
   MessageSquare,
   Boxes,
+  Globe,
+  Mail,
+  GitFork,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
 import { useSession, signOut } from 'next-auth/react';
 import { useEffect, useState } from 'react';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Chat', href: '/chat', icon: MessageSquare },
   { name: 'Workflows', href: '/workflows', icon: Workflow },
+  { name: 'Public Workflows', href: '/workflows/public', icon: Globe },
+  { name: 'Invitations', href: '/invitations', icon: Mail },
+  { name: 'Fork Requests', href: '/fork-requests', icon: GitFork },
   { name: 'Agents', href: '/agents', icon: Bot },
   { name: 'Tools', href: '/tools', icon: Wrench },
   { name: 'Nodes', href: '/nodes', icon: Boxes },
@@ -53,7 +60,6 @@ export function Sidebar() {
   const { data: session } = useSession();
   const user = session?.user;
 
-  // Mounted state for theme hydration issues
   const [mounted, setMounted] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -107,11 +113,18 @@ export function Sidebar() {
         </button>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
         {navigation.map((item) => {
           const Icon = item.icon;
           const isActive =
-            pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+            pathname === item.href ||
+            (item.href !== '/' &&
+              item.href !== '/workflows' &&
+              pathname.startsWith(item.href)) ||
+            (item.href === '/workflows' &&
+              (pathname === '/workflows' ||
+                (pathname.startsWith('/workflows/') &&
+                  !pathname.startsWith('/workflows/public'))));
 
           return (
             <Link
@@ -172,6 +185,9 @@ export function Sidebar() {
             )}
           </button>
         </div>
+
+        {/* Notification Bell */}
+        {user && <div className={cn('flex', isCollapsed ? 'justify-center' : 'justify-end px-1')}><NotificationBell /></div>}
 
         {/* User Info & Logout */}
         {user ? (

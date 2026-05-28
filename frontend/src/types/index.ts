@@ -63,6 +63,32 @@ export interface WorkflowIOField {
   defaultValue?: string;
 }
 
+export type WorkflowVisibility = 'PRIVATE' | 'SHARED' | 'PUBLIC';
+export type CollaboratorRole = 'VIEWER' | 'EXECUTOR' | 'EDITOR';
+export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
+export type AccessRequestStatus = 'PENDING' | 'APPROVED' | 'DENIED';
+
+export interface WorkflowOwner {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+export interface WorkflowCollaboratorSummary {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+}
+
+export interface WorkflowForkedFrom {
+  id: string;
+  name: string;
+  owner?: { firstName: string; lastName: string; email: string };
+}
+
 export interface Workflow {
   id: string;
   name: string;
@@ -75,8 +101,87 @@ export interface Workflow {
     outputSchema?: WorkflowIOField[];
   };
   status: 'draft' | 'active' | 'archived' | 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+  visibility?: WorkflowVisibility;
+  userId?: string;
+  forkedFromId?: string;
+  forkedFrom?: WorkflowForkedFrom;
   createdAt: string;
   updatedAt: string;
+  owner?: WorkflowOwner;
+  collaborators?: WorkflowCollaboratorSummary[];
+}
+
+export interface WorkflowCollaborator {
+  id: string;
+  workflowId: string;
+  userId: string;
+  role: CollaboratorRole;
+  invitedBy: string;
+  invitedAt: string;
+  acceptedAt?: string;
+  status: InvitationStatus;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+}
+
+export interface WorkflowInvitation {
+  id: string;
+  workflowId: string;
+  email: string;
+  invitedBy: string;
+  role: CollaboratorRole;
+  token: string;
+  status: InvitationStatus;
+  expiresAt: string;
+  createdAt: string;
+  workflow?: { id: string; name: string; description?: string };
+  inviter?: { firstName: string; lastName: string; email: string };
+}
+
+export interface WorkflowAccessRequest {
+  id: string;
+  workflowId: string;
+  requesterId: string;
+  status: AccessRequestStatus;
+  message?: string;
+  requestedAt: string;
+  respondedAt?: string;
+}
+
+export interface WorkflowChangeLog {
+  id: string;
+  workflowId: string;
+  userId: string;
+  action: string;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+export type ForkRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export type ForkRequestType = 'fork' | 'view';
+
+export interface WorkflowForkRequest {
+  id: string;
+  workflowId: string;
+  requesterId: string;
+  status: ForkRequestStatus;
+  type?: ForkRequestType;
+  message?: string;
+  createdAt: string;
+  respondedAt?: string;
+  requester?: { id: string; firstName: string; lastName: string; email: string };
+  workflow?: { id: string; name: string };
+}
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  type: 'collaborator_added' | 'fork_request_approved' | 'fork_request_rejected' | 'invitation_received' | 'workflow_request_received';
+  payload: Record<string, unknown>;
+  read: boolean;
+  createdAt: string;
 }
 
 export interface WorkflowNode {

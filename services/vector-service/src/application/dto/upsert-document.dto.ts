@@ -6,7 +6,15 @@ export class UpsertDocumentDto {
 
   @IsString()
   @IsOptional()
+  userId?: string;
+
+  @IsString()
+  @IsOptional()
   documentId?: string;
+
+  @IsString()
+  @IsOptional()
+  id?: string;
 
   @IsString()
   content!: string;
@@ -24,6 +32,10 @@ export class UpsertDocumentDto {
 export class UpsertDocumentsDto {
   @IsString()
   collectionId!: string;
+
+  @IsString()
+  @IsOptional()
+  userId?: string;
 
   @IsArray()
   documents!: Array<{

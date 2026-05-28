@@ -1,6 +1,13 @@
 import RegisterForm from '@/features/auth/components/RegisterForm';
+import InvitationRegisterForm from '@/features/auth/components/InvitationRegisterForm';
 
-export default function RegisterPage() {
+export default async function RegisterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ invitationToken?: string }>;
+}) {
+  const { invitationToken } = await searchParams;
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-background relative overflow-hidden">
       {/* Light Mode Gradient & Grid */}
@@ -12,7 +19,11 @@ export default function RegisterPage() {
       <div className="absolute inset-0 hidden dark:block bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-size-[50px_50px]" />
 
       <div className="relative z-10 w-full max-w-md px-4">
-        <RegisterForm />
+        {invitationToken ? (
+          <InvitationRegisterForm invitationToken={invitationToken} />
+        ) : (
+          <RegisterForm />
+        )}
       </div>
     </div>
   );

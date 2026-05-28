@@ -21,7 +21,10 @@ export class SearchSimilarUseCase {
   async execute(dto: SearchDto): Promise<SearchResultDto[]> {
     this.logger.log(`Searching in collection: ${dto.collectionId}`);
 
-    const collection = await this.vectorRepository.findCollectionById(dto.collectionId);
+    let collection = await this.vectorRepository.findCollectionById(dto.collectionId);
+    if (!collection && dto.userId) {
+      collection = await this.vectorRepository.findCollectionByNameAndUserId(dto.collectionId, dto.userId);
+    }
     if (!collection) {
       throw new NotFoundException(`Collection '${dto.collectionId}' not found`);
     }
@@ -47,12 +50,15 @@ export class SearchSimilarUseCase {
     }
 
     const qdrantCollectionName = collection.getQdrantCollectionName();
-    const limit = dto.limit || 10;
+    const limit = dto.limit || dto.topK || 10;
+    const threshold = dto.threshold ?? dto.scoreThreshold;
+
     const results = await this.qdrantClient.search(
       qdrantCollectionName,
       embedding,
       limit,
       dto.filter,
+      threshold,
     );
 
     const searchResults = results.map(

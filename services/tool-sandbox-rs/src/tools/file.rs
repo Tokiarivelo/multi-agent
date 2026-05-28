@@ -1,59 +1,13 @@
-use std::path::{Component, Path, PathBuf};
 
 use reqwest::Client;
 use serde_json::{json, Value};
-use tokio::fs;
 
 use crate::config::Config;
 
 /// Normalize a path without requiring it to exist (no canonicalize).
-pub fn normalize_path(path: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::ParentDir => {
-                out.pop();
-            }
-            Component::CurDir => {}
-            c => out.push(c),
-        }
-    }
-    out
-}
 
-/// Resolve filePath relative to workspace/cwd. No containment check.
-fn resolve_path(config: &Config, file_path: &str, cwd: Option<&str>) -> PathBuf {
-    let base = match cwd {
-        Some(c) if Path::new(c).is_absolute() => PathBuf::from(c),
-        Some(c) => PathBuf::from(&config.workspace_root).join(c),
-        None => PathBuf::from(&config.workspace_root),
-    };
-
-    if Path::new(file_path).is_absolute() {
-        normalize_path(Path::new(file_path))
-    } else {
-        normalize_path(&base.join(file_path))
-    }
-}
-
-/// Resolve filePath and enforce it stays inside workspace_root.
-pub fn resolve_workspace_path(config: &Config, file_path: &str) -> anyhow::Result<PathBuf> {
-    let root = normalize_path(Path::new(&config.workspace_root));
-
-    let resolved = if Path::new(file_path).is_absolute() {
-        normalize_path(Path::new(file_path))
-    } else {
-        normalize_path(&root.join(file_path))
-    };
-
-    if !resolved.starts_with(&root) {
-        anyhow::bail!(
-            "Access denied: path \"{}\" is outside the allowed workspace root",
-            file_path
-        );
-    }
-    Ok(resolved)
-}
+// Unified storage refactor: resolve_path and resolve_workspace_path are removed
+// as all file operations now go through the file-service API using workspace-relative paths.
 
 pub async fn upload_to_cloud(
     client: &Client,
@@ -128,56 +82,94 @@ pub async fn upload_to_cloud(
     }))
 }
 
-pub async fn file_read(config: &Config, params: &Value) -> anyhow::Result<Value> {
+pub async fn file_read(
+    client: &Client,
+    config: &Config,
+    params: &Value,
+    user_id: Option<String>,
+) -> anyhow::Result<Value> {
     if !config.enable_file_operations {
         anyhow::bail!("File operations are disabled");
     }
-    let path_str = params
+    let path = params
         .get("path")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("path is required"))?;
-    let cwd = params.get("cwd").and_then(|v| v.as_str());
+        .ok_or_else(|| anyhow::anyhow!("path is required"))?
+        .trim_start_matches('/');
+    
+    // Extract workspaceId/userId from params (injected by orchestrator)
+    let workspace_id = params.get("workspaceId").and_then(|v| v.as_str()).or(user_id.as_deref());
+    let user_id_val = params.get("userId").and_then(|v| v.as_str()).or(user_id.as_deref());
 
-    let resolved = resolve_path(config, path_str, cwd);
-    let content = fs::read_to_string(&resolved)
+    let workspace_root = params.get("workspaceRoot").and_then(|v| v.as_str());
+    let uid = workspace_id.ok_or_else(|| anyhow::anyhow!("workspaceId/userId is required for file access"))?;
+
+    let resp = client
+        .post(format!("{}/api/files/read", config.file_service_url))
+        .json(&json!({ 
+            "workspaceId": uid, 
+            "userId": user_id_val,
+            "workspaceRoot": workspace_root,
+            "path": path, 
+            "encoding": "utf-8" 
+        }))
+        .send()
         .await
-        .map_err(|e| anyhow::anyhow!("File read failed for \"{}\": {}", resolved.display(), e))?;
+        .map_err(|e| anyhow::anyhow!("File read from service failed: {}", e))?;
 
-    Ok(json!({ "success": true, "content": content, "path": resolved.to_string_lossy() }))
+    if !resp.status().is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        anyhow::bail!("File read failed: {}", text);
+    }
+
+    let data: Value = resp.json().await?;
+    Ok(json!({
+        "success": true,
+        "content": data["content"],
+        "path":    path,
+        "mimeType": data["mimeType"]
+    }))
 }
 
 /// pdf_read proxies to the document-service (which uses pdfplumber) to preserve
 /// output parity with the TypeScript pdf-parse implementation.
-pub async fn pdf_read(client: &Client, config: &Config, params: &Value) -> anyhow::Result<Value> {
+/// pdf_read proxies to the document-service which now uses file-service.
+pub async fn pdf_read(
+    client: &Client,
+    config: &Config,
+    params: &Value,
+    user_id: Option<String>,
+) -> anyhow::Result<Value> {
     if !config.enable_file_operations {
         anyhow::bail!("File operations are disabled");
     }
-    let path_str = params
+    let path = params
         .get("path")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("path is required"))?;
-    let cwd = params.get("cwd").and_then(|v| v.as_str());
 
-    let resolved = resolve_path(config, path_str, cwd);
-    let safe_path = resolve_workspace_path(config, &resolved.to_string_lossy())?;
+    let workspace_id = params.get("workspaceId").and_then(|v| v.as_str()).or(user_id.as_deref());
+    let user_id_val = params.get("userId").and_then(|v| v.as_str()).or(user_id.as_deref());
+    let workspace_root = params.get("workspaceRoot").and_then(|v| v.as_str());
 
     let resp = client
         .post(format!(
             "{}/api/documents/parse-path",
             config.document_service_url
         ))
-        .json(&json!({ "path": safe_path.to_string_lossy(), "encoding": "utf-8" }))
+        .json(&json!({ 
+            "path": path, 
+            "workspaceId": workspace_id,
+            "userId": user_id_val,
+            "workspaceRoot": workspace_root
+        }))
         .send()
         .await
-        .map_err(|e| anyhow::anyhow!("PDF read failed for \"{}\": {}", path_str, e))?;
+        .map_err(|e| anyhow::anyhow!("PDF read failed for \"{}\": {}", path, e))?;
 
     if !resp.status().is_success() {
-        let detail: Value = resp.json().await.unwrap_or(Value::Null);
-        let msg = detail
-            .get("detail")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown error");
-        anyhow::bail!("PDF read failed for \"{}\": {}", path_str, msg);
+        let text = resp.text().await.unwrap_or_default();
+        anyhow::bail!("PDF read failed: {}", text);
     }
 
     resp.json::<Value>()
@@ -194,7 +186,7 @@ pub async fn file_write(
     if !config.enable_file_operations {
         anyhow::bail!("File operations are disabled");
     }
-    let path_str = params
+    let path = params
         .get("path")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("path is required"))?;
@@ -202,39 +194,32 @@ pub async fn file_write(
         .get("content")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("content is required"))?;
+    
+    let workspace_id = params.get("workspaceId").and_then(|v| v.as_str()).or(user_id.as_deref());
+    let _user_id_val = params.get("userId").and_then(|v| v.as_str()).or(user_id.as_deref());
 
-    let resolved = resolve_path(config, path_str, None);
-    let root = normalize_path(Path::new(&config.workspace_root));
+    let uid = workspace_id.ok_or_else(|| anyhow::anyhow!("workspaceId/userId is required for file write"))?;
 
-    if !resolved.starts_with(&root) {
-        let uid = user_id.ok_or_else(|| {
-            anyhow::anyhow!("Access denied: path is outside workspace and no userId provided")
-        })?;
-        let filename = Path::new(path_str)
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("file.txt");
-        return upload_to_cloud(client, config, path_str, filename, content.as_bytes(), &uid).await;
-    }
-
-    if let Some(parent) = resolved.parent() {
-        fs::create_dir_all(parent)
-            .await
-            .map_err(|e| anyhow::anyhow!("File write failed: {}", e))?;
-    }
-    fs::write(&resolved, content)
-        .await
-        .map_err(|e| anyhow::anyhow!("File write failed: {}", e))?;
-
-    Ok(json!({ "success": true, "path": resolved.to_string_lossy(), "type": "local" }))
+    // Use file-service upload API
+    upload_to_cloud(client, config, path, path, content.as_bytes(), uid).await
 }
 
-pub async fn workspace_read(config: &Config, params: &Value) -> anyhow::Result<Value> {
+pub async fn workspace_read(
+    client: &Client,
+    config: &Config,
+    params: &Value,
+    user_id: Option<String>,
+) -> anyhow::Result<Value> {
     let file_path = params
         .get("filePath")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("filePath is required"))?;
-    file_read(config, &json!({ "path": file_path })).await
+    let workspace_root = params.get("workspaceRoot");
+    let mut read_params = json!({ "path": file_path });
+    if let Some(root) = workspace_root {
+        read_params["workspaceRoot"] = root.clone();
+    }
+    file_read(client, config, &read_params, user_id).await
 }
 
 /// Download a file from a URL (or accept pre-fetched base64 `content`) and optionally
@@ -370,36 +355,15 @@ async fn save_or_encode(
     use base64::Engine as _;
 
     if let Some(path_str) = output_path {
-        let resolved = resolve_path(config, path_str, None);
-        let root = normalize_path(std::path::Path::new(&config.workspace_root));
-
-        if resolved.starts_with(&root) {
-            if let Some(parent) = resolved.parent() {
-                fs::create_dir_all(parent)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create directory: {}", e))?;
-            }
-            fs::write(&resolved, bytes)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to write file: {}", e))?;
-
-            return Ok(json!({
-                "success": true,
-                "localPath": resolved.to_string_lossy(),
-                "url": source_url,
-                "filename": filename,
-                "contentType": content_type,
-                "size": size,
-            }));
-        } else if let Some(uid) = user_id {
+        if let Some(uid) = user_id {
             let cloud = upload_to_cloud(client, config, path_str, filename, bytes, &uid).await?;
             return Ok(json!({
                 "success": true,
-                "localPath": cloud["path"],
-                "url": cloud["url"],
+                "path":    cloud["path"],
+                "url":     cloud["url"],
                 "filename": filename,
                 "contentType": content_type,
-                "size": size,
+                "size":    size,
             }));
         }
     }
@@ -434,30 +398,6 @@ pub async fn workspace_write(
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("content is required"))?;
 
-    let resolved_res = resolve_workspace_path(config, file_path);
-
-    match resolved_res {
-        Ok(resolved) => {
-            if let Some(parent) = resolved.parent() {
-                fs::create_dir_all(parent)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Workspace write failed: {}", e))?;
-            }
-            fs::write(&resolved, content)
-                .await
-                .map_err(|e| anyhow::anyhow!("Workspace write failed: {}", e))?;
-
-            Ok(json!({ "success": true, "path": resolved.to_string_lossy(), "type": "local" }))
-        }
-        Err(_) => {
-            let uid = user_id.ok_or_else(|| {
-                anyhow::anyhow!("Access denied: path is outside workspace and no userId provided")
-            })?;
-            let filename = Path::new(file_path)
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("file.txt");
-            upload_to_cloud(client, config, file_path, filename, content.as_bytes(), &uid).await
-        }
-    }
+    let uid = user_id.ok_or_else(|| anyhow::anyhow!("userId is required for workspace write"))?;
+    upload_to_cloud(client, config, file_path, file_path, content.as_bytes(), &uid).await
 }

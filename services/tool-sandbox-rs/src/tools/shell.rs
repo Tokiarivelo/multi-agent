@@ -23,11 +23,14 @@ pub async fn shell_execute(config: &Config, params: &Value) -> anyhow::Result<Va
 
     let exec_cwd = match params.get("cwd").and_then(|v| v.as_str()) {
         Some(c) if Path::new(c).is_absolute() => c.to_string(),
-        Some(c) => Path::new(&config.workspace_root)
+        Some(c) => Path::new(".")
             .join(c)
             .to_string_lossy()
             .to_string(),
-        None => config.workspace_root.clone(),
+        None => params.get("workspaceRoot")
+            .and_then(|v| v.as_str())
+            .unwrap_or(".")
+            .to_string(),
     };
 
     let output = timeout(

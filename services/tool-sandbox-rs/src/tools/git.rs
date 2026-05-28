@@ -5,11 +5,11 @@ use tokio::process::Command;
 
 use crate::config::Config;
 
-fn resolve_cwd(config: &Config, cwd: Option<&str>) -> String {
+fn resolve_cwd(_config: &Config, cwd: Option<&str>) -> String {
     match cwd {
-        None => config.workspace_root.clone(),
+        None => ".".to_string(),
         Some(c) if Path::new(c).is_absolute() => c.to_string(),
-        Some(c) => Path::new(&config.workspace_root)
+        Some(c) => Path::new(".")
             .join(c)
             .to_string_lossy()
             .to_string(),
