@@ -42,6 +42,11 @@ import { ForkWorkflowUseCase } from './application/use-cases/fork-workflow.use-c
 import { ForkRequestUseCase } from './application/use-cases/fork-request.use-case';
 import { WorkflowChangeLogUseCase } from './application/use-cases/workflow-change-log.use-case';
 import { ManageWorkflowSharingUseCase } from './application/use-cases/manage-workflow-sharing.use-case';
+import { ListMarketplaceTemplatesUseCase } from './application/use-cases/list-marketplace-templates.use-case';
+import { GetMarketplaceTemplateUseCase } from './application/use-cases/get-marketplace-template.use-case';
+import { InstallTemplateUseCase } from './application/use-cases/install-template.use-case';
+import { PublishWorkflowUseCase } from './application/use-cases/publish-workflow.use-case';
+import { GetInstallersUseCase } from './application/use-cases/get-installers.use-case';
 import { WORKFLOW_EXECUTOR } from './application/interfaces/workflow-executor.interface';
 
 // Presentation
@@ -59,6 +64,7 @@ import { ResourceProvisioningService } from './infrastructure/external/resource-
 import { WorkflowHealingService } from './infrastructure/external/workflow-healing.service';
 import { HealingController } from './presentation/controllers/healing.controller';
 import { GmailWebhookController } from './presentation/controllers/gmail-webhook.controller';
+import { MarketplaceController } from './presentation/controllers/marketplace.controller';
 import { GmailTriggerService } from './domain/services/gmail-trigger.service';
 import { GmailPollerService } from './domain/services/gmail-poller.service';
 import { GmailNotificationProcessorService } from './domain/services/gmail-notification-processor.service';
@@ -77,6 +83,7 @@ import { GmailNotificationProcessorService } from './domain/services/gmail-notif
     }),
   ],
   controllers: [
+    MarketplaceController, // must be before WorkflowController — /workflows/marketplace/* must match before /workflows/:id
     WorkflowSharingController, // must be before WorkflowController — static routes (/public, /invitations/*) must register before :id
     WorkflowController,
     WorkflowAiController,
@@ -115,6 +122,11 @@ import { GmailNotificationProcessorService } from './domain/services/gmail-notif
     ForkRequestUseCase,
     WorkflowChangeLogUseCase,
     ManageWorkflowSharingUseCase,
+    ListMarketplaceTemplatesUseCase,
+    GetMarketplaceTemplateUseCase,
+    InstallTemplateUseCase,
+    PublishWorkflowUseCase,
+    GetInstallersUseCase,
 
     // Repositories
     {

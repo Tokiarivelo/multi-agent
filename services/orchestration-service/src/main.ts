@@ -12,6 +12,10 @@ async function bootstrap() {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
   });
 
+  // Disable ETags so API responses always return 200 with fresh data
+  // (ETags cause 304 Not Modified for API calls, masking updated DB state)
+  app.getHttpAdapter().getInstance().disable('etag');
+
   const configService = app.get(ConfigService);
 
   // Enable CORS

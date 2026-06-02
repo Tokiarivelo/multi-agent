@@ -113,6 +113,13 @@ export class Workflow {
   updatedAt!: Date;
   owner?: WorkflowOwner;
   collaborators?: WorkflowCollaboratorSummary[];
+  isTemplate?: boolean;
+  category?: string | null;
+  tags?: string[];
+  installsCount?: number;
+  previewImageUrl?: string | null;
+  isFeatured?: boolean;
+  authorName?: string | null;
 
   constructor(partial: Partial<Workflow>) {
     this.visibility = WorkflowVisibility.PRIVATE;

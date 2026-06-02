@@ -109,6 +109,10 @@ export interface Workflow {
   updatedAt: string;
   owner?: WorkflowOwner;
   collaborators?: WorkflowCollaboratorSummary[];
+  isTemplate?: boolean;
+  category?: string | null;
+  tags?: string[];
+  authorName?: string | null;
 }
 
 export interface WorkflowCollaborator {

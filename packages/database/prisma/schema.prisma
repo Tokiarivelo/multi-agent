@@ -34,6 +34,7 @@ model User {
   workflowChangeLogs        WorkflowChangeLog[]
   notifications             Notification[]
   forkRequests              WorkflowForkRequest[]     @relation("ForkRequester")
+  templateInstallations     WorkflowInstallation[]    @relation("UserInstallations")
 
   @@index([email])
   @@map("users")
@@ -52,6 +53,13 @@ model Workflow {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   definition         Json?
+  isTemplate         Boolean   @default(false)
+  category           String?
+  tags               String[]
+  installsCount      Int       @default(0)
+  previewImageUrl    String?
+  isFeatured         Boolean   @default(false)
+  authorName         String?
   executions         Execution[]
   workflowExecutions WorkflowExecution[]
   user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -63,10 +71,15 @@ model Workflow {
   accessRequests     WorkflowAccessRequest[]
   changeLogs         WorkflowChangeLog[]
   forkRequests       WorkflowForkRequest[]
+  templateInstallations WorkflowInstallation[] @relation("TemplateInstallations")
+  installedAs           WorkflowInstallation?  @relation("InstalledWorkflow")
 
   @@index([userId])
   @@index([status])
   @@index([visibility])
+  @@index([isTemplate, category])
+  @@index([isTemplate, isFeatured])
+  @@index([isTemplate, visibility, isFeatured(sort: Desc), installsCount(sort: Desc), updatedAt(sort: Desc)], map: "idx_marketplace_listing")
   @@map("workflows")
 }
 
@@ -421,6 +434,22 @@ model WorkflowForkRequest {
   @@index([requesterId])
   @@index([status])
   @@map("workflow_fork_requests")
+}
+
+model WorkflowInstallation {
+  id                  String   @id @default(uuid())
+  templateId          String
+  installedWorkflowId String   @unique
+  installerId         String
+  installedAt         DateTime @default(now())
+
+  template            Workflow @relation("TemplateInstallations", fields: [templateId], references: [id], onDelete: Cascade)
+  installedWorkflow   Workflow @relation("InstalledWorkflow", fields: [installedWorkflowId], references: [id], onDelete: Cascade)
+  installer           User     @relation("UserInstallations", fields: [installerId], references: [id])
+
+  @@index([templateId])
+  @@index([installerId])
+  @@map("workflow_installations")
 }
 
 enum ForkRequestStatus {
