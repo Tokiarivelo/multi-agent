@@ -1,11 +1,25 @@
 'use client';
 
 import { useWorkflows, useDeleteWorkflow } from '../hooks/useWorkflows';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+import { marketplaceApi } from '@/features/marketplace/api/marketplace.api';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import {
   Table,
   TableBody,
@@ -14,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Play, Edit, Trash2, Share2, Crown, Users, GitFork } from 'lucide-react';
+import { Plus, Play, Edit, Trash2, Share2, Crown, Users, GitFork, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor } from '@/lib/utils';
 import { useState } from 'react';
@@ -22,6 +36,7 @@ import { CreateWorkflowModal } from './CreateWorkflowModal';
 import { DeleteGuardDialog } from '@/components/shared/DeleteGuardDialog';
 import { useDeleteGuard } from '@/hooks/useDeleteGuard';
 import { WorkflowSharingModal } from './WorkflowSharingModal';
+import { PublishToMarketplaceModal } from '@/features/marketplace/components/PublishToMarketplaceModal';
 import { AvatarGroup } from './AvatarGroup';
 import { Workflow, WorkflowForkedFrom, WorkflowVisibility } from '@/types';
 import { useAuthStore } from '@/store/auth.store';
@@ -36,12 +51,24 @@ interface ShareTarget {
 export function WorkflowList() {
   const { t } = useTranslation();
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
   const { data, isLoading, error } = useWorkflows();
   const deleteWorkflow = useDeleteWorkflow();
   const deleteGuard = useDeleteGuard('workflow');
   const [modalOpen, setModalOpen] = useState(false);
   const [pendingDeleteWorkflow, setPendingDeleteWorkflow] = useState<Workflow | null>(null);
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
+  const [publishTarget, setPublishTarget] = useState<Workflow | null>(null);
+
+  const unpublishMutation = useMutation({
+    mutationFn: (workflowId: string) => marketplaceApi.unpublish(workflowId, user!.id),
+    onSuccess: () => {
+      toast.success(t('marketplace.unpublish.success'));
+      queryClient.invalidateQueries({ queryKey: ['workflows'] });
+      queryClient.invalidateQueries({ queryKey: ['marketplace'] });
+    },
+    onError: () => toast.error(t('marketplace.unpublish.error')),
+  });
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-destructive">Error loading workflows</div>;
@@ -105,6 +132,9 @@ export function WorkflowList() {
                       setPendingDeleteWorkflow(w);
                       deleteGuard.openGuard(w.id);
                     }}
+                    onPublish={(w) => setPublishTarget(w)}
+                    onUnpublish={(w) => unpublishMutation.mutate(w.id)}
+                    unpublishDisabled={unpublishMutation.isPending}
                     deleteDisabled={deleteWorkflow.isPending}
                     t={t}
                   />
@@ -139,6 +169,23 @@ export function WorkflowList() {
         }}
       />
 
+      {publishTarget && user?.id && (
+        <PublishToMarketplaceModal
+          open={!!publishTarget}
+          onClose={() => setPublishTarget(null)}
+          workflowId={publishTarget.id}
+          workflowName={publishTarget.name}
+          userId={user.id}
+          isAdmin={user.role === 'ADMIN'}
+          isPublished={!!publishTarget.isTemplate}
+          initialValues={{
+            name: publishTarget.name,
+            category: publishTarget.category ?? undefined,
+            tags: publishTarget.tags,
+          }}
+        />
+      )}
+
       {shareTarget && (
         <WorkflowSharingModal
           workflowId={shareTarget.workflowId}
@@ -158,11 +205,14 @@ interface WorkflowRowProps {
   currentUserId?: string;
   onShare: (w: Workflow) => void;
   onDelete: (w: Workflow) => void;
+  onPublish: (w: Workflow) => void;
+  onUnpublish: (w: Workflow) => void;
   deleteDisabled: boolean;
+  unpublishDisabled: boolean;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }
 
-function WorkflowRow({ workflow, currentUserId, onShare, onDelete, deleteDisabled, t }: WorkflowRowProps) {
+function WorkflowRow({ workflow, currentUserId, onShare, onDelete, onPublish, onUnpublish, deleteDisabled, unpublishDisabled, t }: WorkflowRowProps) {
   const isShared = !!currentUserId && workflow.userId !== currentUserId;
   const collaboratorPeople = (workflow.collaborators ?? []).map((c) => ({
     name: `${c.firstName} ${c.lastName}`.trim() || c.email,
@@ -185,6 +235,12 @@ function WorkflowRow({ workflow, currentUserId, onShare, onDelete, deleteDisable
               <Badge variant="secondary" className="gap-1 text-xs font-normal">
                 <Users className="h-3 w-3" />
                 {t('sharing.sharedBadge')}
+              </Badge>
+            )}
+            {workflow.isTemplate && (
+              <Badge variant="success" className="gap-1 text-xs font-normal">
+                <Upload className="h-3 w-3" />
+                {t('marketplace.badge.published')}
               </Badge>
             )}
           </div>
@@ -256,6 +312,51 @@ function WorkflowRow({ workflow, currentUserId, onShare, onDelete, deleteDisable
             <Share2 className="h-3 w-3" />
             {t('workflows.actions.share')}
           </Button>
+          {workflow.userId === currentUserId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+              onClick={() => onPublish(workflow)}
+            >
+              <Upload className="h-3 w-3" />
+              {workflow.isTemplate
+                ? t('marketplace.update.submit')
+                : t('marketplace.publish.button')}
+            </Button>
+          )}
+          {workflow.isTemplate && workflow.userId === currentUserId && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 text-muted-foreground hover:text-destructive"
+                  disabled={unpublishDisabled}
+                >
+                  <Upload className="h-3 w-3" />
+                  {t('marketplace.unpublish.button')}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{t('marketplace.unpublish.title')}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {t('marketplace.unpublish.description', { name: workflow.name })}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{t('marketplace.cancel')}</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive hover:bg-destructive/90"
+                    onClick={() => onUnpublish(workflow)}
+                  >
+                    {t('marketplace.unpublish.confirm')}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <Button
             variant="ghost"
             size="icon"

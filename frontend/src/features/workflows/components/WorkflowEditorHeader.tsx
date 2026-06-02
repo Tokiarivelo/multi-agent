@@ -14,6 +14,7 @@ import {
   ArrowDownToLine,
   Share2,
   History,
+  Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +31,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Workflow } from '@/types';
 import { WorkflowSharingModal } from './WorkflowSharingModal';
+import { PublishToMarketplaceModal } from '@/features/marketplace/components/PublishToMarketplaceModal';
+import { useAuthStore } from '@/store/auth.store';
 import Link from 'next/link';
 
 const STATUS_VARIANT: Record<string, 'default' | 'success' | 'destructive' | 'warning' | 'secondary'> = {
@@ -81,7 +84,12 @@ export function WorkflowEditorHeader({
   onOutputLogsChange,
 }: WorkflowEditorHeaderProps) {
   const { t } = useTranslation();
+  const { user } = useAuthStore();
   const [sharingOpen, setSharingOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+
+  const isOwner = !!workflow && !!user?.id && workflow.userId === user.id;
+  const isAdmin = user?.role === 'ADMIN';
 
   return (
     <div className="flex items-center justify-between gap-3 flex-wrap p-2 px-4 rounded-xl bg-white/30 dark:bg-black/40 backdrop-blur-md border border-border/50 shadow-sm pointer-events-auto shrink-0 mb-4">
@@ -159,6 +167,17 @@ export function WorkflowEditorHeader({
           </Button>
         )}
 
+        {workflow?.id && isOwner && (
+          <Button
+            variant={workflow.isTemplate ? 'secondary' : 'outline'}
+            size="icon"
+            onClick={() => setPublishOpen(true)}
+            title={workflow.isTemplate ? t('marketplace.publish.alreadyPublished') : t('marketplace.publish.button')}
+          >
+            <Upload className="h-4 w-4" />
+          </Button>
+        )}
+
         {workflow?.id && (
           <Link
             href={`/workflows/${workflow.id}/history`}
@@ -224,6 +243,23 @@ export function WorkflowEditorHeader({
           currentVisibility={workflow.visibility ?? 'PRIVATE'}
           open={sharingOpen}
           onClose={() => setSharingOpen(false)}
+        />
+      )}
+
+      {workflow && user?.id && publishOpen && (
+        <PublishToMarketplaceModal
+          open={publishOpen}
+          onClose={() => setPublishOpen(false)}
+          workflowId={workflow.id}
+          workflowName={workflow.name}
+          userId={user.id}
+          isAdmin={isAdmin}
+          isPublished={!!workflow.isTemplate}
+          initialValues={{
+            name: workflow.name,
+            category: workflow.category ?? undefined,
+            tags: workflow.tags,
+          }}
         />
       )}
     </div>

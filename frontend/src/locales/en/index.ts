@@ -11,6 +11,7 @@ import { healing } from './healing';
 import { documents } from './documents';
 import { chat } from './chat';
 import { nodes } from './nodes';
+import { marketplace } from './marketplace';
 
 export const en = {
   ...workflows,
@@ -26,4 +27,5 @@ export const en = {
   ...documents,
   ...chat,
   ...nodes,
+  ...marketplace,
 };

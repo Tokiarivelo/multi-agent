@@ -27,6 +27,8 @@ import {
   Globe,
   Mail,
   GitFork,
+  Store,
+  Upload,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -41,6 +43,8 @@ const navigation = [
   { name: 'Public Workflows', href: '/workflows/public', icon: Globe },
   { name: 'Invitations', href: '/invitations', icon: Mail },
   { name: 'Fork Requests', href: '/fork-requests', icon: GitFork },
+  { name: 'Marketplace', href: '/marketplace', icon: Store },
+  { name: 'My Published', href: '/published-workflows', icon: Upload },
   { name: 'Agents', href: '/agents', icon: Bot },
   { name: 'Tools', href: '/tools', icon: Wrench },
   { name: 'Nodes', href: '/nodes', icon: Boxes },
