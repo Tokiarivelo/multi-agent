@@ -72,10 +72,19 @@ describe('PublishWorkflowUseCase', () => {
       mockPrisma.workflow.findUnique.mockResolvedValue(mockWorkflow);
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
       mockPrisma.workflow.update.mockResolvedValue({
-        id: 'wf-1', name: 'x', category: 'AI', authorName: 'Alice Smith', isTemplate: true,
+        id: 'wf-1',
+        name: 'x',
+        category: 'AI',
+        authorName: 'Alice Smith',
+        isTemplate: true,
       });
 
-      await useCase.publish({ workflowId: 'wf-1', userId: 'user-1', description: 'desc', category: 'AI' });
+      await useCase.publish({
+        workflowId: 'wf-1',
+        userId: 'user-1',
+        description: 'desc',
+        category: 'AI',
+      });
 
       expect(mockPrisma.workflow.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ authorName: 'Alice Smith' }) }),
@@ -86,13 +95,24 @@ describe('PublishWorkflowUseCase', () => {
       mockPrisma.workflow.findUnique.mockResolvedValue(mockWorkflow);
       mockPrisma.user.findUnique.mockResolvedValue({ ...mockUser, firstName: '', lastName: '' });
       mockPrisma.workflow.update.mockResolvedValue({
-        id: 'wf-1', name: 'x', category: 'AI', authorName: 'alice@example.com', isTemplate: true,
+        id: 'wf-1',
+        name: 'x',
+        category: 'AI',
+        authorName: 'alice@example.com',
+        isTemplate: true,
       });
 
-      await useCase.publish({ workflowId: 'wf-1', userId: 'user-1', description: 'desc', category: 'AI' });
+      await useCase.publish({
+        workflowId: 'wf-1',
+        userId: 'user-1',
+        description: 'desc',
+        category: 'AI',
+      });
 
       expect(mockPrisma.workflow.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ authorName: 'alice@example.com' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ authorName: 'alice@example.com' }),
+        }),
       );
     });
 
@@ -100,11 +120,19 @@ describe('PublishWorkflowUseCase', () => {
       mockPrisma.workflow.findUnique.mockResolvedValue(mockWorkflow);
       mockPrisma.user.findUnique.mockResolvedValue({ ...mockUser, role: 'ADMIN' });
       mockPrisma.workflow.update.mockResolvedValue({
-        id: 'wf-1', name: 'x', category: 'AI', authorName: 'Alice Smith', isTemplate: true,
+        id: 'wf-1',
+        name: 'x',
+        category: 'AI',
+        authorName: 'Alice Smith',
+        isTemplate: true,
       });
 
       await useCase.publish({
-        workflowId: 'wf-1', userId: 'user-1', description: 'desc', category: 'AI', isFeatured: true,
+        workflowId: 'wf-1',
+        userId: 'user-1',
+        description: 'desc',
+        category: 'AI',
+        isFeatured: true,
       });
 
       expect(mockPrisma.workflow.update).toHaveBeenCalledWith(
@@ -116,11 +144,19 @@ describe('PublishWorkflowUseCase', () => {
       mockPrisma.workflow.findUnique.mockResolvedValue(mockWorkflow);
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
       mockPrisma.workflow.update.mockResolvedValue({
-        id: 'wf-1', name: 'x', category: 'AI', authorName: 'Alice Smith', isTemplate: true,
+        id: 'wf-1',
+        name: 'x',
+        category: 'AI',
+        authorName: 'Alice Smith',
+        isTemplate: true,
       });
 
       await useCase.publish({
-        workflowId: 'wf-1', userId: 'user-1', description: 'desc', category: 'AI', isFeatured: true,
+        workflowId: 'wf-1',
+        userId: 'user-1',
+        description: 'desc',
+        category: 'AI',
+        isFeatured: true,
       });
 
       expect(mockPrisma.workflow.update).toHaveBeenCalledWith(
@@ -144,7 +180,11 @@ describe('PublishWorkflowUseCase', () => {
         .mockResolvedValueOnce({ isTemplate: false });
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
       mockPrisma.workflow.update.mockResolvedValue({
-        id: 'wf-1', name: 'x', category: 'AI', authorName: 'Alice Smith', isTemplate: true,
+        id: 'wf-1',
+        name: 'x',
+        category: 'AI',
+        authorName: 'Alice Smith',
+        isTemplate: true,
       });
 
       await expect(
@@ -156,7 +196,12 @@ describe('PublishWorkflowUseCase', () => {
       mockPrisma.workflow.findUnique.mockResolvedValue(null);
 
       await expect(
-        useCase.publish({ workflowId: 'no-such', userId: 'user-1', description: 'x', category: 'AI' }),
+        useCase.publish({
+          workflowId: 'no-such',
+          userId: 'user-1',
+          description: 'x',
+          category: 'AI',
+        }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -217,7 +262,11 @@ describe('PublishWorkflowUseCase', () => {
       mockPrisma.workflow.findUnique.mockResolvedValue(publishedWorkflow);
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
       mockPrisma.workflow.update.mockResolvedValue({
-        id: 'wf-1', name: 'Updated', category: 'Data', authorName: 'Alice Smith', isTemplate: true,
+        id: 'wf-1',
+        name: 'Updated',
+        category: 'Data',
+        authorName: 'Alice Smith',
+        isTemplate: true,
       });
 
       const result = await useCase.updatePublished('wf-1', 'user-1', {
@@ -228,7 +277,11 @@ describe('PublishWorkflowUseCase', () => {
 
       expect(mockPrisma.workflow.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ name: 'Updated', category: 'Data', tags: ['data', 'etl'] }),
+          data: expect.objectContaining({
+            name: 'Updated',
+            category: 'Data',
+            tags: ['data', 'etl'],
+          }),
         }),
       );
       expect(result.name).toBe('Updated');
@@ -237,13 +290,17 @@ describe('PublishWorkflowUseCase', () => {
     it('throws ForbiddenException when user is not the owner', async () => {
       mockPrisma.workflow.findUnique.mockResolvedValue({ ...publishedWorkflow, userId: 'other' });
 
-      await expect(useCase.updatePublished('wf-1', 'user-1', {})).rejects.toThrow(ForbiddenException);
+      await expect(useCase.updatePublished('wf-1', 'user-1', {})).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('throws ConflictException when workflow is not published', async () => {
       mockPrisma.workflow.findUnique.mockResolvedValue(mockWorkflow);
 
-      await expect(useCase.updatePublished('wf-1', 'user-1', {})).rejects.toThrow(ConflictException);
+      await expect(useCase.updatePublished('wf-1', 'user-1', {})).rejects.toThrow(
+        ConflictException,
+      );
     });
   });
 });

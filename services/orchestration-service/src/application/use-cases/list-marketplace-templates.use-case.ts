@@ -70,11 +70,7 @@ export class ListMarketplaceTemplatesUseCase {
         },
         skip,
         take: limit,
-        orderBy: [
-          { isFeatured: 'desc' },
-          { installsCount: 'desc' },
-          { updatedAt: 'desc' },
-        ],
+        orderBy: [{ isFeatured: 'desc' }, { installsCount: 'desc' }, { updatedAt: 'desc' }],
       }),
     ]);
 

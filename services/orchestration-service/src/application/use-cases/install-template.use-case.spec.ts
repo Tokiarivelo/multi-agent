@@ -35,10 +35,7 @@ describe('InstallTemplateUseCase', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        InstallTemplateUseCase,
-        { provide: PrismaService, useValue: mockPrisma },
-      ],
+      providers: [InstallTemplateUseCase, { provide: PrismaService, useValue: mockPrisma }],
     }).compile();
 
     useCase = module.get<InstallTemplateUseCase>(InstallTemplateUseCase);

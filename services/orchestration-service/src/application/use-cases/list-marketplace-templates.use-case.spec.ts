@@ -51,7 +51,11 @@ describe('ListMarketplaceTemplatesUseCase', () => {
 
     expect(result).toEqual({ data: [MOCK_TEMPLATE], total: 1, page: 1, limit: 12 });
     expect(mockPrisma.workflow.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { isTemplate: true, visibility: 'PUBLIC' }, skip: 0, take: 12 }),
+      expect.objectContaining({
+        where: { isTemplate: true, visibility: 'PUBLIC' },
+        skip: 0,
+        take: 12,
+      }),
     );
   });
 

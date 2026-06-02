@@ -31,10 +31,7 @@ describe('GetMarketplaceTemplateUseCase', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        GetMarketplaceTemplateUseCase,
-        { provide: PrismaService, useValue: mockPrisma },
-      ],
+      providers: [GetMarketplaceTemplateUseCase, { provide: PrismaService, useValue: mockPrisma }],
     }).compile();
 
     useCase = module.get<GetMarketplaceTemplateUseCase>(GetMarketplaceTemplateUseCase);

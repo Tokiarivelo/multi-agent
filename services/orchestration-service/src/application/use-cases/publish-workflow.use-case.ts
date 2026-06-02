@@ -39,7 +39,15 @@ export class PublishWorkflowUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
   async publish(input: PublishWorkflowInput): Promise<PublishedWorkflowResult> {
-    const { workflowId, userId, description, category, tags = [], previewImageUrl, isFeatured } = input;
+    const {
+      workflowId,
+      userId,
+      description,
+      category,
+      tags = [],
+      previewImageUrl,
+      isFeatured,
+    } = input;
 
     const workflow = await this.prisma.workflow.findUnique({
       where: { id: workflowId },
@@ -48,7 +56,8 @@ export class PublishWorkflowUseCase {
 
     if (!workflow) throw new NotFoundException(`Workflow ${workflowId} not found`);
     if (workflow.userId !== userId) throw new ForbiddenException('You do not own this workflow');
-    if (workflow.isTemplate) throw new ConflictException('Workflow is already published to the marketplace');
+    if (workflow.isTemplate)
+      throw new ConflictException('Workflow is already published to the marketplace');
 
     if (workflow.forkedFromId) {
       const parent = await this.prisma.workflow.findUnique({
@@ -56,7 +65,9 @@ export class PublishWorkflowUseCase {
         select: { isTemplate: true },
       });
       if (parent?.isTemplate) {
-        throw new ForbiddenException('Workflows installed from the marketplace cannot be published');
+        throw new ForbiddenException(
+          'Workflows installed from the marketplace cannot be published',
+        );
       }
     }
 
@@ -65,9 +76,7 @@ export class PublishWorkflowUseCase {
       select: { firstName: true, lastName: true, email: true, role: true },
     });
 
-    const authorName = user
-      ? (`${user.firstName} ${user.lastName}`.trim() || user.email)
-      : 'Unknown';
+    const authorName = user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Unknown';
 
     const canSetFeatured = user?.role === 'ADMIN';
 
